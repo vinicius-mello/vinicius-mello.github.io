@@ -24,7 +24,7 @@ github_username: vinicius-mello
 
 # Build settings
 markdown: kramdown
-theme: minima
+theme: jekyll-theme-midnight
 plugins:
   - jekyll-feed
 
