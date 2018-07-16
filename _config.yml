@@ -13,20 +13,30 @@
 # you will see them accessed via {{ site.title }}, {{ site.email }}, and so on.
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
-title: Vinícius
-email: vinicius.moreira.mello@gmail.com
+title: Prof. Vinícius
+email: vinicius.mello@ufba.br
 description: >- # this means to ignore newlines until "baseurl:"
-    Página pessoal.
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "" # the base hostname & protocol for your site, e.g. http://example.com
-twitter_username: vinicius_mello
-github_username: vinicius-mello 
+  Página do Prof. Vinícius Mello.
+baseurl: "/~vinicius.mello" # the subpath of your site, e.g. /blog
+url: "http://www.dmat.ufba.br" # the base hostname & protocol for your site, e.g. http://example.com
+#twitter_username: vinicius_mello
+#github_username:  vinicius-mello
 
 # Build settings
 markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: pygments 
 theme: minima
 plugins:
   - jekyll-feed
+
+header_pages:
+  - ensino/GeoGebra.md
+  - ensino/GA.md
+  - ensino/MEM.md
+  - ensino/RCEM.md
+  - about.md
 
 # Exclude from processing.
 # The following items will not be processed, by default. Create a custom list
