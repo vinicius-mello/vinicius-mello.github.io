@@ -1,0 +1,2 @@
+CofGL = CoffeeScript + WebGL
+============================

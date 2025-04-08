@@ -1,0 +1,162 @@
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <title>Prof. Vinícius</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css?family=Oxanium|Source+Code+Pro&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/codemirror.css">
+  <link rel="stylesheet" href="css/darcula.css">
+  <link rel="stylesheet" href="css/show-hint.css">
+  <script src="js/codemirror.js"></script>
+  <script src="js/lua.js"></script>
+  <script src="js/matchbrackets.js"></script>
+  <script src="js/closebrackets.js"></script>
+  <script src="js/show-hint.js"></script>
+  <script src="js/placeholder.js"></script>
+  <script src="js/fengari-web.js"></script>
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script src="https://unpkg.com/jquery.terminal@2.37.2/js/jquery.terminal.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/jquery.terminal@2.x.x/css/jquery.terminal.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js"></script>
+<style>
+.CodeMirror{
+  font-family:'Source Code Pro',monospace;
+  font-size:20px
+}
+.cm-s-darcula.CodeMirror{
+  background:#000;
+  color:#a9b7c6
+}
+.terminal {
+--font:'Source Code Pro',monospace;
+    --size: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.column {
+  float: left;
+  padding: 10px;
+}
+
+.left {
+  width: 25%;
+}
+
+.right {
+  width: 75%;
+}
+.row:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="column left">
+    <div>Examples</div>
+    <ul>
+      <li class="example" onclick="tt('Expand((x+y)^2)')">Expand</li>
+      <li class="example" onclick="tt('A=Rand({-2,2},4,4)','A','Det(A)')">Det</li>
+    </ul>
+    </div>
+    <div class="column right">
+      <div id="terminal"></div>
+      <button onclick="runCode()">Run</button>
+      <textarea id="editor"></textarea>
+    </div>
+  </div>
+</body>
+
+<script>
+$(function() {
+  const luakeywords="and,break,do,else,elseif,end,false,for,function,if,in,local,nil,not,or,repeat,return,then,true,until,while,";
+  function runLua(command) {
+    let ret;
+    let f = false;
+    try {
+      ret = fengari.load("return tostring("+command+")")();
+    } catch(error) {
+      f = true;
+    }
+    if(f) {
+      try {
+        ret = fengari.load(command)();
+      } catch(error) {
+        term.echo(error);
+      }
+    }
+    return ret;
+  }
+  window.term = $('#terminal').terminal(function(command) {
+    let ret = runLua(command);
+    if(ret!==undefined) this.echo(ret);
+  }, {
+    height: 300,
+    greetings: `
+ _____                                  
+|  __ \\                                 
+| |  \\/_   _  __ _  ___ _   _ _ __ __ _ 
+| | __| | | |/ _\` |/ __| | | | '__/ _\` |
+| |_\\ \\ |_| | (_| | (__| |_| | | | (_| |
+ \\____/\\__,_|\\__,_|\\___|\\__, |_|  \\__,_|
+                         __/ |          
+                        |___/
+  Lua 5.3 + Guacyra           
+  `,
+  completion: function(str,cb) {
+    let ret=fengari.load("local r=''; for k,v in pairs(guacyra.__symbols) do r=r..','..k end; return r")()
+    ret=(luakeywords+ret).split(',').sort();
+    return ret.filter((g)=>g.startsWith(str));
+  }
+  });
+  fengari.load("guacyra = require 'guacyra'; ")();
+  fengari.load("js = require 'js'")();
+  fengari.load("print = function(...) local term = js.global.term; local a={...}; local b = ''; for i=1,#a do if i>1 then b=b..'\\t' end; b = b..tostring(a[i]) end; term:echo(b);  end")();
+  window.editor=CodeMirror.fromTextArea(
+    $('#editor')[0], {
+      mode:"lua",
+      theme:"darcula",
+      autoCloseBrackets:true,
+      lineNumbers:true,
+      placeholder: "Lua code goes here..."
+    });
+  window.runCode = function() {
+    let command = editor.getValue();
+    runLua(command)
+  }
+  window.tt = function(...cmds) {
+    var p = Promise.resolve();
+    cmds.forEach(cmd =>
+      p = p.then(() => term.exec(cmd, {typing: true})) 
+    );
+    return p;
+  }
+  let complete=function(){CodeMirror.showHint(editor,
+    function(){
+      const cursor=editor.getCursor()
+      const token=editor.getTokenAt(cursor)
+      const start=token.start
+      const end=cursor.ch
+      const line=cursor.line
+      const currentWord=token.string
+      let ret=fengari.load("local r=''; for k,v in pairs(guacyra.__symbols) do r=r..','..k end; return r")()
+      ret=(luakeywords+ret).split(',').sort();const st=ret.filter((g)=>g.startsWith(currentWord));return{list:st,from:CodeMirror.Pos(line,start),to:CodeMirror.Pos(line,end)}
+    })
+  }
+  editor.setOption("extraKeys",
+    {
+      'Tab':complete,
+      'Shift-Enter':function(cm){runCode()}
+    })
+});  
+</script>
+</html>

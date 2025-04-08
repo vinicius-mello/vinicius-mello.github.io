@@ -1,0 +1,28 @@
+html {
+  background: black;  
+  height: 100%;
+  color: white;
+}
+a:active {
+  color: white;
+  font-style: italic;
+}
+.example:hover {
+  color: white;
+  font-style: italic;
+}
+a:link {
+  color: white;
+}
+a:visited {
+  color: white;
+  font-weight: bold;
+}
+body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 45px;
+      font-family: 'Oxanium', serif;
+}

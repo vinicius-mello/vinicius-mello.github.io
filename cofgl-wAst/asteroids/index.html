@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+   <!--  <meta name="viewport" content="width=device-width; height=device-height; initial-scale=1.0; maximum-scale=1.0;" /> -->
+	<title>Asteroids</title>
+	<style type="text/css"> 
+		* {
+		  -webkit-touch-callout: none; /* prevent callout to copy image, etc when tap to hold */
+		  -webkit-text-size-adjust: none; /* prevent webkit from resizing text to fit */
+		/* make transparent link selection, adjust last value opacity 0 to 1.0 */
+		  -webkit-tap-highlight-color: rgba(0,0,0,0); 
+		  -webkit-user-select: none; /* prevent copy paste, to allow, change 'none' to 'text' */
+		  -webkit-tap-highlight-color: rgba(0,0,0,0); 
+		}
+	</style>
+	<link rel=stylesheet type=text/css href=../assets/style.css>
+	<link rel=stylesheet type=text/css href=assets/style.css>	
+	<script type=text/javascript src=../lib/jquery.js></script>
+	<script type=text/javascript src=../lib/gl-matrix.js></script>
+	<script type=text/javascript src=../lib/webgl-debug.js></script>
+	<script type=text/javascript src=../lib/hammer.js></script>
+	<script type=text/javascript src=../compiled/engine.js></script>
+	<script type=text/javascript src=../compiled/contextobj.js></script>
+	<script type=text/javascript src=../compiled/process.js></script>
+	<script type=text/javascript src=../compiled/world.js></script>
+	<script type=text/javascript src=../compiled/resmgr.js></script>
+	<script type=text/javascript src=../compiled/resources.js></script>
+	<script type=text/javascript src=../compiled/texture.js></script>
+	<script type=text/javascript src=../compiled/shaders.js></script>
+	<script type=text/javascript src=../compiled/camera.js></script>
+	<script type=text/javascript src=../compiled/complex.js></script>
+	<script type=text/javascript src=../compiled/transformations.js></script>
+	<script type=text/javascript src=../compiled/step.js></script>
+	<script type=text/javascript src=../compiled/game.js></script>
+	<script type=text/javascript src=../compiled/spaceship.js></script>
+	<script type=text/javascript src=../compiled/asteroid.js></script>
+	<script type=text/javascript src=../compiled/bullet.js></script>
+	<script type=text/javascript src=../compiled/vbo.js></script>
+	<script type=text/javascript src=../compiled/fbo.js></script>
+	<script type=text/javascript src=../compiled/processor.js></script>
+	<script type=text/javascript src=../compiled/world.js></script>
+	<script type=text/javascript src=../compiled/debugpanel.js></script>
+	<script type=text/javascript src=../compiled/helpers.js></script>
+</head>
+
+<script>
+function pageLoad() {
+  if (!window.WebGLRenderingContext) {
+     // Browser has no idea what WebGL is. Suggest they
+     // get a new browser by presenting the user with link to
+     // http://get.webgl.org
+     //location.href = "http://get.webgl.org";
+     document.getElementById("gameCanvas").innerHTML="<p></br> You browser don't support WebGL. </br> Please verify on <a href='http://get.webgl.org'> http://get.webgl.org </a></p></br>";
+     return;
+  }
+
+  gl = viewport.getContext("webgl");
+  if (!gl) {
+    // Browser could not initialize WebGL. User probably needs to
+    // update their drivers or get a new browser. Present a link to
+    // http://get.webgl.org/troubleshooting
+    document.getElementById("gameCanvas").innerHTML="<p></br> Browser could not initialize WebGL. </br> Please verify on <a href='http://get.webgl.org/troubleshooting'> http://get.webgl.org/troubleshooting </a></p></br>";
+    return;
+  }
+}
+window.onload = pageLoad;
+</script>
+
+<h1>Non-Euclidean Spaceship</h1>
+<p>Use arrow/WASD keys for navigation and SPACE for shooting.</p>
+<div id="geoselector">
+    <input type="radio" name="geometry" value="euclidean" checked="checked" /> Euclidean <br/>
+    <input type="radio" name="geometry" value="elliptic" /> Ellipitic <br/>
+    <input type="radio" name="geometry" value="hyperbolic" /> Hyperbolic
+</div>
+<div class="container" >
+	<canvas id="composite" width="768" height="768" style="display: block; margin: 0 auto;"></canvas>
+	<canvas id="viewport" width="768" height="768" style="display: none"></canvas>
+	<canvas id="gui" width="768" height="768" style="display: none"></canvas>
+</div>
+

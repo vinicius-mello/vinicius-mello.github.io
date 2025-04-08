@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <title>Prof. Vinícius</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/codemirror.css">
+  <link rel="stylesheet" href="css/darcula.css">
+  <link rel="stylesheet" href="css/show-hint.css">
+  <script src="js/codemirror.js"></script>
+  <script src="js/markdown.js"></script>
+  <script src="js/matchbrackets.js"></script>
+  <script src="js/closebrackets.js"></script>
+  <script src="js/show-hint.js"></script>
+  <script src="js/placeholder.js"></script>
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script type="module">
+      import { Marp } from 'https://esm.sh/@marp-team/marp-core?bundle'
+      import browser from 'https://esm.sh/@marp-team/marp-core/browser'
+
+      window.marpit = new Marp({ script: false })
+
+  </script>
+<style>
+.CodeMirror{
+  font-family:'Source Code Pro',monospace;
+  font-optical-sizing: auto;
+  font-size:20px
+}
+.cm-s-darcula.CodeMirror{
+  background:#000;
+  color:#a9b7c6
+}
+.terminal {
+--font:'Source Code Pro',monospace;
+    --size: 1.5;
+}
+
+body {
+      max-width: 1200px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.column {
+  float: left;
+  padding: 10px;
+}
+
+.left {
+  width: 10%;
+}
+
+.right {
+  width: 90%;
+}
+.row:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+</style>
+</head>
+<body>
+  <div class="row">
+    <button onclick="runCode()">Gerar</button>
+  </div>
+  <div class="row">
+    <div class="column right">
+      <textarea id="editor"></textarea>
+    </div>
+  </div>
+</body>
+
+<script>
+const initialText = `---
+marp: true
+paginate: true
+theme: default
+header: 'Este é o cabeçalho'
+footer: 'Este é o rodapé'
+title: Teste
+style: |
+    img[alt~="center"] {
+      display: block;
+      margin: 0 auto;
+    }
+---
+<!-- _class: invert -->
+<!-- _paginate: skip -->
+# Título da Apresentação
+
+Nome do Autor
+Universidade Federal da Bahia
+4 de Abril de 2025
+
+---
+
+# Título do Slide
+
+Assim se escreve em **negrito**. 
+Assim se escreve em _itálico_.
+Assim se escreve ~~rasurado~~.
+Assim se escreve <mark>destacado</mark>.
+Assim se escreve <u>sublinhado</u>.
+
+---
+# Título do Slide
+
+Assim vazemos uma citação:
+> O coração tem razões que a própria
+> razão desconhece
+> <cite>Pascal</cite>
+
+---
+# Título 1
+
+## Título 2
+
+### Título 3
+
+---
+
+# Listas
+
+1. Este é o primeiro passo
+2. Seguido pelo segundo passo
+
+- Tópico um
+- Tópico dois
+  - Subtópico
+
+---
+
+# Imagem
+
+A imagem de uma flor.
+
+![w:600px center](https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Abelhas_em_Gramado_-_RS.jpg/1024px-Abelhas_em_Gramado_-_RS.jpg)
+
+
+---
+
+# Code
+
+Código em linha: \`print("Hello")\`
+
+Código em bloco:
+\`\`\`r
+for (i in 1:100) {
+  print(i)
+} 
+\`\`\`
+
+---
+
+# Matemática
+
+$$
+f(x) = \\frac{1}{\\sigma \\sqrt{2\\pi}} e^{-0.5 \\left( \\frac{x-\\mu}{\\sigma} \\right)^2}
+$$
+
+---
+
+# Tabela
+
+| ID          | Atributo X  | Atributo  Y |
+| ----------- | ----------- | ----------- |
+| 101         | 3           | 0.1         |
+| 102         | 4           | 0.1         |
+| 103         | 2           | 0.3         |
+
+---
+<!-- _class: tinytext --->
+# Tinytext class
+
+Use \`<!-- _class: tinytext --->\` para tornar o texto pequeno.
+`
+
+
+$(function() {
+
+  window.editor = CodeMirror.fromTextArea(
+    $('#editor')[0], {
+      mode:"markdown",
+      theme:"darcula",
+      autoCloseBrackets:true,
+      lineNumbers:true,
+      placeholder: "Marpit code goes here..."
+    });
+  window.editor.setSize("100%", "650px");
+  window.editor.setValue(initialText);
+
+  window.runCode = function() {
+    const { html, css } = marpit.render(editor.getValue())
+
+    const htmlFile = `
+<!DOCTYPE html>
+<html><body>
+  <style>${css}</style>
+  ${html}
+</body></html>
+`;
+    var newWindow = window.open();
+    newWindow.document.write(htmlFile);
+  }
+  editor.setOption("extraKeys",
+    {
+      'Shift-Enter':function(cm){runCode()}
+    })
+});  
+</script>
+</html>

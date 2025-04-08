@@ -1,0 +1,61 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+</head>
+<body>
+<!-- pandoc -s --mathjax details.md -o details.html -->
+
+<h1 id="games-in-2-manifolds">Games in 2-manifolds</h1>
+<h2 id="metric">Metric</h2>
+<p><span class="math">\[ds^2=\frac{4(dx^2+dy^2)}{(1+K(x^2+y^2))^2}=\frac{4dz\overline{dz}}{(1+K|z|^2)^2}\]</span></p>
+<p><span class="math">\[\begin{align*}
+\text{arctan}_K(z) &amp;=\sum_{n=0}^\infty \frac{K^nz^{2n+1}}{2n+1} \\
+  &amp;=\left\{
+    \begin{array}{cc}
+    \text{arctanh(z)}, &amp; \text{ if }K=-1\\
+    \text{z}, &amp; \text{ if }K=0\\
+    \text{arctan(z)}, &amp; \text{ if }K=1
+    \end{array}
+    \right.
+\end{align*}\]</span></p>
+<p><span class="math">\[d(z_1,z_2)=2\text{arctan}_K\left|\frac{z_1-z_2}{1+Kz_1\overline{z_2}}\right|\]</span></p>
+<h2 id="isometries">Isometries</h2>
+<p>Translation (<span class="math">\(a\rightarrow 0\)</span>) <span class="math">\[T_a(z)=\frac{z-a}{1+Kz\overline{a}}\]</span></p>
+<p>Rotation 0 <span class="math">\[R_\theta(z)=e^{i\theta}z\]</span></p>
+<p>Reflection 0 <span class="math">\[R(z)=-z\]</span></p>
+<p>Mirror (<span class="math">\(a\leftrightarrow0\)</span>) <span class="math">\[M(z)=\frac{a^2}{|a|^2}\frac{\overline{a-z}}{1+Ka\overline{z}}\]</span></p>
+<p>Perpendicular Bisector (<span class="math">\(\overline{0a}\)</span>) <span class="math">\[K|a|^2(x^2+y^2)+2a_xx+2a_yy=|a|^2\]</span></p>
+<p>If <span class="math">\(K\neq 0\)</span>, <span class="math">\[\left(x+K\frac{a_x}{|a|^2}\right)^2+
+\left(y+K\frac{a_y}{|a|^2}\right)^2=\frac{1}{|a|^2}+K\]</span></p>
+<p>Midpoint (<span class="math">\(\overline{0a}\)</span>) <span class="math">\[m=\left\{\begin{array}{cc}
+  \frac{1}{2}a, \text{ if }K=0\\
+  K\frac{\sqrt{1+K|a|^2}-1}{|a|^2}a
+\end{array}\right.\]</span></p>
+<h2 id="geodesic-circle-or">Geodesic Circle <span class="math">\((O,R)\)</span></h2>
+<p><span class="math">\[p=\text{tan}_K\left(\frac{R}{2}\right)\]</span></p>
+<p><span class="math">\[\left(x-\frac{O_x(1+Kp^2)}{1-p^2K^2|O|^2}\right)^2+
+\left(y-\frac{O_y(1+Kp^2)}{1-p^2K^2|O|^2}\right)^2=
+\left(\frac{p(1+K|O|^2)}{1-p^2K^2|O|^2}\right)^2\]</span></p>
+<h2 id="geodesic-update-rule">Geodesic Update Rule</h2>
+<p><span class="math">\[L(q_x,q_y,p_x,p_y)=\frac{4(p_x^2+p_y^2)}{(1+K(q_x^2+q_y^2))^2}\]</span> <span class="math">\[L_d(q_x,q_y,q_x&#39;,q_y&#39;,h)=
+hL\left(q_x,q_y,\frac{q_x&#39;-q_x}{h},\frac{q_y&#39;-q_y}{h}\right)\]</span></p>
+<p><span class="math">\[\begin{align*}
+p_x &amp;= \frac{8}{h(1+K|q|^2)^2}
+\left(\Delta q_x +
+2 K q_x\left((\Delta q_x)^2+(\Delta q_y)^2\right) \right) \\
+p_y &amp;= \frac{8}{h(1+K|q|^2)^2}
+\left(\Delta q_y +
+2 K q_y\left((\Delta q_x)^2+(\Delta q_y)^2\right) \right) \\
+q_x&#39;&amp;=q_x+\Delta q_x \\
+q_y&#39;&amp;=q_y+\Delta q_y \\
+p_x&#39;&amp;=\frac{8\Delta q_x}{h(1+K|q|^2)^2}\\
+p_y&#39;&amp;=\frac{8\Delta q_y}{h(1+K|q|^2)^2}\\
+\end{align*}\]</span></p>
+</body>
+</html>

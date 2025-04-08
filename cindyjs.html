@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <title>Prof. Vinícius</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css?family=Oxanium|Source+Code+Pro&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/codemirror.css">
+  <link rel="stylesheet" href="css/darcula.css">
+  <link rel="stylesheet" href="css/show-hint.css">
+  <link rel="stylesheet" href="https://cindyjs.org/dist/latest/CindyJS.css">
+  <script src="js/codemirror.js"></script>
+  <script src="js/javascript.js"></script>
+  <script src="js/matchbrackets.js"></script>
+  <script src="js/closebrackets.js"></script>
+  <script src="js/show-hint.js"></script>
+  <script src="js/placeholder.js"></script>
+  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+  <script src="https://unpkg.com/jquery.terminal@2.37.2/js/jquery.terminal.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/jquery.terminal@2.x.x/css/jquery.terminal.min.css"/>
+  <script src="https://cindyjs.org/dist/latest/Cindy.js"></script>
+  <script src="https://cindyjs.org/dist/latest/CindyGL.js"></script>
+<style>
+.CodeMirror{
+  font-family:'Source Code Pro',monospace;
+  font-size:20px
+}
+.cm-s-darcula.CodeMirror{
+  background:#000;
+  color:#a9b7c6
+}
+.terminal {
+--font:'Source Code Pro',monospace;
+    --size: 1.5;
+}
+
+body {
+      max-width: 1200px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.column {
+  float: left;
+  padding: 10px;
+}
+
+.left {
+  width: 50%;
+}
+
+.right {
+  width: 50%;
+}
+.row:after {
+  content: "";
+  display: table;
+  clear: both;
+}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="column left">
+    </div>
+    <div class="column right">
+      <select id="selectBuffer" onchange="changeBuffer()">
+        <option value="draw">draw</option>
+        <option value="init">init</option>
+        <option value="tick">tick</option>
+        <option value="config">config</option>
+        <option value="move">move</option>
+        <option value="mousedown">mousedown</option>
+        <option value="mousemove">mousemove</option>
+        <option value="mouseup">mouseup</option>
+        <option value="mousedrag">mousedrag</option>
+        <option value="mouseclick">mouseclick</option>
+        <option value="keydown">keydown</option>
+        <option value="multidown">multidown</option>
+        <option value="multidrag">multidrag</option>
+        <option value="multiup">multiup</option>
+      </select>
+      <button onclick="runCode()">Run</button>
+      <button onclick="save()">Save</button>
+      <input type="file" id="inputFile" value="Load"></input>
+    </div>
+  </div>
+  <div class="row">
+    <div class="column left">
+      <div id="port" style="width: 500px; height: 500px"></div>
+    </div>
+    <div class="column right">
+      <textarea id="editor"></textarea>
+    </div>
+  </div>
+</body>
+`
+<script>
+$(function() {
+function inspect(object, indent) {
+  if (indent == null) indent = "";
+  switch (typeof(object)) {
+  case "undefined":
+    return "undefined";
+  case "string":
+    return "\`" + object + "\`";
+  case "object":
+    if (object == null) {
+      return "null";
+    }
+    var a = [];
+    if (object instanceof Array) {
+      for (var i in object) {
+        a.push(inspect(object[i],indent));
+      }
+      return "[" + a.join(", ") + "]";
+    } else {
+      for (var key in object) {
+        if (object.hasOwnProperty(key)) {
+          a.push(key + ": " + inspect(object[key], indent+"  "));
+        }
+      };
+      return "\n"+indent+"{\n"+indent+"  "+ a.join(",\n"+indent+"  ") + "\n"+indent+"}";
+    }
+  default:
+    return object.toString();
+  }
+};  
+  const cskeywords="and,break,do,else,elseif,end,false,for,function,if,in,local,nil,not,or,repeat,return,then,true,until,while,";
+
+  window.editor_buffer = {};
+  let selectBuffer = document.getElementById("selectBuffer");
+  let optionValues = [...selectBuffer.options].map(o => o.value);
+  for(var x of optionValues)
+    window.editor_buffer[x] = "";
+  window.editor_buffer.config = `
+{
+  ports: [
+  {
+    id: "port",
+    axes: false,
+    grid: 0,
+    background: "rgb(168,176,192)"
+  } ],
+  animation: {
+    autoplay: true
+  },
+}`;
+  window.prevBuffer = "draw";
+
+  window.cindy = CindyJS(eval('('+window.editor_buffer.config+')'));
+  window.editor = CodeMirror.fromTextArea(
+    $('#editor')[0], {
+      mode:"javascript",
+      theme:"darcula",
+      autoCloseBrackets:true,
+      lineNumbers:true,
+      placeholder: "CindyJS code goes here..."
+    });
+  window.editor.setSize("100%", "500px");
+  window.changeBuffer = function() {
+    var x = document.getElementById("selectBuffer").value;
+    window.editor_buffer[prevBuffer]=editor.getValue();   
+    editor.setValue(window.editor_buffer[x]);   
+    prevBuffer = x;
+  }
+
+  function saveFile (name, type, data) {
+    if (data !== null && navigator.msSaveBlob)
+        return navigator.msSaveBlob(new Blob([data], { type: type }), name);
+    var a = $("<a style='display: none;'/>");
+    var url = window.URL.createObjectURL(new Blob([data], {type: type}));
+    a.attr("href", url);
+    a.attr("download", name);
+    $("body").append(a);
+    a[0].click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+  }
+  window.save = function() {
+    var scripts = {}
+    for (var key in editor_buffer) {
+      if (key!='config')
+        scripts[key] = editor_buffer[key];
+    }
+    var config = eval('('+editor_buffer.config+')');
+    config.scripts = scripts;
+    saveFile("file.js","data:attachment/text",inspect(config));
+  }
+  $("#inputFile").change(function(e) {
+    onChange(e);
+  });
+
+  function onChange(event) {
+    var reader = new FileReader();
+    reader.onload = onReaderLoad;
+    reader.readAsText(event.target.files[0]);
+  }
+  window.runCode = function() {
+    cindy.shutdown();
+    window.editor_buffer[prevBuffer]=editor.getValue();   
+    var scripts = {}
+    for (var key in editor_buffer) {
+      if (key!='config')
+        scripts[key] = editor_buffer[key];
+    }
+    var config = eval('('+editor_buffer.config+')');
+    config.scripts = scripts;
+    cindy = CindyJS(config);
+  }
+  function onReaderLoad(event){
+    var config = eval('('+event.target.result+')');
+    for (var key in editor_buffer) {
+      if (key!='config')
+        editor_buffer[key]=config.scripts[key] || "";
+    }
+    delete config.scripts;
+    editor_buffer.config = inspect(config);
+    editor.setValue(window.editor_buffer[prevBuffer]);
+    window.runCode();
+  }
+  editor.setOption("extraKeys",
+    {
+      'Shift-Enter':function(cm){runCode()}
+    })
+});  
+</script>
+</html>
