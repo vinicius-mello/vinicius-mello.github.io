@@ -1,11 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-  <title>Prof. Vinícius</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://fonts.googleapis.com/css?family=Oxanium|Source+Code+Pro&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <title>Editor CindyJS</title>
   <link rel="stylesheet" href="css/codemirror.css">
   <link rel="stylesheet" href="css/darcula.css">
   <link rel="stylesheet" href="css/show-hint.css">
@@ -16,216 +14,1265 @@
   <script src="js/closebrackets.js"></script>
   <script src="js/show-hint.js"></script>
   <script src="js/placeholder.js"></script>
-  <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-  <script src="https://unpkg.com/jquery.terminal@2.37.2/js/jquery.terminal.min.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/jquery.terminal@2.x.x/css/jquery.terminal.min.css"/>
   <script src="https://cindyjs.org/dist/latest/Cindy.js"></script>
   <script src="https://cindyjs.org/dist/latest/CindyGL.js"></script>
-<style>
-.CodeMirror{
-  font-family:'Source Code Pro',monospace;
-  font-size:20px
-}
-.cm-s-darcula.CodeMirror{
-  background:#000;
-  color:#a9b7c6
-}
-.terminal {
---font:'Source Code Pro',monospace;
-    --size: 1.5;
-}
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel-bg: rgba(17, 24, 39, 0.82);
+      --panel-border: rgba(148, 163, 184, 0.16);
+      --panel-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+      --text-main: #e5edf7;
+      --text-soft: #8ca0b8;
+      --accent: #f97316;
+      --radius-lg: 28px;
+      --canvas-size: min(100%, calc(100vh - 72px), 512px);
+      --workspace-canvas-width: 50%;
+      --workspace-gap: 10px;
+      font-family: "Segoe UI", "Noto Sans", sans-serif;
+    }
 
-body {
-      max-width: 1200px;
-}
+    * {
+      box-sizing: border-box;
+    }
 
-* {
-  box-sizing: border-box;
-}
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(249, 115, 22, 0.24), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.16), transparent 28%),
+        linear-gradient(160deg, #10141d 0%, #161c28 48%, #0c1017 100%);
+      color: var(--text-main);
+      overflow: hidden;
+    }
 
-.column {
-  float: left;
-  padding: 10px;
-}
+    body {
+      padding: 10px;
+    }
 
-.left {
-  width: 50%;
-}
+    .page-shell {
+      width: min(1440px, 100%);
+      margin: 0 auto;
+      display: grid;
+    }
 
-.right {
-  width: 50%;
-}
-.row:after {
-  content: "";
-  display: table;
-  clear: both;
-}
-</style>
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(514px, var(--workspace-canvas-width)) 12px minmax(0, 1fr);
+      gap: var(--workspace-gap);
+      align-items: stretch;
+      height: calc(100vh - 20px);
+    }
+
+    .workspace.is-resizing {
+      cursor: col-resize;
+      user-select: none;
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--panel-shadow);
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .canvas-panel {
+      grid-column: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .splitter {
+      grid-column: 2;
+      position: relative;
+      height: 100%;
+      cursor: col-resize;
+      touch-action: none;
+    }
+
+    .splitter::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 10px;
+      bottom: 10px;
+      width: 2px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+      transition: background 120ms ease, box-shadow 120ms ease;
+    }
+
+    .splitter::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 10px;
+      height: 56px;
+      transform: translate(-50%, -50%);
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(15, 23, 42, 0.9);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+    }
+
+    .splitter:hover::before,
+    .workspace.is-resizing .splitter::before {
+      background: rgba(249, 115, 22, 0.72);
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
+    }
+
+    .canvas-stage {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92));
+    }
+
+    #port {
+      width: 512px;
+      height: 512px;
+      flex: 0 0 auto;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.45);
+      background: #0b1120;
+    }
+
+    .editor-panel {
+      grid-column: 3;
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .sidebar {
+      display: block;
+      padding: 10px 6px 10px 10px;
+      border-right: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(12, 18, 29, 0.32);
+    }
+
+    .tablist {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      height: 100%;
+      overflow: hidden;
+      padding-right: 2px;
+    }
+
+    .tab-button {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(15, 23, 42, 0.7);
+      color: var(--text-soft);
+      padding: 5px 8px;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 0.6rem;
+      line-height: 0.95;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease;
+      white-space: nowrap;
+    }
+
+    .tab-button:hover,
+    .tab-button:focus-visible {
+      transform: translateY(-1px);
+      border-color: rgba(249, 115, 22, 0.42);
+      color: var(--text-main);
+      outline: none;
+    }
+
+    .tab-button[aria-selected="true"] {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(251, 146, 60, 0.22));
+      border-color: rgba(249, 115, 22, 0.52);
+      color: var(--text-main);
+      box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.12);
+    }
+
+    .button,
+    .file-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 26px;
+      padding: 0 8px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      font: inherit;
+      font-size: 0.62rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 120ms ease, filter 120ms ease, border-color 120ms ease;
+    }
+
+    .button:hover,
+    .file-button:hover,
+    .button:focus-visible,
+    .file-button:focus-visible {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+      outline: none;
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, #f97316, #fb923c);
+      color: #1a1106;
+      font-weight: 700;
+    }
+
+    .button-secondary,
+    .file-button {
+      background: rgba(15, 23, 42, 0.82);
+      border-color: rgba(148, 163, 184, 0.18);
+      color: var(--text-main);
+    }
+
+    .file-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .editor-shell {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      padding: 10px;
+      min-height: 0;
+    }
+
+    .editor-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .editor-frame {
+      height: 100%;
+      min-height: 0;
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    }
+
+    .output-console {
+      min-height: calc(4.5 * 1.2em + 10px);
+      max-height: calc(4.5 * 1.2em + 10px);
+      margin: 0;
+      padding: 5px 56px 5px 8px;
+      overflow: auto;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(11, 17, 30, 0.92);
+      color: #b9c9dc;
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 10px;
+      line-height: 1.2;
+      white-space: pre-wrap;
+    }
+
+    .console-wrap {
+      position: relative;
+    }
+
+    .console-clear-button {
+      position: absolute;
+      top: 4px;
+      right: 16px;
+      min-height: 20px;
+      padding: 0 6px;
+      font-size: 0.55rem;
+      z-index: 1;
+    }
+
+    .CodeMirror {
+      height: 100%;
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .cm-s-darcula.CodeMirror {
+      background: #0f1722;
+      color: #d9e7f3;
+    }
+
+    .cm-s-darcula .CodeMirror-gutters {
+      background: #121a27;
+      border-right: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .CodeMirror-scroll {
+      overflow-x: hidden !important;
+    }
+
+    .cm-cindy-keyword {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
+    .cm-cindy-function {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .cm-cindy-constant {
+      color: #34d399;
+      font-weight: 600;
+    }
+
+    .cm-cindy-modifier {
+      color: #f472b6;
+      font-weight: 600;
+    }
+
+    .CodeMirror-hints {
+      max-height: min(42vh, 320px);
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 12px;
+      background: #0b1220;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      color: #e6edf7;
+      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+      z-index: 50;
+    }
+
+    .CodeMirror-hint {
+      color: #e6edf7;
+      padding: 4px 8px;
+    }
+
+    li.CodeMirror-hint-active {
+      background: #f97316;
+      color: #111827;
+    }
+
+    .docs-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(3, 7, 18, 0.72);
+      backdrop-filter: blur(8px);
+      z-index: 120;
+    }
+
+    .docs-overlay.is-open {
+      display: flex;
+    }
+
+    .docs-dialog {
+      width: min(980px, 100%);
+      height: min(82vh, 100%);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: rgba(11, 18, 32, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 20px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+
+    .docs-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(15, 23, 42, 0.94);
+    }
+
+    .docs-title {
+      margin: 0;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #f8fafc;
+    }
+
+    .docs-status {
+      color: var(--text-soft);
+      font-size: 0.66rem;
+    }
+
+    .docs-body {
+      margin: 0;
+      padding: 14px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #e5edf7;
+      background: linear-gradient(180deg, rgba(10, 15, 27, 0.98), rgba(15, 23, 42, 0.96));
+    }
+
+    @media (max-width: 1120px) {
+      body {
+        padding: 8px;
+      }
+
+      .workspace {
+        grid-template-columns: minmax(514px, var(--workspace-canvas-width)) 10px minmax(0, 1fr);
+        height: calc(100vh - 16px);
+      }
+
+      .editor-panel {
+        grid-template-columns: 98px minmax(0, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 6px;
+      }
+
+      .workspace {
+        grid-template-columns: minmax(514px, var(--workspace-canvas-width)) 8px minmax(0, 1fr);
+        gap: 8px;
+        height: calc(100vh - 12px);
+      }
+
+      .editor-panel {
+        grid-template-columns: 84px minmax(0, 1fr);
+      }
+
+      .canvas-panel,
+      .editor-shell {
+        padding: 8px;
+      }
+
+      .sidebar {
+        padding: 8px 4px 8px 8px;
+      }
+
+      .tab-button {
+        font-size: 0.54rem;
+        padding: 4px 6px;
+      }
+
+      .button,
+      .file-button {
+        min-height: 24px;
+        padding: 0 7px;
+        font-size: 0.56rem;
+      }
+
+      .CodeMirror {
+        font-size: 12px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <div class="row">
-    <div class="column left">
-    </div>
-    <div class="column right">
-      <select id="selectBuffer" onchange="changeBuffer()">
-        <option value="draw">draw</option>
-        <option value="init">init</option>
-        <option value="tick">tick</option>
-        <option value="config">config</option>
-        <option value="move">move</option>
-        <option value="mousedown">mousedown</option>
-        <option value="mousemove">mousemove</option>
-        <option value="mouseup">mouseup</option>
-        <option value="mousedrag">mousedrag</option>
-        <option value="mouseclick">mouseclick</option>
-        <option value="keydown">keydown</option>
-        <option value="multidown">multidown</option>
-        <option value="multidrag">multidrag</option>
-        <option value="multiup">multiup</option>
-      </select>
-      <button onclick="runCode()">Run</button>
-      <button onclick="save()">Save</button>
-      <input type="file" id="inputFile" value="Load"></input>
-    </div>
+  <main class="page-shell">
+    <section class="workspace">
+      <article class="panel canvas-panel">
+        <div class="canvas-stage">
+          <div id="port"></div>
+        </div>
+      </article>
+
+      <div
+        id="workspaceSplitter"
+        class="splitter"
+        role="separator"
+        aria-label="Redimensionar painel"
+        aria-orientation="vertical"
+        aria-valuemin="42"
+        aria-valuemax="68"
+        aria-valuenow="50"
+        tabindex="0"
+      ></div>
+
+      <article class="panel editor-panel">
+        <aside class="sidebar">
+          <div id="bufferTabs" class="tablist" role="tablist" aria-label="Buffers de script"></div>
+        </aside>
+
+        <div class="editor-shell">
+          <div class="editor-actions">
+            <button id="runButton" class="button button-primary" type="button" title="Shift-Enter">Run</button>
+            <button id="saveButton" class="button button-secondary" type="button" title="Ctrl-S">Save</button>
+            <label class="file-button" for="inputFile" title="Ctrl-F">Open</label>
+            <button id="docsButton" class="button button-secondary" type="button">Docs</button>
+            <input class="file-input" type="file" id="inputFile" accept=".js,.txt,.json">
+          </div>
+          <div class="editor-frame">
+            <textarea id="editor"></textarea>
+          </div>
+          <div class="console-wrap">
+            <button id="clearConsoleButton" class="button button-secondary console-clear-button" type="button">Clear</button>
+            <pre id="console" class="output-console" aria-live="polite"></pre>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <div id="docsOverlay" class="docs-overlay" aria-hidden="true">
+    <section class="docs-dialog" role="dialog" aria-modal="true" aria-labelledby="docsTitle">
+      <header class="docs-header">
+        <div>
+          <h2 id="docsTitle" class="docs-title">CindyJS Summary</h2>
+          <div id="docsStatus" class="docs-status">Carregando documentação...</div>
+        </div>
+        <button id="closeDocsButton" class="button button-secondary" type="button">Close</button>
+      </header>
+      <pre id="docsContent" class="docs-body"></pre>
+    </section>
   </div>
-  <div class="row">
-    <div class="column left">
-      <div id="port" style="width: 500px; height: 500px"></div>
-    </div>
-    <div class="column right">
-      <textarea id="editor"></textarea>
-    </div>
-  </div>
-</body>
-`
-<script>
-$(function() {
-function inspect(object, indent) {
-  if (indent == null) indent = "";
-  switch (typeof(object)) {
-  case "undefined":
-    return "undefined";
-  case "string":
-    return "\`" + object + "\`";
-  case "object":
-    if (object == null) {
-      return "null";
-    }
-    var a = [];
-    if (object instanceof Array) {
-      for (var i in object) {
-        a.push(inspect(object[i],indent));
-      }
-      return "[" + a.join(", ") + "]";
-    } else {
-      for (var key in object) {
-        if (object.hasOwnProperty(key)) {
-          a.push(key + ": " + inspect(object[key], indent+"  "));
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const bufferNames = [
+        "draw",
+        "init",
+        "tick",
+        "move",
+        "mousedown",
+        "mousemove",
+        "mouseup",
+        "mousedrag",
+        "mouseclick",
+        "keydown",
+        "multidown",
+        "multidrag",
+        "multiup",
+        "config"
+      ];
+
+      const defaultConfig = [
+        "{",
+        "  ports: [",
+        "    {",
+        "      id: `port`,",
+        "      axes: false,",
+        "      grid: 0,",
+        "      background: `rgb(168,176,192)`",
+        "    }",
+        "  ],",
+        "  animation:",
+        "  {",
+        "    autoplay: true",
+        "  },",
+        "  geometry: [",
+        "    {",
+        "      name: `A`,",
+        "      kind: `P`,",
+        "      type: `Free`,",
+        "      pos: [0, 0]",
+        "    },",
+        "    {",
+        "      name: `B`,",
+        "      kind: `P`,",
+        "      type: `Free`,",
+        "      pos: [7, 7]",
+        "    }",
+        "  ]",
+        "}"
+      ].join("\n");
+
+      const defaultDrawScript = [
+        "repeat(500,i,",
+        "  w=i*pi/180*(137.508+B.x*0.5);",
+        "  p=A+(cos(w),sin(w))*0.3*sqrt(i);",
+        "  a=i;",
+        "  draw(p,size->sqrt(i)*.4,color->hue(i/34));",
+        ");"
+      ].join("\n");
+
+      function inspect(object, indent) {
+        const currentIndent = indent || "";
+
+        switch (typeof object) {
+          case "undefined":
+            return "undefined";
+          case "string":
+            return "\`" + object + "\`";
+          case "object":
+            if (object === null) {
+              return "null";
+            }
+
+            if (Array.isArray(object)) {
+              return "[" + object.map(function (item) {
+                return inspect(item, currentIndent);
+              }).join(", ") + "]";
+            }
+
+            return "\n" + currentIndent + "{\n" + currentIndent + "  " + Object.keys(object).map(function (key) {
+              return key + ": " + inspect(object[key], currentIndent + "  ");
+            }).join(",\n" + currentIndent + "  ") + "\n" + currentIndent + "}";
+          default:
+            return object.toString();
         }
+      }
+
+      function parseConfig(source) {
+        return Function("return (" + source + ");")();
+      }
+
+      function saveFile(name, type, data) {
+        const blob = new Blob([data], { type: type });
+        const anchor = document.createElement("a");
+        const url = window.URL.createObjectURL(blob);
+
+        anchor.href = url;
+        anchor.download = name;
+        anchor.style.display = "none";
+        document.body.appendChild(anchor);
+        anchor.click();
+        window.URL.revokeObjectURL(url);
+        anchor.remove();
+      }
+
+      const state = {
+        buffers: Object.fromEntries(bufferNames.map(function (name) {
+          return [name, ""];
+        })),
+        activeBuffer: "draw",
+        cindy: null,
+        tabs: []
       };
-      return "\n"+indent+"{\n"+indent+"  "+ a.join(",\n"+indent+"  ") + "\n"+indent+"}";
-    }
-  default:
-    return object.toString();
-  }
-};  
-  const cskeywords="and,break,do,else,elseif,end,false,for,function,if,in,local,nil,not,or,repeat,return,then,true,until,while,";
 
-  window.editor_buffer = {};
-  let selectBuffer = document.getElementById("selectBuffer");
-  let optionValues = [...selectBuffer.options].map(o => o.value);
-  for(var x of optionValues)
-    window.editor_buffer[x] = "";
-  window.editor_buffer.config = `
-{
-  ports: [
-  {
-    id: "port",
-    axes: false,
-    grid: 0,
-    background: "rgb(168,176,192)"
-  } ],
-  animation: {
-    autoplay: true
-  },
-}`;
-  window.prevBuffer = "draw";
+      state.buffers.config = defaultConfig;
+      state.buffers.draw = defaultDrawScript;
+      
+      const tabsRoot = document.getElementById("bufferTabs");
+      const inputFile = document.getElementById("inputFile");
+      const runButton = document.getElementById("runButton");
+      const saveButton = document.getElementById("saveButton");
+      const docsButton = document.getElementById("docsButton");
+      const closeDocsButton = document.getElementById("closeDocsButton");
+      const clearConsoleButton = document.getElementById("clearConsoleButton");
+      const consoleOutput = document.getElementById("console");
+      const docsOverlay = document.getElementById("docsOverlay");
+      const docsContent = document.getElementById("docsContent");
+      const docsStatus = document.getElementById("docsStatus");
+      const workspace = document.querySelector(".workspace");
+      const splitter = document.getElementById("workspaceSplitter");
 
-  window.cindy = CindyJS(eval('('+window.editor_buffer.config+')'));
-  window.editor = CodeMirror.fromTextArea(
-    $('#editor')[0], {
-      mode:"javascript",
-      theme:"darcula",
-      autoCloseBrackets:true,
-      lineNumbers:true,
-      placeholder: "CindyJS code goes here..."
+      const resizeBounds = {
+        min: 42,
+        max: 68
+      };
+
+      const cindyKeywords = [
+        "if",
+        "repeat",
+        "forall",
+        "while",
+        "regional",
+        "createvar",
+        "removevar",
+        "clear",
+        "eval",
+        "trigger"
+      ];
+
+      const cindyCoreFunctions = [
+        "draw",
+        "drawall",
+        "connect",
+        "drawpoly",
+        "fillpoly",
+        "drawcircle",
+        "fillcircle",
+        "drawarc",
+        "fillarc",
+        "drawtext",
+        "line",
+        "join",
+        "print",
+        "println",
+        "err",
+        "assert",
+        "clearconsole",
+        "time",
+        "date",
+        "seconds",
+        "resetclock",
+        "simulationtime",
+        "playanimation",
+        "pauseanimation",
+        "stopanimation",
+        "sin",
+        "cos",
+        "tan",
+        "sqrt",
+        "abs",
+        "exp",
+        "log",
+        "hue",
+        "translate",
+        "rotate",
+        "scale",
+        "pointsize",
+        "linesize"
+      ];
+
+      const cindyListFunctions = [
+        "length",
+        "contains",
+        "concat",
+        "remove",
+        "common",
+        "append",
+        "prepend",
+        "apply",
+        "select",
+        "sort",
+        "pairs",
+        "reverse",
+        "flatten"
+      ];
+
+      const cindyGeometryFunctions = [
+        "allpoints",
+        "alllines",
+        "meet",
+        "join",
+        "parallel",
+        "para",
+        "perpendicular",
+        "perp",
+        "area",
+        "cross",
+        "geotype",
+        "point",
+        "line",
+        "complex",
+        "gauss",
+        "crossratio",
+        "linereflect",
+        "pointreflect",
+        "map"
+      ];
+
+      const cindyStringFunctions = [
+        "text",
+        "substring",
+        "indexof",
+        "tokenize",
+        "replace",
+        "parse",
+        "parseCSV",
+        "format"
+      ];
+
+      const cindyLinearAlgebraFunctions = [
+        "sum",
+        "product",
+        "max",
+        "min",
+        "transpose",
+        "row",
+        "column",
+        "submatrix",
+        "rowmatrix",
+        "columnmatrix",
+        "zerovector",
+        "zeromatrix",
+        "det",
+        "dist",
+        "inverse",
+        "eigenvalues",
+        "eigenvectors",
+        "linearsolve",
+        "mincostmatching",
+        "convexhull3d"
+      ];
+
+      const cindyFunctions = cindyCoreFunctions
+        .concat(cindyListFunctions)
+        .concat(cindyGeometryFunctions)
+        .concat(cindyStringFunctions)
+        .concat(cindyLinearAlgebraFunctions);
+
+      const cindyConstants = [
+        "pi",
+        "i",
+        "true",
+        "false",
+        "___"
+      ];
+
+      const cindyModifiers = [
+        "alpha->",
+        "size->",
+        "color->",
+        "pointcolor->",
+        "linecolor->",
+        "pointsize->",
+        "linesize->",
+        "noborder->",
+        "border->",
+        "dashtype->",
+        "dashing->",
+        "dashpattern->",
+        "start->",
+        "stop->",
+        "step->",
+        "autoconvert->",
+        "delimiter->",
+        "truncate->"
+      ];
+
+      const cindyVocabulary = Array.from(new Set(
+        cindyKeywords
+          .concat(cindyFunctions)
+          .concat(cindyConstants)
+          .concat(cindyModifiers)
+      )).sort(function (a, b) {
+        return a.localeCompare(b);
+      });
+
+      const cindySnippets = {
+        if: "if(__CURSOR__, )",
+        repeat: "repeat(__CURSOR__, )",
+        forall: "forall(__CURSOR__, )",
+        while: "while(__CURSOR__, )",
+        regional: "regional(__CURSOR__)",
+        draw: "draw(__CURSOR__)",
+        drawall: "drawall(__CURSOR__)",
+        connect: "connect(__CURSOR__)",
+        drawpoly: "drawpoly(__CURSOR__)",
+        fillpoly: "fillpoly(__CURSOR__)",
+        drawcircle: "drawcircle(__CURSOR__, )",
+        fillcircle: "fillcircle(__CURSOR__, )",
+        drawarc: "drawarc(__CURSOR__, , )",
+        fillarc: "fillarc(__CURSOR__, , )",
+        drawtext: "drawtext(__CURSOR__, )",
+        print: "print(__CURSOR__)",
+        println: "println(__CURSOR__)",
+        err: "err(__CURSOR__)",
+        assert: "assert(__CURSOR__, )",
+        clearconsole: "clearconsole()",
+        apply: "apply(__CURSOR__, )",
+        select: "select(__CURSOR__, )",
+        sort: "sort(__CURSOR__)",
+        tokenize: "tokenize(__CURSOR__, )",
+        replace: "replace(__CURSOR__, , )",
+        parse: "parse(__CURSOR__)",
+        parseCSV: "parseCSV(__CURSOR__)",
+        format: "format(__CURSOR__, )",
+        sum: "sum(__CURSOR__)",
+        product: "product(__CURSOR__)",
+        max: "max(__CURSOR__)",
+        min: "min(__CURSOR__)",
+        transpose: "transpose(__CURSOR__)",
+        det: "det(__CURSOR__)",
+        dist: "dist(__CURSOR__, )",
+        inverse: "inverse(__CURSOR__)",
+        linearsolve: "linearsolve(__CURSOR__, )",
+        crossratio: "crossratio(__CURSOR__, , , )",
+        map: "map(__CURSOR__, )",
+        alpha: "alpha->__CURSOR__",
+        size: "size->__CURSOR__",
+        color: "color->__CURSOR__",
+        pointcolor: "pointcolor->__CURSOR__",
+        linecolor: "linecolor->__CURSOR__",
+        pointsize: "pointsize->__CURSOR__",
+        linesize: "linesize->__CURSOR__",
+        noborder: "noborder->__CURSOR__",
+        border: "border->__CURSOR__",
+        dashtype: "dashtype->__CURSOR__",
+        dashing: "dashing->__CURSOR__",
+        dashpattern: "dashpattern->__CURSOR__",
+        start: "start->__CURSOR__",
+        stop: "stop->__CURSOR__",
+        step: "step->__CURSOR__",
+        autoconvert: "autoconvert->__CURSOR__",
+        delimiter: "delimiter->__CURSOR__",
+        truncate: "truncate->__CURSOR__"
+      };
+
+      const cindyKeywordSet = new Set(cindyKeywords);
+      const cindyFunctionSet = new Set(cindyFunctions);
+      const cindyConstantSet = new Set(cindyConstants);
+      const cindyModifierSet = new Set(cindyModifiers.map(function (item) {
+        return item.slice(0, -2).toLowerCase();
+      }));
+
+      function getWordRange(cm) {
+        const cursor = cm.getCursor();
+        const line = cm.getLine(cursor.line);
+        let start = cursor.ch;
+        let end = cursor.ch;
+
+        while (start > 0 && /[A-Za-z0-9_#\-]/.test(line.charAt(start - 1))) {
+          start -= 1;
+        }
+
+        while (end < line.length && /[A-Za-z0-9_#\->]/.test(line.charAt(end))) {
+          end += 1;
+        }
+
+        return {
+          cursor: cursor,
+          start: start,
+          end: end,
+          text: line.slice(start, end)
+        };
+      }
+
+      function cindyHint(cm) {
+        const range = getWordRange(cm);
+        const query = range.text.toLowerCase();
+        const list = cindyVocabulary.filter(function (item) {
+          return query.length === 0 || item.toLowerCase().indexOf(query) === 0;
+        }).map(function (item) {
+          const normalized = item.endsWith("->") ? item.slice(0, -2) : item;
+          const snippet = cindySnippets[normalized];
+
+          if (!snippet) {
+            return item;
+          }
+
+          return {
+            text: item,
+            displayText: item + "  ·  " + snippet.replace("__CURSOR__", "…"),
+            hint: function (innerCm, self) {
+              const marker = "__CURSOR__";
+              const markerIndex = snippet.indexOf(marker);
+              const inserted = snippet.replace(marker, "");
+              innerCm.replaceRange(inserted, self.from, self.to);
+              if (markerIndex >= 0) {
+                innerCm.setCursor(CodeMirror.Pos(self.from.line, self.from.ch + markerIndex));
+              }
+            }
+          };
+        });
+
+        return {
+          list: list,
+          from: CodeMirror.Pos(range.cursor.line, range.start),
+          to: CodeMirror.Pos(range.cursor.line, range.end)
+        };
+      }
+
+      let docsLoaded = false;
+
+      function openDocs() {
+        docsOverlay.classList.add("is-open");
+        docsOverlay.setAttribute("aria-hidden", "false");
+        closeDocsButton.focus();
+
+        if (docsLoaded) {
+          return;
+        }
+
+        docsStatus.textContent = "Carregando documentação...";
+        fetch("cindyjs-docs.txt")
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error("Falha ao carregar documentação");
+            }
+            return response.text();
+          })
+          .then(function (text) {
+            docsContent.textContent = text;
+            docsStatus.textContent = "Local summary based on the official CindyJS documentation.";
+            docsLoaded = true;
+          })
+          .catch(function () {
+            docsContent.textContent = "Não foi possível carregar o arquivo cindyjs-docs.txt.";
+            docsStatus.textContent = "Erro ao carregar documentação.";
+          });
+      }
+
+      function closeDocs() {
+        docsOverlay.classList.remove("is-open");
+        docsOverlay.setAttribute("aria-hidden", "true");
+        docsButton.focus();
+      }
+
+      const editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
+        mode: "javascript",
+        theme: "darcula",
+        autoCloseBrackets: true,
+        matchBrackets: true,
+        lineNumbers: true,
+        tabSize: 2,
+        indentUnit: 2,
+        lineWrapping: true,
+        placeholder: "Write the selected event code here..."
+      });
+
+      editor.setValue(state.buffers[state.activeBuffer]);
+      editor.setOption("extraKeys", {
+        "Shift-Enter": function () {
+          runCode();
+        },
+        "Ctrl-S": function () {
+          saveProject();
+        },
+        "Ctrl-F": function () {
+          document.getElementById("inputFile").click();
+        },
+        "Ctrl-D": function () {
+          openDocs();
+        },
+        "Ctrl-Space": function (cm) {
+          cm.showHint({ hint: cindyHint, completeSingle: false });
+        }
+      });
+
+      editor.addOverlay({
+        token: function (stream) {
+          if (stream.eatSpace()) {
+            return null;
+          }
+
+          if (stream.match(/[A-Za-z#][A-Za-z0-9_]*/)) {
+            const word = stream.current().toLowerCase();
+            if (cindyKeywordSet.has(word)) {
+              return "cindy-keyword";
+            }
+            if (cindyFunctionSet.has(word)) {
+              return "cindy-function";
+            }
+            if (cindyConstantSet.has(word)) {
+              return "cindy-constant";
+            }
+            if (cindyModifierSet.has(word)) {
+              return "cindy-modifier";
+            }
+          }
+
+          stream.next();
+          return null;
+        }
+      });
+
+      editor.on("inputRead", function (cm, change) {
+        if (!change.text || !change.text.length || cm.state.completionActive) {
+          return;
+        }
+
+        const typed = change.text.join("");
+        if (/^[A-Za-z>]$/.test(typed)) {
+          cm.showHint({ hint: cindyHint, completeSingle: false });
+        }
+      });
+
+      editor.on("change", persistActiveBuffer);
+
+      function applyWorkspaceWidth(value) {
+        const nextValue = Math.min(resizeBounds.max, Math.max(resizeBounds.min, value));
+        document.documentElement.style.setProperty("--workspace-canvas-width", nextValue + "%");  
+        splitter.setAttribute("aria-valuenow", String(Math.round(nextValue)));
+        editor.refresh();
+      }
+
+      function updateWorkspaceWidth(pointerClientX) {
+        const rect = workspace.getBoundingClientRect();
+        const percentage = ((pointerClientX - rect.left) / rect.width) * 100;
+        applyWorkspaceWidth(percentage);
+      }
+
+      splitter.addEventListener("pointerdown", function (event) {
+        event.preventDefault();
+        workspace.classList.add("is-resizing");
+        splitter.setPointerCapture(event.pointerId);
+        updateWorkspaceWidth(event.clientX);
+      });
+
+      splitter.addEventListener("pointermove", function (event) {
+        if (!splitter.hasPointerCapture(event.pointerId)) {
+          return;
+        }
+
+        updateWorkspaceWidth(event.clientX);
+      });
+
+      splitter.addEventListener("pointerup", function (event) {
+        if (splitter.hasPointerCapture(event.pointerId)) {
+          splitter.releasePointerCapture(event.pointerId);
+        }
+        workspace.classList.remove("is-resizing");
+      });
+
+      splitter.addEventListener("pointercancel", function (event) {
+        if (splitter.hasPointerCapture(event.pointerId)) {
+          splitter.releasePointerCapture(event.pointerId);
+        }
+        workspace.classList.remove("is-resizing");
+      });
+
+      splitter.addEventListener("keydown", function (event) {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+          return;
+        }
+
+        event.preventDefault();
+        const delta = event.key === "ArrowLeft" ? -2 : 2;
+        const currentValue = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--workspace-canvas-width")) || 50;
+        applyWorkspaceWidth(currentValue + delta);
+      });
+
+      function persistActiveBuffer() {
+        state.buffers[state.activeBuffer] = editor.getValue();
+      }
+
+      function updateTabs() {
+        state.tabs.forEach(function (button) {
+          const selected = button.dataset.buffer === state.activeBuffer;
+          button.setAttribute("aria-selected", String(selected));
+          button.tabIndex = selected ? 0 : -1;
+        });
+      }
+
+      function activateBuffer(name) {
+        if (!state.buffers.hasOwnProperty(name) || state.activeBuffer === name) {
+          return;
+        }
+
+        persistActiveBuffer();
+        state.activeBuffer = name;
+        editor.setValue(state.buffers[name]);
+        updateTabs();
+        editor.focus();
+      }
+
+      function collectScripts() {
+        persistActiveBuffer();
+        const scripts = {};
+
+        bufferNames.forEach(function (name) {
+          if (name !== "config") {
+            scripts[name] = state.buffers[name];
+          }
+        });
+
+        return scripts;
+      }
+
+      function buildConfig() {
+        const config = parseConfig(state.buffers.config);
+        config.scripts = collectScripts();
+        config.csconsole = "console";
+        return config;
+      }
+
+      function runCode() {
+        const config = buildConfig();
+
+        if (state.cindy) {
+          state.cindy.shutdown();
+        }
+
+        state.cindy = CindyJS(config);
+      }
+
+      function saveProject() {
+        const config = buildConfig();
+        saveFile("file.js", "data:attachment/text", inspect(config));
+      }
+
+      function clearConsole() {
+        if (consoleOutput) {
+          consoleOutput.textContent = "";
+        }
+      }
+
+      function loadProject(file) {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          const loadedConfig = parseConfig(event.target.result);
+          const loadedScripts = loadedConfig.scripts || {};
+
+          bufferNames.forEach(function (name) {
+            if (name !== "config") {
+              state.buffers[name] = loadedScripts[name] || "";
+            }
+          });
+
+          delete loadedConfig.scripts;
+          state.buffers.config = inspect(loadedConfig).trimStart();
+          editor.setValue(state.buffers[state.activeBuffer]);
+          runCode();
+        };
+
+        reader.readAsText(file);
+      }
+
+      function createTabs() {
+        state.tabs = bufferNames.map(function (name) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "tab-button";
+          button.dataset.buffer = name;
+          button.setAttribute("role", "tab");
+          button.setAttribute("aria-controls", "editor");
+          button.textContent = name;
+          button.addEventListener("click", function () {
+            activateBuffer(name);
+          });
+          tabsRoot.appendChild(button);
+          return button;
+        });
+
+        updateTabs();
+      }
+
+      runButton.addEventListener("click", runCode);
+      saveButton.addEventListener("click", saveProject);
+      docsButton.addEventListener("click", openDocs);
+      closeDocsButton.addEventListener("click", closeDocs);
+      clearConsoleButton.addEventListener("click", clearConsole);
+      docsOverlay.addEventListener("click", function (event) {
+        if (event.target === docsOverlay) {
+          closeDocs();
+        }
+      });
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && docsOverlay.classList.contains("is-open")) {
+          closeDocs();
+        }
+      });
+      inputFile.addEventListener("change", function (event) {
+        const file = event.target.files && event.target.files[0];
+        if (file) {
+          loadProject(file);
+        }
+        inputFile.value = "";
+      });
+
+      createTabs();
+      applyWorkspaceWidth(50);
+      state.cindy = CindyJS(parseConfig(state.buffers.config));
+      editor.refresh();
+      runCode();
     });
-  window.editor.setSize("100%", "500px");
-  window.changeBuffer = function() {
-    var x = document.getElementById("selectBuffer").value;
-    window.editor_buffer[prevBuffer]=editor.getValue();   
-    editor.setValue(window.editor_buffer[x]);   
-    prevBuffer = x;
-  }
-
-  function saveFile (name, type, data) {
-    if (data !== null && navigator.msSaveBlob)
-        return navigator.msSaveBlob(new Blob([data], { type: type }), name);
-    var a = $("<a style='display: none;'/>");
-    var url = window.URL.createObjectURL(new Blob([data], {type: type}));
-    a.attr("href", url);
-    a.attr("download", name);
-    $("body").append(a);
-    a[0].click();
-    window.URL.revokeObjectURL(url);
-    a.remove();
-  }
-  window.save = function() {
-    var scripts = {}
-    for (var key in editor_buffer) {
-      if (key!='config')
-        scripts[key] = editor_buffer[key];
-    }
-    var config = eval('('+editor_buffer.config+')');
-    config.scripts = scripts;
-    saveFile("file.js","data:attachment/text",inspect(config));
-  }
-  $("#inputFile").change(function(e) {
-    onChange(e);
-  });
-
-  function onChange(event) {
-    var reader = new FileReader();
-    reader.onload = onReaderLoad;
-    reader.readAsText(event.target.files[0]);
-  }
-  window.runCode = function() {
-    cindy.shutdown();
-    window.editor_buffer[prevBuffer]=editor.getValue();   
-    var scripts = {}
-    for (var key in editor_buffer) {
-      if (key!='config')
-        scripts[key] = editor_buffer[key];
-    }
-    var config = eval('('+editor_buffer.config+')');
-    config.scripts = scripts;
-    cindy = CindyJS(config);
-  }
-  function onReaderLoad(event){
-    var config = eval('('+event.target.result+')');
-    for (var key in editor_buffer) {
-      if (key!='config')
-        editor_buffer[key]=config.scripts[key] || "";
-    }
-    delete config.scripts;
-    editor_buffer.config = inspect(config);
-    editor.setValue(window.editor_buffer[prevBuffer]);
-    window.runCode();
-  }
-  editor.setOption("extraKeys",
-    {
-      'Shift-Enter':function(cm){runCode()}
-    })
-});  
-</script>
+  </script>
+</body>
 </html>

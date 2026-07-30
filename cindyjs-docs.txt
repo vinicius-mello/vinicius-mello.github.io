@@ -1,0 +1,299 @@
+Summary of CindyScript / CindyJS
+Source: official CindyJS documentation (cindyjs.org/ref)
+
+This file summarizes CindyScript syntax and the most common usage patterns for quick reference.
+The examples below are practical summaries, not the full documentation.
+
+==================================================
+1. Control Structures
+==================================================
+if(condition, expression)
+if(condition, exprTrue, exprFalse)
+while(condition, expression)
+repeat(number, expression)
+repeat(number, variable, expression)
+forall(list, expression)
+forall(list, variable, expression)
+regional(a, b, c)
+createvar(x)
+removevar(x)
+
+Examples:
+if(x < 0, println("negative"));
+if(x > 0, 1, -1);
+repeat(5, i, println(i));
+forall(1..5, k, draw((k, k)));
+
+==================================================
+2. Drawing and Visualization
+==================================================
+draw(obj)
+draw(pointA, pointB)
+drawall(list)
+connect(pointList)
+drawpoly(pointList)
+fillpoly(pointList)
+drawcircle(center, radius)
+fillcircle(center, radius)
+drawarc(p1, p2, p3)
+fillarc(p1, p2, p3)
+drawtext(position, text)
+
+Common modifiers:
+color->(r,g,b)
+alpha->0.8
+size->4
+pointsize->6
+linesize->2
+pointcolor->(1,0,0)
+linecolor->(0,0,1)
+start->1
+stop->10
+step->2
+dashtype->2
+dashing->4
+dashpattern->[4,2]
+
+Examples:
+draw((1,2), color->(1,0.4,0));
+drawcircle((0,0), 2, color->(0,0.7,1));
+fillcircle((0,0), 1, color->(1,0,0), alpha->0.4);
+drawtext((2,3), "Hi");
+
+==================================================
+3. Console and Debugging
+==================================================
+print(expr)
+println(expr)
+err(expr)
+assert(condition, message)
+clearconsole()
+
+Examples:
+println("value=" + x);
+err(x);
+assert(length(list) > 0, "empty list");
+
+==================================================
+4. Time and Animation
+==================================================
+time()
+date()
+seconds()
+resetclock()
+simulationtime()
+playanimation()
+pauseanimation()
+stopanimation()
+
+Examples:
+t = time();
+println(seconds());
+playanimation();
+
+==================================================
+5. List Operations
+==================================================
+1..10
+length(list)
+contains(list, value)
+concat(list1, list2)
+remove(list1, list2)
+common(list1, list2)
+append(list, value)
+prepend(value, list)
+apply(list, expr)
+apply(list, var, expr)
+select(list, condition)
+select(list, var, condition)
+sort(list)
+reverse(list)
+flatten(list)
+pairs(list)
+
+Examples:
+apply(1..5, #^2);
+select(1..10, isodd(#));
+append([1,2], 3);
+concat([1,2], [3,4]);
+
+==================================================
+6. Geometric Operations
+==================================================
+join(p1, p2)
+meet(l1, l2)
+parallel(point, line)
+parallel(line, point)
+para(...)
+perpendicular(point, line)
+perpendicular(line, point)
+perpendicular(vector)
+perp(...)
+area(p1, p2, p3)
+point(v)
+line(v)
+geotype(v)
+complex(point)
+gauss(complexNumber)
+crossratio(a, b, c, d)
+linereflect(line)
+pointreflect(point)
+map(...)
+allpoints()
+alllines()
+
+Examples:
+r = join(A, B);
+p = meet(r, s);
+h = perpendicular(A, r);
+println(area(A, B, C));
+
+==================================================
+7. Strings
+==================================================
+text(expr)
+substring(text, start, end)
+indexof(text, fragment)
+indexof(text, fragment, start)
+tokenize(text, separator)
+replace(text, oldValue, newValue)
+replace(text, replacements)
+parse(text)
+parseCSV(text)
+format(number, digits)
+
+Useful modifiers:
+autoconvert->false
+delimiter->";"
+truncate->false
+
+Examples:
+text(pi);
+substring("abcdef", 2, 5);
+replace("abcabc", "a", "X");
+parse("3+4");
+format(pi, 4);
+
+==================================================
+8. Vectors, Matrices and Linear Algebra
+==================================================
+sum(list)
+sum(list, expr)
+sum(list, var, expr)
+product(list)
+product(list, expr)
+product(list, var, expr)
+max(list)
+min(list)
+transpose(matrix)
+row(matrix, i)
+column(matrix, i)
+submatrix(matrix, column, row)
+rowmatrix(vector)
+columnmatrix(vector)
+zerovector(n)
+zeromatrix(rows, columns)
+det(matrix)
+dist(v1, v2)
+inverse(matrix)
+eigenvalues(matrix)
+eigenvectors(matrix)
+linearsolve(A, b)
+mincostmatching(A)
+convexhull3d(list)
+
+Examples:
+sum(1..10);
+transpose([[1,2],[3,4]]);
+det([[1,2],[3,4]]);
+linearsolve([[1,1],[1,-1]], [4,0]);
+
+==================================================
+9. Common Math
+==================================================
+sin(x)
+cos(x)
+tan(x)
+sqrt(x)
+abs(x)
+exp(x)
+log(x)
+hue(x)
+
+Constants:
+pi
+i
+true
+false
+___
+
+Examples:
+sin(30°);
+cos(pi/4);
+sqrt(2);
+hue(0.5);
+
+==================================================
+10. Syntax Notes
+==================================================
+Variable assignment:
+x = 10;
+
+Function definition:
+f(x) := x^2 + 1;
+
+Sequence of commands:
+a = 1;
+b = 2;
+println(a + b);
+
+Modifiers use arrows:
+draw(A, color->(1,0,0), size->5);
+
+Lists:
+[1,2,3]
+
+Vectors can also be written with parentheses:
+(1,2)
+
+Integer range:
+1..10
+
+==================================================
+11. Useful Mini Examples
+==================================================
+Point spiral:
+repeat(200, i,
+  p = (cos(i*12°), sin(i*12°)) * i / 30;
+  draw(p, color->hue(i/30), size->3);
+);
+
+Filter even numbers:
+select(1..20, # % 2 == 0);
+
+Map squares:
+apply(1..10, #^2);
+
+Simple debug:
+println("A=" + text(A.xy));
+
+Time-based animation:
+t = seconds();
+draw((cos(t), sin(t)));
+
+==================================================
+12. Official Reference
+==================================================
+Main reference:
+https://cindyjs.org/ref/
+
+Source pages used for this summary:
+- Control Operators
+- Elementary Drawing Functions
+- Console Output
+- Timing and Animations
+- Elementary List Operations
+- Geometric Operators
+- String Operators
+- Vectors and Matrices
+- Language
