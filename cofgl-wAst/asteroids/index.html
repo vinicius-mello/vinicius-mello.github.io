@@ -4,14 +4,87 @@
 	<meta charset="utf-8">
    <!--  <meta name="viewport" content="width=device-width; height=device-height; initial-scale=1.0; maximum-scale=1.0;" /> -->
 	<title>Asteroids</title>
-	<style type="text/css"> 
+	<style type="text/css">
 		* {
 		  -webkit-touch-callout: none; /* prevent callout to copy image, etc when tap to hold */
 		  -webkit-text-size-adjust: none; /* prevent webkit from resizing text to fit */
 		/* make transparent link selection, adjust last value opacity 0 to 1.0 */
-		  -webkit-tap-highlight-color: rgba(0,0,0,0); 
+		  -webkit-tap-highlight-color: rgba(0,0,0,0);
 		  -webkit-user-select: none; /* prevent copy paste, to allow, change 'none' to 'text' */
-		  -webkit-tap-highlight-color: rgba(0,0,0,0); 
+		  -webkit-tap-highlight-color: rgba(0,0,0,0);
+		}
+
+		.game-layout {
+			display: flex;
+			align-items: center;
+			gap: 28px;
+		}
+		.sidebar {
+			flex: 0 0 240px;
+			width: 240px;
+		}
+		.sidebar h1,
+		.sidebar p {
+			text-align: left;
+		}
+		.back-link {
+			display: block;
+			font-family: 'Helvetica Neue', 'Helvetica', sans-serif;
+			font-size: 13px;
+			color: #bbb;
+			text-decoration: none;
+			margin-bottom: 14px;
+		}
+		.back-link:hover {
+			color: #e0a458;
+		}
+		h1 {
+			letter-spacing: 0.03em;
+		}
+		#geoselector {
+			display: flex;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 8px;
+			border: none !important;
+			background: transparent !important;
+			width: auto !important;
+		}
+		#geoselector label {
+			padding: 6px 14px;
+			border-radius: 999px;
+			border: 1px solid #444;
+			background: rgba(255, 255, 255, 0.05);
+			cursor: pointer;
+			font-size: 13px;
+			transition: border-color 0.15s ease, background 0.15s ease;
+		}
+		#geoselector label:hover {
+			border-color: #e0a458;
+		}
+		#geoselector input {
+			accent-color: #e0a458;
+			margin-right: 4px;
+		}
+		.container {
+			flex: 1;
+			display: flex;
+			justify-content: flex-start;
+		}
+		#composite {
+			/* keep it square and never upscale past the native 768x768
+			   resolution, but shrink to fit the viewport if needed
+			   (320px reserves room for the sidebar/gap beside it, 80px
+			   for the page's own top/bottom margin) */
+			width: min(768px, calc(100vw - 320px), calc(100vh - 80px));
+			height: min(768px, calc(100vw - 320px), calc(100vh - 80px));
+		}
+		/* the FPS/debug table is appended straight to <body> by the game
+		   engine, as a sibling after .game-layout - match it to the
+		   game screen's width and line it up underneath it */
+		#debugpanel {
+			width: min(768px, calc(100vw - 320px), calc(100vh - 80px)) !important;
+			margin: 20px 0 0 268px !important;
 		}
 	</style>
 	<link rel=stylesheet type=text/css href=../assets/style.css>
@@ -67,16 +140,21 @@ function pageLoad() {
 window.onload = pageLoad;
 </script>
 
-<h1>Non-Euclidean Spaceship</h1>
-<p>Use arrow/WASD keys for navigation and SPACE for shooting.</p>
-<div id="geoselector">
-    <input type="radio" name="geometry" value="euclidean" checked="checked" /> Euclidean <br/>
-    <input type="radio" name="geometry" value="elliptic" /> Ellipitic <br/>
-    <input type="radio" name="geometry" value="hyperbolic" /> Hyperbolic
-</div>
-<div class="container" >
-	<canvas id="composite" width="768" height="768" style="display: block; margin: 0 auto;"></canvas>
-	<canvas id="viewport" width="768" height="768" style="display: none"></canvas>
-	<canvas id="gui" width="768" height="768" style="display: none"></canvas>
+<div class="game-layout">
+	<div class="sidebar">
+		<a href="../../index.html" class="back-link">&larr; Prof. Vinícius</a>
+		<h1>Non-Euclidean Spaceship</h1>
+		<p>Use arrow/WASD keys for navigation and SPACE for shooting.</p>
+		<div id="geoselector">
+		    <label><input type="radio" name="geometry" value="euclidean" checked="checked" /> Euclidean</label>
+		    <label><input type="radio" name="geometry" value="elliptic" /> Elliptic</label>
+		    <label><input type="radio" name="geometry" value="hyperbolic" /> Hyperbolic</label>
+		</div>
+	</div>
+	<div class="container" >
+		<canvas id="composite" width="768" height="768" style="display: block; margin: 0;"></canvas>
+		<canvas id="viewport" width="768" height="768" style="display: none"></canvas>
+		<canvas id="gui" width="768" height="768" style="display: none"></canvas>
+	</div>
 </div>
 

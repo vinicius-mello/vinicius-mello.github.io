@@ -57,21 +57,153 @@
   display: table;
   clear: both;
 }
+
+html {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(224, 164, 88, 0.16), transparent 45%),
+    linear-gradient(160deg, #6b4e2f 0%, #4a341e 45%, #2b1d12 100%);
+  min-height: 100%;
+}
+
+body {
+  max-width: 1100px;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.back-link {
+  font-family: 'Michroma', sans-serif;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.65) !important;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.back-link:hover {
+  color: white !important;
+}
+
+.app-header h1 {
+  font-family: 'Michroma', sans-serif;
+  font-size: 1.5rem;
+  margin: 0;
+  letter-spacing: 0.03em;
+}
+
+.panel {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  padding: 16px;
+}
+
+.column.left {
+  width: 220px;
+}
+
+.column.right {
+  width: calc(100% - 220px);
+}
+
+.left .panel-label {
+  font-family: 'Michroma', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 10px;
+}
+
+.left ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.left .example {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  font-family: 'Source Code Pro', monospace;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.left .example:hover {
+  transform: translateX(2px);
+  border-color: rgba(224, 164, 88, 0.7);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.right .panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#terminal {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.run-btn {
+  align-self: flex-start;
+  font-family: 'Michroma', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  color: white;
+  background: rgba(224, 164, 88, 0.18);
+  border: 1px solid rgba(224, 164, 88, 0.7);
+  border-radius: 999px;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.run-btn:hover {
+  background: rgba(224, 164, 88, 0.32);
+  transform: translateY(-1px);
+}
+
+#editor {
+  width: 100%;
+}
+
+.CodeMirror {
+  border-radius: 10px;
+}
 </style>
 </head>
 <body>
+  <div class="app-header">
+    <a href="index.html" class="back-link">&larr; Prof. Vinícius</a>
+    <h1>Guacyra</h1>
+  </div>
   <div class="row">
     <div class="column left">
-    <div>Examples</div>
-    <ul>
-      <li class="example" onclick="tt('Expand((x+y)^2)')">Expand</li>
-      <li class="example" onclick="tt('A=Rand({-2,2},4,4)','A','Det(A)')">Det</li>
-    </ul>
+      <div class="panel">
+        <div class="panel-label">Examples</div>
+        <ul>
+          <li class="example" onclick="tt('Expand((x+y)^2)')">Expand</li>
+          <li class="example" onclick="tt('A=Rand({-2,2},4,4)','A','Det(A)')">Det</li>
+        </ul>
+      </div>
     </div>
     <div class="column right">
-      <div id="terminal"></div>
-      <button onclick="runCode()">Run</button>
-      <textarea id="editor"></textarea>
+      <div class="panel">
+        <div id="terminal"></div>
+        <button class="run-btn" onclick="runCode()">Run</button>
+        <textarea id="editor"></textarea>
+      </div>
     </div>
   </div>
 </body>
