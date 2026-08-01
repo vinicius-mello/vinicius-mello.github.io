@@ -1880,7 +1880,7 @@ const parseExpression = (expression, scope) => {
         //console.log('Found train with functions:', B.text, C.text, D.text);
         let newText = '';
         if(B.category === 'V') {
-          newText = `((${_w_}, ${_a_})=> ${C.text}(${D.text}, ${B.text}(${_w_}, ${_a_})))`;
+          newText = `((${_w_}, ${_a_})=> ${C.text}(${D.text}(${_w_}), ${B.text}))`;
         } else {
           newText = `((${_w_}, ${_a_})=> ${C.text}(${D.text}(${_w_}, ${_a_}), ${B.text}(${_w_}, ${_a_})))`;     
         }
