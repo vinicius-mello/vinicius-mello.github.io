@@ -15,6 +15,7 @@ const tokenizer = (text) => {
     { regex: /^\}/, type: 'BRACE_CLOSE' },
     { regex: /^←/u, type: 'ASSIGN' },
     { regex: /^:/, type: 'GUARD' },
+    { regex: /^⎕[A-Z]+/u, type: 'IDENTIFIER' },
     { regex: /^∘\./u, type: 'SYMBOL' },
     { regex: /^[@\\!\?\*¨,-\/\p{Math}\p{Sm}\p{So}]/u, type: 'SYMBOL' },
     { regex: /^[\p{L}_][\p{L}0-9_]*/u, type: 'IDENTIFIER' }
@@ -135,6 +136,7 @@ const global_category = {
   '∩': { category:'F', name: 'intersect'},
   '⍤': { category:'D', name: 'rank' },
   '⌸': { category:'M', name: 'key' },
+  '⎕TYPEOF': { category:'F', name: 'typeOf' },
   // Graphics library (Phase 3): plain lowercase words resolving to G.<name>,
   // exactly like any other global identifier binding.
   circle: { category:'F', name: 'svgCircle' },
@@ -1512,6 +1514,15 @@ const G = {
     const generatedCode = aplToJavaScript(w);
     const fn = new Function('G', generatedCode);
     return fn(this);
+  },
+  typeOf: (w) => {
+    if (w === null) {
+      return 'null';
+    }
+    if (Array.isArray(w)) {
+      return 'array';
+    }
+    return typeof w;
   },
   svgCircle: (w, a) => {
     const [cx, cy] = a ?? [0, 0];
