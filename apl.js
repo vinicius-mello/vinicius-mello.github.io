@@ -1739,6 +1739,89 @@ const CAT_BOUNDARY = ['(', '←', 'Edge', ':'];
 const CAT_BOUNDARY_MF_NOCOLON = ['(', '←', 'M', 'F', 'Edge'];
 const CAT_V_CLOSEPAREN = ['V', ')'];
 
+// Renders a statement list the same way at both the dfn-body level (via
+// Block, which additionally hoists `let` declarations) and the top-level
+// Program: every statement but the last is followed by `; `, the last is
+// wrapped in `return ... ;` - a dfn's/program's value is its last expression.
+const emitStatements = (statements) => {
+  let result = '';
+  statements.forEach((node, i) => {
+    if (i === statements.length - 1) {
+      result += `return ${emitJs(node)};`;
+    } else {
+      result += `${emitJs(node)}; `;
+    }
+  });
+  return result;
+};
+
+// Turns an AST node (built by parseExpression/reduceStack below) into APL's
+// one and only backend today: a JS source string, executed via `new
+// Function('G', code)`. A second emitter (e.g. toMermaid/toDot) can walk the
+// same node shapes to draw a train/fork as a graph instead.
+const emitJs = (node) => {
+  switch (node.type) {
+    case 'Raw':
+      return node.text;
+    case 'Identifier':
+      return (node.global ? 'G.' : '') + node.name;
+    case 'Strand':
+      return `[${node.elements.map(emitJs).join(', ')}]`;
+    case 'Apply':
+      return `${emitJs(node.fn)}(${emitJs(node.arg)})`;
+    case 'DyadicApply':
+      return `${emitJs(node.fn)}(${emitJs(node.w)}, ${emitJs(node.a)})`;
+    case 'OperatorApply':
+      return `${emitJs(node.operator)}(${emitJs(node.operand)})`;
+    case 'DyadicOperatorApply':
+      if (node.isOuterIdiom) {
+        return `G.outer(${emitJs(node.right)})`;
+      }
+      return `${emitJs(node.operator)}(${emitJs(node.left)}, ${emitJs(node.right)})`;
+    case 'Fork':
+      if (node.leftIsValue) {
+        return `((${_w_}, ${_a_})=> ${emitJs(node.mid)}(${emitJs(node.right)}(${_w_}), ${emitJs(node.left)}))`;
+      }
+      return `((${_w_}, ${_a_})=> ${emitJs(node.mid)}(${emitJs(node.right)}(${_w_}, ${_a_}), ${emitJs(node.left)}(${_w_}, ${_a_})))`;
+    case 'Atop':
+      return `((${_w_}, ${_a_})=> ${emitJs(node.f)}(${emitJs(node.g)}(${_w_}, ${_a_})))`;
+    case 'Assign':
+      if (node.firstAlphaAssign) {
+        return `${node.targetText} = _a_===undefined ? ${emitJs(node.value)} : _a_`;
+      }
+      return `${node.targetText} = ${emitJs(node.value)}`;
+    case 'Guard':
+      return `if(${emitJs(node.cond)}===1) return ${emitJs(node.body)}`;
+    case 'Dfn':
+      return `(function _del_(${_w_}, ${_a_}) {${emitJs(node.body)}})`;
+    case 'Dop':
+      if (node.kind === 'dyadic') {
+        return `(function _ddel_(${_aa_}, ${_ww_}) { return (function _del_(${_w_}, ${_a_}) {${emitJs(node.body)}})})`;
+      }
+      return `(function _ddel_(${_aa_}) { return (function _del_(${_w_}, ${_a_}) {${emitJs(node.body)}})})`;
+    case 'Block': {
+      let prefix = '';
+      if (node.declarations.length > 0) {
+        const decls = node.declarations.map((d) => (d[0] === '[' ? `${d} = []` : d)).join(', ');
+        prefix = `let ${decls}; `;
+      }
+      return prefix + emitStatements(node.statements);
+    }
+    case 'Program':
+      return emitStatements(node.statements);
+    default:
+      throw new Error(`Unknown AST node type: ${node.type}`);
+  }
+};
+
+// A "train" is an implicit composition of functions formed by bare
+// juxtaposition - a 2-tine atop (`f g`) or a 3-tine fork (`f g h`) - as
+// opposed to a function derived via an explicit operator glyph
+// (OperatorApply/DyadicOperatorApply: f¨, f⍣3, f.g, f∘g...). Only reduceStack's
+// train/fork rules (apl.js's "Found train"/"Found train with functions")
+// ever produce these two node types, so the check is just the node's type.
+const isTrain = (node) => node.type === 'Fork' || node.type === 'Atop';
+
 const parseExpression = (expression, scope) => {
   const stack = [];
 
@@ -1775,9 +1858,8 @@ const parseExpression = (expression, scope) => {
         belong(B.category, CAT_V_F_D_M) &&
         C.category === ')'
       ) {
-        //console.log('Found parentheses:', B.text);
-        let newText = B.text;
-        stack.splice(size - 3, 3, { category: B.category, text: newText });
+        //console.log('Found parentheses:', B.node);
+        stack.splice(size - 3, 3, { category: B.category, node: B.node });
         foundReduction = true;
         continue;
       }
@@ -1788,7 +1870,7 @@ const parseExpression = (expression, scope) => {
         // ⍞ quotes whatever sits to its right into a plain value - same
         // generated code, just relabeled so it can be stored, put in an
         // array, or handed to a JS callback instead of being applied.
-        stack.splice(size - 2, 2, { category: 'V', text: B.text });
+        stack.splice(size - 2, 2, { category: 'V', node: B.node });
         foundReduction = true;
         continue;
       }
@@ -1798,16 +1880,13 @@ const parseExpression = (expression, scope) => {
         C.category === 'V'
       ) {
         //console.log('Found strand:',A,B,C);
-        stack.pop();
-        let newText = '[';
+        const savedA = stack.pop();
+        const elements = [];
         while (stack.length > 0 && stack[stack.length - 1].category === 'V') {
-          const top = stack.pop();
-          newText += top.text;
-          if(stack.length > 0 && stack[stack.length - 1].category === 'V') newText += ', ';
+          elements.push(stack.pop().node);
         }
-        newText += ']';
-        stack.push({ category: 'V', text: newText })
-        stack.push(A);          
+        stack.push({ category: 'V', node: { type: 'Strand', elements } });
+        stack.push(savedA);
         foundReduction = true;
         continue;
       }
@@ -1816,10 +1895,10 @@ const parseExpression = (expression, scope) => {
         B.category === 'F' &&
         C.category === 'V'
       ) {
-        //console.log('Found function application:', B.text, C.text);
-        const newText = `${B.text}(${C.text})`;
-        stack.splice(size - 3, 3, 
-          { category: 'V', text: newText }, A);
+        //console.log('Found function application:', B.node, C.node);
+        const node = { type: 'Apply', fn: B.node, arg: C.node };
+        stack.splice(size - 3, 3,
+          { category: 'V', node }, A);
         foundReduction = true;
         continue;
       }
@@ -1829,10 +1908,10 @@ const parseExpression = (expression, scope) => {
         C.category === 'F' &&
         D.category === 'V'
       ) {
-        //console.log('Found function application:', B.text, C.text, D.text);
-        const newText = `${C.text}(${D.text})`;
-        stack.splice(size - 4, 4, 
-          { category: 'V', text: newText }, B, A);
+        //console.log('Found function application:', B.node, C.node, D.node);
+        const node = { type: 'Apply', fn: C.node, arg: D.node };
+        stack.splice(size - 4, 4,
+          { category: 'V', node }, B, A);
         foundReduction = true;
         continue;
       }
@@ -1842,10 +1921,10 @@ const parseExpression = (expression, scope) => {
         C.category === 'F' &&
         D.category === 'V'
       ) {
-        //console.log('Found function application:', C.text, D.text, B.text);
-        const newText = `${C.text}(${D.text}, ${B.text})`;
-        stack.splice(size - 4, 4, 
-          { category: 'V', text: newText }, A);
+        //console.log('Found function application:', C.node, D.node, B.node);
+        const node = { type: 'DyadicApply', fn: C.node, w: D.node, a: B.node };
+        stack.splice(size - 4, 4,
+          { category: 'V', node }, A);
         foundReduction = true;
         continue;
       }
@@ -1854,10 +1933,10 @@ const parseExpression = (expression, scope) => {
         belong(B.category, CAT_F_V) &&
         C.category === 'M'
       ) {
-        //console.log('Found monadic operator:', B.text, C.text);
-        const newText = `${C.text}(${B.text})`;
-        stack.splice(size - 3, 3, 
-          { category: 'F', text: newText }, A);
+        //console.log('Found monadic operator:', B.node, C.node);
+        const node = { type: 'OperatorApply', operator: C.node, operand: B.node };
+        stack.splice(size - 3, 3,
+          { category: 'F', node }, A);
         foundReduction = true;
         continue;
       }
@@ -1870,15 +1949,15 @@ const parseExpression = (expression, scope) => {
         C.category === 'D' &&
         belong(D.category, CAT_F_V)
       ) {
-        //console.log('Found dyadic operator:', B.text, C.text, D.text);
-        let newText;
-        if(B.text==='G.emptyFunc' && C.text==='G.dot') {
-          newText = `G.outer(${D.text})`;
-        } else { 
-          newText = `${C.text}(${B.text}, ${D.text})`;
-        }
-        stack.splice(size - 4, 4, 
-          { category: 'F', text: newText }, A);
+        //console.log('Found dyadic operator:', B.node, C.node, D.node);
+        // f∘.g (outer product) tokenizes as emptyFunc . g - the jot's left
+        // operand being literally the bare, unglobal-prefixed emptyFunc/dot
+        // pair is what distinguishes this idiom from an ordinary a D w.
+        const isOuterIdiom = B.node.type === 'Identifier' && B.node.global && B.node.name === 'emptyFunc'
+          && C.node.type === 'Identifier' && C.node.global && C.node.name === 'dot';
+        const node = { type: 'DyadicOperatorApply', operator: C.node, left: B.node, right: D.node, isOuterIdiom };
+        stack.splice(size - 4, 4,
+          { category: 'F', node }, A);
         foundReduction = true;
         continue;
       }
@@ -1888,15 +1967,10 @@ const parseExpression = (expression, scope) => {
         C.category === 'F' &&
         D.category === 'F'
       ) {
-        //console.log('Found train with functions:', B.text, C.text, D.text);
-        let newText = '';
-        if(B.category === 'V') {
-          newText = `((${_w_}, ${_a_})=> ${C.text}(${D.text}(${_w_}), ${B.text}))`;
-        } else {
-          newText = `((${_w_}, ${_a_})=> ${C.text}(${D.text}(${_w_}, ${_a_}), ${B.text}(${_w_}, ${_a_})))`;     
-        }
-        stack.splice(size - 4, 4, 
-          { category: 'F', text: newText }, A);
+        //console.log('Found train with functions:', B.node, C.node, D.node);
+        const node = { type: 'Fork', left: B.node, leftIsValue: B.category === 'V', mid: C.node, right: D.node };
+        stack.splice(size - 4, 4,
+          { category: 'F', node }, A);
         foundReduction = true;
         continue;
       }
@@ -1905,10 +1979,10 @@ const parseExpression = (expression, scope) => {
         B.category === 'F' &&
         C.category === 'F'
       ) {
-        //console.log('Found train:', B.text, C.text);
-        const newText = `((${_w_}, ${_a_})=> ${B.text}(${C.text}(${_w_}, ${_a_})))`;
-        stack.splice(size - 3, 3, 
-          { category: 'F', text: newText }, A);
+        //console.log('Found train:', B.node, C.node);
+        const node = { type: 'Atop', f: B.node, g: C.node };
+        stack.splice(size - 3, 3,
+          { category: 'F', node }, A);
         foundReduction = true;
         continue;
       }
@@ -1918,17 +1992,21 @@ const parseExpression = (expression, scope) => {
         C.category === '←' &&
         belong(D.category, CAT_V_F_D_M)
       ) {
-        const [categoryEntry, global] 
-          = find_category(B.text, scope);
-        let newText = '';
-        const Btext = global ? B.text.slice(2) : B.text;
-        if(Btext === '_a_' && categoryEntry && categoryEntry.name === '') { // First assignment of ⍺ in a DFN
-          newText = `${B.text} = _a_===undefined ? ${D.text} : _a_`;
-        } else newText = `${B.text} = ${D.text}`;
-        scope[scope.length - 1][Btext] = 
-          { category: D.category, name: Btext }; 
-        stack.splice(size - 4, 4, 
-          { category: D.category, text: newText }, A);
+        // The scope key has to be a string, and the assignment target may
+        // be a strand (e.g. `a b c←⍵`, whose Strand node renders as
+        // "[a, b, c]" - valid on both sides, array literal or destructuring
+        // pattern) rather than a plain Identifier, so it's rendered here via
+        // emitJs the same way the old text-based version always had it
+        // pre-rendered. See find_category for what "global" means here.
+        const Btext = emitJs(B.node);
+        const [categoryEntry, global] = find_category(Btext, scope);
+        const strippedBtext = global ? Btext.slice(2) : Btext;
+        const firstAlphaAssign = strippedBtext === '_a_' && categoryEntry && categoryEntry.name === ''; // First assignment of ⍺ in a DFN
+        const node = { type: 'Assign', targetText: Btext, value: D.node, firstAlphaAssign };
+        scope[scope.length - 1][strippedBtext] =
+          { category: D.category, name: strippedBtext };
+        stack.splice(size - 4, 4,
+          { category: D.category, node }, A);
         foundReduction = true;
         continue;
       }
@@ -1938,10 +2016,10 @@ const parseExpression = (expression, scope) => {
         C.category === ':' &&
         D.category === 'V'
       ) {
-        //console.log('Found conditional:', B.text, D.text);
-        let newText = `if(${B.text}===1) return ${D.text}`;
-        stack.splice(size - 4, 4, 
-          { category: 'V', text: newText }, A);
+        //console.log('Found conditional:', B.node, D.node);
+        const node = { type: 'Guard', cond: B.node, body: D.node };
+        stack.splice(size - 4, 4,
+          { category: 'V', node }, A);
         foundReduction = true;
         continue;
       }
@@ -1954,35 +2032,16 @@ const parseExpression = (expression, scope) => {
       '_a_': { category: 'V', name: '' }, // name is empty to deal with first assignment of ⍺ in a DFN
     };  
     scope.push(subScope);
-    let resultText = '';
+    const statements = [];
     for (let i = 0; i < subExpressions.length; i++) {
-      const subExpression = subExpressions[i];
-      const subResult = parseExpression(subExpression, scope);
-      if (i === subExpressions.length - 1) {
-        resultText += `return ${subResult};`;
-      } else {
-        resultText += `${subResult}; `;
-      }
+      statements.push(parseExpression(subExpressions[i], scope));
     }
     delete scope[scope.length - 1]['_del_'];
     delete scope[scope.length - 1]['_ddel_'];
     delete scope[scope.length - 1]['_a_'];
-    let prefix = 'let ';
-    let first = true;
-    for(const key in subScope) {
-      if (!first) {
-        prefix += ', ';
-      } else {
-        first = false;
-      }
-      prefix += key;
-      if(key[0] === '[') prefix += ' = []';
-    }
-    if (!first) {
-      resultText = `${prefix}; ${resultText}`;
-    }
+    const declarations = Object.keys(subScope);
     scope.pop();
-    return resultText;
+    return { type: 'Block', declarations, statements };
   }
   const tokens = expression.reverse();
   tokens.push({ type: 'Edge', value: 'Edge' });
@@ -1991,33 +2050,30 @@ const parseExpression = (expression, scope) => {
     const reg = {};
     if (token.type === 'DFN') {
       reg.category = 'F';
-      const newText = processDFN(token.value, scope);
-      reg.text = `(function _del_(${_w_}, ${_a_}) {${newText}})`;
+      reg.node = { type: 'Dfn', body: processDFN(token.value, scope) };
     } else if (token.type === 'DOPD') {
       reg.category = 'D';
-      const newText = processDFN(token.value, scope);
-      reg.text = `(function _ddel_(${_aa_}, ${_ww_}) { return (function _del_(${_w_}, ${_a_}) {${newText}})})`;
+      reg.node = { type: 'Dop', kind: 'dyadic', body: processDFN(token.value, scope) };
     } else if (token.type === 'DOPM') {
       reg.category = 'M';
-      const newText = processDFN(token.value, scope);
-      reg.text = `(function _ddel_(${_aa_}) { return (function _del_(${_w_}, ${_a_}) {${newText}})})`;
+      reg.node = { type: 'Dop', kind: 'monadic', body: processDFN(token.value, scope) };
     } else if (token.type === 'SPECIAL_VAR') {
       reg.category = global_category[token.value].category;
-      reg.text = global_category[token.value].name;
+      reg.node = { type: 'Identifier', name: global_category[token.value].name, global: false };
     } else if (
         token.type === 'IDENTIFIER' ||
         token.type === 'SYMBOL'
       ) {
       const [cat_name, global] = find_category(token.value, scope);
       reg.category = cat_name ? cat_name.category : 'V';
-      reg.text = (global ? 'G.' : '') + (cat_name && cat_name.name ? cat_name.name : token.value);
+      const name = cat_name && cat_name.name ? cat_name.name : token.value;
+      reg.node = { type: 'Identifier', name, global };
     } else {
-      reg.category = 
-        token.type === 'NUMBER' ? 'V' : 
+      reg.category =
+        token.type === 'NUMBER' ? 'V' :
         token.type === 'STRING' ? 'V' : token.value;
-      if (token.type === 'NUMBER') {
-        reg.text = token.value.replace('¯', '-');
-      } else reg.text = token.value;
+      const text = token.type === 'NUMBER' ? token.value.replace('¯', '-') : token.value;
+      reg.node = { type: 'Raw', text };
     }
     stack.push(reg);
     // Apply reduction rules greedily onto the stack frame
@@ -2025,26 +2081,21 @@ const parseExpression = (expression, scope) => {
   }
   // Post-parsing structural check
   if (stack.length > 2) {
-    console.log("❌ SYNTAX ERROR: The stack ended with orphaned elements!:", stack.slice(1).map(e => e.text).join(', '));
+    console.log("❌ SYNTAX ERROR: The stack ended with orphaned elements!:", stack.slice(1).map(e => emitJs(e.node)).join(', '));
   }
-  return stack[0].text;
+  return stack[0].node;
 }
 
-const parser = (text, categories = { ...global_category }) => {
+const parseToAst = (text, categories = { ...global_category }) => {
   const tokens = tokenizer(text);
   const [expressions, _] = breakExpressions(tokens, 0);
   const scope = [categories];
-  let finalResult = '';
-  for (let i = 0; i < expressions.length; i++) {
-    const expression = expressions[i];
-    const result = parseExpression(expression, scope);
-    if (i === expressions.length - 1) {
-      finalResult += `return ${result};`;
-    } else {
-      finalResult += `${result}; `;
-    }
-  }
-  return finalResult;
+  const statements = expressions.map((expression) => parseExpression(expression, scope));
+  return { type: 'Program', statements };
+};
+
+const parser = (text, categories = { ...global_category }) => {
+  return emitJs(parseToAst(text, categories));
 }
 
 const aplToJavaScript = (text, categories = { ...global_category }) => {
@@ -2071,6 +2122,9 @@ export {
   tokenizer,
   breakExpressions,
   parseExpression,
+  parseToAst,
+  emitJs,
+  isTrain,
   parser,
   aplToJavaScript,
   evaluateApl,
