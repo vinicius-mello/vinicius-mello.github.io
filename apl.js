@@ -162,6 +162,18 @@ const global_category = {
   Plot: { category:'V', name: 'Plot' },
 }
 
+// Reverse lookup used only by emitGraph's node labels, so a graph shows the
+// glyph/keyword a user actually typed (e.g. "⍵", "circle") instead of the
+// internal JS name it resolves to (e.g. "_w_", "svgCircle"). First writer
+// wins on name collisions (e.g. the repeated '⍣' entry above) - harmless,
+// since duplicates always share the same name anyway.
+const NAME_TO_GLYPH = {};
+for (const [glyph, entry] of Object.entries(global_category)) {
+  if (!(entry.name in NAME_TO_GLYPH)) {
+    NAME_TO_GLYPH[entry.name] = glyph;
+  }
+}
+
 const _a_ = global_category['⍺'].name;
 const _w_ = global_category['⍵'].name;
 const _aa_ = global_category['⍺⍺'].name;
@@ -1822,6 +1834,101 @@ const emitJs = (node) => {
 // ever produce these two node types, so the check is just the node's type.
 const isTrain = (node) => node.type === 'Fork' || node.type === 'Atop';
 
+// Glyph for a leaf node, or null if `n` isn't a leaf (Identifier/Raw) - used
+// below to decide whether a compose-like node (Fork, Atop, an operator
+// application...) can use its own glue/operator's glyph as its label
+// instead of a generic word like "fork"/"operator".
+const trainGlyph = (n) => {
+  if (n.type === 'Identifier') return NAME_TO_GLYPH[n.name] || n.name;
+  if (n.type === 'Raw') return n.text;
+  return null;
+};
+
+// {label, entries: [[tag|null, childNode], ...]} for every AST node type -
+// the shape emitGraph's indented-tree printer below walks. A composition's
+// own operator/glue glyph becomes the label directly (a Fork's label is its
+// glue function's glyph, e.g. "," for `+,-`; an OperatorApply's label is the
+// operator itself, e.g. "⌿") instead of a generic node-type name, and its
+// tines/operands need no tag - position already says which is which. Kept
+// separate from emitJs's switch since the two walk the tree for entirely
+// different purposes (source text vs. a picture).
+const trainEntry = (node) => {
+  switch (node.type) {
+    case 'Fork': {
+      const glyph = trainGlyph(node.mid);
+      return glyph !== null
+        ? { label: glyph, entries: [[null, node.left], [null, node.right]] }
+        : { label: 'fork', entries: [['left', node.left], ['mid', node.mid], ['right', node.right]] };
+    }
+    case 'Atop': {
+      const glyph = trainGlyph(node.f);
+      return glyph !== null
+        ? { label: glyph, entries: [[null, node.g]] }
+        : { label: 'atop', entries: [['f', node.f], ['g', node.g]] };
+    }
+    case 'OperatorApply':
+      return { label: trainGlyph(node.operator) ?? 'operator', entries: [[null, node.operand]] };
+    case 'DyadicOperatorApply':
+      return { label: trainGlyph(node.operator) ?? 'operator', entries: [[null, node.left], [null, node.right]] };
+    case 'Apply': {
+      const glyph = trainGlyph(node.fn);
+      return glyph !== null
+        ? { label: glyph, entries: [[null, node.arg]] }
+        : { label: 'apply', entries: [['fn', node.fn], ['arg', node.arg]] };
+    }
+    case 'DyadicApply': {
+      const glyph = trainGlyph(node.fn);
+      return glyph !== null
+        ? { label: glyph, entries: [['⍺', node.a], ['⍵', node.w]] }
+        : { label: 'apply', entries: [['fn', node.fn], ['⍺', node.a], ['⍵', node.w]] };
+    }
+    case 'Strand':
+      return { label: 'strand', entries: node.elements.map((el, i) => [String(i), el]) };
+    case 'Assign':
+      return { label: '←', entries: [['target', node.target], ['value', node.value]] };
+    case 'Guard':
+      return { label: ':', entries: [['cond', node.cond], ['then', node.body]] };
+    case 'Dfn':
+      return { label: 'dfn', entries: [['body', node.body]] };
+    case 'Dop':
+      return { label: `dop (${node.kind})`, entries: [['body', node.body]] };
+    case 'Block':
+    case 'Program':
+      return { label: node.type.toLowerCase(), entries: node.statements.map((s, i) => [String(i), s]) };
+    default: // Identifier, Raw
+      return { label: trainGlyph(node) ?? node.type, entries: [] };
+  }
+};
+
+// Renders an AST node as an indented tree - straight box-drawing guides
+// (├─/└─/│), no diagonal lines, no layout math - each line is one node's
+// own glyph (see trainEntry above), which is what a train actually is: an
+// implicit composition of primitives. `(+,-)` prints as:
+//   ,
+//   ├─ +
+//   └─ -
+// i.e. the classic fork diagram (glue function on top, its two tines below)
+// falls out for free, since a Fork's label already is its glue's glyph.
+const emitGraph = (node) => {
+  // Auto-unwrap a single-statement Program, the common case for a one-liner
+  // like emitGraph(parseToAst('(+,-)3 4')).
+  const root = (node.type === 'Program' && node.statements.length === 1)
+    ? node.statements[0] : node;
+
+  const lines = [];
+  const walk = (n, prefix, isLast, isRoot, tag) => {
+    const { label, entries } = trainEntry(n);
+    const text = tag ? `${tag}: ${label}` : label;
+    lines.push(isRoot ? text : prefix + (isLast ? '└─ ' : '├─ ') + text);
+    const childPrefix = isRoot ? '' : prefix + (isLast ? '   ' : '│  ');
+    entries.forEach(([childTag, child], i) => {
+      walk(child, childPrefix, i === entries.length - 1, false, childTag);
+    });
+  };
+  walk(root, '', true, true, null);
+  return lines.join('\n');
+};
+
 const parseExpression = (expression, scope) => {
   const stack = [];
 
@@ -2002,7 +2109,7 @@ const parseExpression = (expression, scope) => {
         const [categoryEntry, global] = find_category(Btext, scope);
         const strippedBtext = global ? Btext.slice(2) : Btext;
         const firstAlphaAssign = strippedBtext === '_a_' && categoryEntry && categoryEntry.name === ''; // First assignment of ⍺ in a DFN
-        const node = { type: 'Assign', targetText: Btext, value: D.node, firstAlphaAssign };
+        const node = { type: 'Assign', target: B.node, targetText: Btext, value: D.node, firstAlphaAssign };
         scope[scope.length - 1][strippedBtext] =
           { category: D.category, name: strippedBtext };
         stack.splice(size - 4, 4,
@@ -2124,6 +2231,7 @@ export {
   parseExpression,
   parseToAst,
   emitJs,
+  emitGraph,
   isTrain,
   parser,
   aplToJavaScript,

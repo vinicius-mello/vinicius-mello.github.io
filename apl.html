@@ -968,7 +968,7 @@
     import { syntaxHighlighting, HighlightStyle } from "https://esm.sh/@codemirror/language@6";
     import { tags } from "https://esm.sh/@lezer/highlight@1";
     import { apl } from "https://esm.sh/@codemirror/legacy-modes@6/mode/apl";
-    import { aplToJavaScript, G, global_category, isSceneNode, sceneToSvgElement } from "./apl.js";
+    import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, isSceneNode, sceneToSvgElement } from "./apl.js";
 
     const baseAplToken = apl.token.bind(apl);
     // Matches the tokenizer's own unquoted-string rule in apl.js
@@ -1588,7 +1588,7 @@
 
       const head = document.createElement("div");
       head.className = "cell-head";
-      const label = kind === "emit" ? "Output (quad)" : kind === "error" ? "Error" : "Result";
+      const label = kind === "emit" ? "Output (quad)" : kind === "error" ? "Error" : kind === "graph" ? "Train" : "Result";
       head.textContent = label;
 
       const body = document.createElement("div");
@@ -1765,11 +1765,13 @@
         return true;
       }
 
+      let ast = null;
       let jsCode = null;
       let jsCodeFormatted = null;
       let transpileError = null;
       try {
-        jsCode = aplToJavaScript(source, replCategories);
+        ast = parseToAst(source, replCategories);
+        jsCode = emitJs(ast);
         jsCodeFormatted = beautifyGeneratedJavaScript(jsCode);
       } catch (error) {
         transpileError = error;
@@ -1788,6 +1790,20 @@
 
       removeOutputsFor(record);
       const newOutputs = [];
+
+      // A cell whose last statement is a train (an implicit fork/atop
+      // composition, e.g. `(+,-)` or `×⌿(1∘+⍳)`) shows its structure as a
+      // graph before anything else - trains evaluate to a bare JS function,
+      // which the normal Result cell can't display meaningfully anyway.
+      const lastStatement = ast ? ast.statements[ast.statements.length - 1] : null;
+      if (lastStatement && isTrain(lastStatement)) {
+        try {
+          newOutputs.push(buildOutputCell("graph", emitGraph(lastStatement)));
+        } catch (error) {
+          // Best-effort visualization (e.g. d3 not loaded) - a failure here
+          // shouldn't block execution.
+        }
+      }
 
       if (transpileError) {
         newOutputs.push(buildOutputCell("error", transpileError instanceof Error ? transpileError.message : String(transpileError)));
