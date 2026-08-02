@@ -136,6 +136,7 @@ const global_category = {
   '∩': { category:'F', name: 'intersect'},
   '⍤': { category:'D', name: 'rank' },
   '⌸': { category:'M', name: 'key' },
+  '⌹': { category:'F', name: 'domino' },
   '⎕TYPEOF': { category:'F', name: 'typeOf' },
   // Graphics library (Phase 3): plain lowercase words resolving to G.<name>,
   // exactly like any other global identifier binding.
@@ -477,6 +478,74 @@ const permute = (a, p) => {
       return at(a, ip.map(i => prefix[i]));
     });
 }
+
+// Matrix multiply: A is m×k, B is k×n, result is m×n. Both plain row-major
+// nested arrays, same convention as everything else in this file.
+const matMul = (A, B) => {
+  const m = A.length, k = B.length, n = B[0].length;
+  const result = [];
+  for (let i = 0; i < m; i++) {
+    const row = new Array(n).fill(0);
+    for (let t = 0; t < k; t++) {
+      const a_it = A[i][t];
+      for (let j = 0; j < n; j++) {
+        row[j] += a_it * B[t][j];
+      }
+    }
+    result.push(row);
+  }
+  return result;
+};
+
+// Square-matrix inverse via Gauss-Jordan elimination with partial pivoting.
+const matInverse = (A) => {
+  const n = A.length;
+  const M = A.map((row, i) => row.concat(Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))));
+  for (let col = 0; col < n; col++) {
+    let pivotRow = col;
+    let pivotAbs = Math.abs(M[col][col]);
+    for (let r = col + 1; r < n; r++) {
+      if (Math.abs(M[r][col]) > pivotAbs) {
+        pivotAbs = Math.abs(M[r][col]);
+        pivotRow = r;
+      }
+    }
+    if (pivotAbs < 1e-10) {
+      throw new Error('Matrix is singular and has no inverse');
+    }
+    if (pivotRow !== col) {
+      [M[col], M[pivotRow]] = [M[pivotRow], M[col]];
+    }
+    const pivot = M[col][col];
+    for (let j = 0; j < 2 * n; j++) {
+      M[col][j] /= pivot;
+    }
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const factor = M[r][col];
+      if (factor !== 0) {
+        for (let j = 0; j < 2 * n; j++) {
+          M[r][j] -= factor * M[col][j];
+        }
+      }
+    }
+  }
+  return M.map((row) => row.slice(n));
+};
+
+// Domino (⌹): square matrices invert directly; a non-square, full-rank A
+// gets the least-squares pseudo-inverse instead, via the normal equations
+// (Aᵀ·A)⁻¹·Aᵀ when A is tall, or Aᵀ·(A·Aᵀ)⁻¹ when A is wide - same
+// generalization Dyalog's monadic ⌹ makes.
+const matPseudoInverse = (A) => {
+  if (A.length === A[0].length) {
+    return matInverse(A);
+  }
+  const At = transposeRec(A);
+  return A.length > A[0].length
+    ? matMul(matInverse(matMul(At, A)), At)
+    : matMul(At, matInverse(matMul(A, At)));
+};
 
 // A "command" for ⍠ (buildObject) is [key, value(s)]. APL strand-flattening
 // collapses a single-pair list (e.g. ('x' 5)) into a bare pair, and a
@@ -1003,6 +1072,23 @@ const G = {
       const result = ww(right, left);
       return result.reduceRight(aa);      
     });
+  },
+  // Domino (⌹): monadic ⌹⍵ is the matrix inverse (or least-squares
+  // pseudo-inverse for a non-square ⍵); dyadic ⍺⌹⍵ solves ⍵·X≡⍺ for X, i.e.
+  // (⌹⍵)+.×⍺ - ⍺ may be a plain vector (a single right-hand side) or a
+  // matrix (one right-hand side per column), and the result matches ⍺'s
+  // shape (vector in, vector out).
+  domino: (w, a) => {
+    if (!Array.isArray(w) || !Array.isArray(w[0])) {
+      throw new Error('Domino requires a matrix');
+    }
+    if (a === undefined) {
+      return matPseudoInverse(w);
+    }
+    const aIsVector = !Array.isArray(a[0]);
+    const aMat = aIsVector ? a.map((x) => [x]) : a;
+    const result = matMul(matPseudoInverse(w), aMat);
+    return aIsVector ? result.map((row) => row[0]) : result;
   },
   rank: (f, g) => (w, a) => {
     if (typeof f !== 'function') {
