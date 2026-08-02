@@ -1856,15 +1856,19 @@ const trainEntry = (node) => {
   switch (node.type) {
     case 'Fork': {
       const glyph = trainGlyph(node.mid);
+      // "⋅" (not a real APL primitive here, so it can't collide with one)
+      // stands in for a glue/outer function that isn't a bare glyph itself
+      // (e.g. it's a derived function) - still two/three real children,
+      // just no word or tag to name the node they hang off.
       return glyph !== null
         ? { label: glyph, entries: [[null, node.left], [null, node.right]] }
-        : { label: 'fork', entries: [['left', node.left], ['mid', node.mid], ['right', node.right]] };
+        : { label: '⋅', entries: [[null, node.left], [null, node.mid], [null, node.right]] };
     }
     case 'Atop': {
       const glyph = trainGlyph(node.f);
       return glyph !== null
         ? { label: glyph, entries: [[null, node.g]] }
-        : { label: 'atop', entries: [['f', node.f], ['g', node.g]] };
+        : { label: '⋅', entries: [[null, node.f], [null, node.g]] };
     }
     case 'OperatorApply':
       return { label: trainGlyph(node.operator) ?? 'operator', entries: [[null, node.operand]] };
