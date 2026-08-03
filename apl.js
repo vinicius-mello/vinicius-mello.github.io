@@ -138,6 +138,10 @@ const global_category = {
   '⌸': { category:'M', name: 'key' },
   '⌹': { category:'F', name: 'domino' },
   '⎕TYPEOF': { category:'F', name: 'typeOf' },
+  // Print precision: how many significant digits formatNum/⎕←/⍕ show for a
+  // number. A plain read/write variable (category V, not a function), same
+  // as ⎕ itself - ⎕PP←4 compiles to a normal assignment (G.pp = 4).
+  '⎕PP': { category:'V', name: 'pp' },
   // Graphics library (Phase 3): plain lowercase words resolving to G.<name>,
   // exactly like any other global identifier binding.
   circle: { category:'F', name: 'svgCircle' },
@@ -649,15 +653,43 @@ const uniqueItems = (items) => {
   return result;
 };
 
-const formatNum = (x) => {
+// Rounds x to `digits` significant figures (⎕PP's unit - unlike ⍕'s dyadic
+// form, which rounds to a fixed number of *decimal places* instead).
+// digits===undefined means "no rounding", so every caller below stays a
+// no-op unless a ⎕PP value is actually threaded through.
+const roundSignificant = (x, digits) => {
+  if (digits === undefined || !Number.isFinite(x) || x === 0) {
+    return x;
+  }
+  const magnitude = Math.pow(10, digits - Math.ceil(Math.log10(Math.abs(x))));
+  return Math.round(x * magnitude) / magnitude;
+};
+
+// Same, recursively applied through (possibly nested) arrays - used to
+// round a whole result/⎕← value for display without touching non-numbers
+// (strings, scene-graph objects, ...) or the original arrays/value itself.
+const roundValue = (value, digits) => {
+  if (digits === undefined) {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return roundSignificant(value, digits);
+  }
+  if (Array.isArray(value)) {
+    return value.map((v) => roundValue(v, digits));
+  }
+  return value;
+};
+
+const formatNum = (x, digits) => {
   if (typeof x !== 'number') {
     return String(x);
   }
-  const v = Object.is(x, -0) ? 0 : x;
+  const v = Object.is(roundSignificant(x, digits), -0) ? 0 : roundSignificant(x, digits);
   return String(v).replace('-', '¯');
 };
 
-const formatCell = (x) => (typeof x === 'string' ? x : formatNum(x));
+const formatCell = (x, digits) => (typeof x === 'string' ? x : formatNum(x, digits));
 
 const padColumns = (rows) => {
   const cols = rows[0].length;
@@ -666,17 +698,17 @@ const padColumns = (rows) => {
   return rows.map(r => r.map((c, j) => c.padStart(widths[j])).join(' ')).join('\n');
 };
 
-const formatArray = (w) => {
+const formatArray = (w, digits) => {
   if (typeof w === 'string') {
     return w;
   }
   if (!Array.isArray(w)) {
-    return formatCell(w);
+    return formatCell(w, digits);
   }
   if (w.length === 0 || !Array.isArray(w[0])) {
-    return w.map(formatCell).join(' ');
+    return w.map((c) => formatCell(c, digits)).join(' ');
   }
-  return padColumns(w.map(row => row.map(formatCell)));
+  return padColumns(w.map(row => row.map((c) => formatCell(c, digits))));
 };
 
 const formatFixed = (x, decimals) => {
@@ -808,9 +840,14 @@ const G = {
   get Plot() { return globalThis.Plot; },
   zilde: [],
   emptyFunc: (w, a) => [],
+  // ⎕PP: significant digits shown for numeric output (formatNum/⍕/⎕←) -
+  // Dyalog's own default. A plain data property, not an accessor: each
+  // session's Object.create(G) context gets its own value the moment it's
+  // assigned (⎕PP←4 compiles to a normal G.pp = 4), same as any other
+  // reassignable global.
+  pp: 10,
   set quad(value) {
-    console.log('⎕:', value);
-    return value;
+    console.log('⎕:', roundValue(value, this.pp));
   },
   right: (w) => w,
   left: (w,a) => (a===undefined?w:a),
@@ -1586,9 +1623,13 @@ const G = {
     });
     return result;
   },
-  format: (w, a) => {
+  // Not an arrow function on purpose - needs `this` bound to the calling
+  // context (see `execute` below for the same trick) to read the caller's
+  // own ⎕PP for the monadic form. The dyadic form (fixed decimal places)
+  // is a separate, explicitly-requested precision and ignores ⎕PP.
+  format: function (w, a) {
     if (a === undefined) {
-      return formatArray(w);
+      return formatArray(w, this.pp);
     }
     let width;
     let decimals;
@@ -2329,6 +2370,7 @@ export {
   G,
   global_category,
   AplJS,
+  roundValue,
   isSceneNode,
   sceneToSvgElement,
   sceneToSvgString

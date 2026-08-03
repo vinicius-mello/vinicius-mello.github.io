@@ -968,7 +968,7 @@
     import { syntaxHighlighting, HighlightStyle } from "https://esm.sh/@codemirror/language@6";
     import { tags } from "https://esm.sh/@lezer/highlight@1";
     import { apl } from "https://esm.sh/@codemirror/legacy-modes@6/mode/apl";
-    import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, isSceneNode, sceneToSvgElement } from "./apl.js";
+    import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, isSceneNode, sceneToSvgElement, roundValue } from "./apl.js";
 
     const baseAplToken = apl.token.bind(apl);
     // Matches the tokenizer's own unquoted-string rule in apl.js
@@ -1148,6 +1148,7 @@
       { glyph: "≢", name: "Tally", monadic: "Length: <code>≢1 2 3</code> → 3", dyadic: "Not-match: <code>1 2≢1 2</code> → 0" },
       { glyph: "⎕", name: "Quad", monadic: "Print/emit a value: <code>⎕←value</code>" },
       { glyph: "⎕TYPEOF", name: "Type of", monadic: "JS type of a value: <code>⎕TYPEOF 5</code> → \"number\", <code>⎕TYPEOF 1 2 3</code> → \"array\"" },
+      { glyph: "⎕PP", name: "Print precision", monadic: "Read/write variable: significant digits shown by <code>⍕</code> and <code>⎕←</code> (default 10): <code>⎕PP←4 ⋄ ⍕2÷3</code> → \"0.6667\". Stored values keep full precision - only display rounds." },
       { glyph: "⊢", name: "Right", monadic: "Identity: <code>⊢5</code> → 5", dyadic: "Right value: <code>1⊢2</code> → 2" },
       { glyph: "⊣", name: "Left", monadic: "Identity: <code>⊣5</code> → 5", dyadic: "Left value: <code>1⊣2</code> → 1" },
       { glyph: ".", name: "Dot (operator)", dyadic: "Inner/matrix product: <code>A+.×B</code>" },
@@ -1816,9 +1817,11 @@
           const fn = new Function("G", jsCode);
           const result = fn(replRuntime);
 
-          lastEmissions.forEach((item) => newOutputs.push(buildOutputCell("emit", item)));
+          // Rounded for display only (⎕PP) - the underlying values (and
+          // anything derived from them in later cells) stay full-precision.
+          lastEmissions.forEach((item) => newOutputs.push(buildOutputCell("emit", roundValue(item, replRuntime.pp))));
           if (result !== undefined) {
-            newOutputs.push(buildOutputCell("result", result));
+            newOutputs.push(buildOutputCell("result", roundValue(result, replRuntime.pp)));
           }
 
           setStatus(`Executed input #${record.execCount}.`);
