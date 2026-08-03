@@ -945,11 +945,11 @@
         </section>
         <section id="helpTabGraphics" class="help-tab-panel">
           <p>Shapes are plain data (<span class="help-code">{tag, attrs, children}</span>), not live DOM/SVG.js objects - they compose with ordinary APL arrays and only turn into real SVG when displayed.</p>
-          <p><strong>d3</strong> and <strong>Plot</strong> (Observable Plot) are also loaded and reachable as globals via ⍔ - e.g. <span class="help-code">(Plot⍔#barY⊢⊂1 2 3 4 5)⍔#plot⊢⍬</span> (a mark's own <span class="help-code">.plot()</span> renders it standalone, no options object needed). Any real DOM element a cell evaluates to - what <span class="help-code">Plot.plot(...)</span> returns, or anything else built via the FFI - is displayed directly, not just the shapes above.</p>
+          <p><strong>d3</strong> and <strong>Plot</strong> (Observable Plot) are also loaded and reachable as globals via ⍠+⍔ - e.g. <span class="help-code">(((Plot⍠#barY)⍔⊢⊂1 2 3 4 5)⍠#plot)⍔⊢⍬</span> (a mark's own <span class="help-code">.plot()</span> renders it standalone, no options object needed). Any real DOM element a cell evaluates to - what <span class="help-code">Plot.plot(...)</span> returns, or anything else built via the FFI - is displayed directly, not just the shapes above.</p>
           <div id="helpGraphicsList"></div>
         </section>
         <section id="helpTabFFI" class="help-tab-panel">
-          <p>Worked examples of the FFI trio: <span class="help-code">⍔</span> calls a JS method (<span class="help-code">obj⍔'method'⊢args</span>), <span class="help-code">⍠</span> builds/reads plain objects, <span class="help-code">⍞</span> turns an APL function into a plain value. <span class="help-code">#word</span> is shorthand for <span class="help-code">'word'</span>.</p>
+          <p>Worked examples of the FFI trio: <span class="help-code">⍠</span> builds/reads plain objects - reading a function back binds it to its receiver, so it stays correctly callable even if stored away first; <span class="help-code">⍔</span> relabels a value as an applicable function, e.g. <span class="help-code">(obj⍠'method')⍔⊢args</span> to call a JS method; <span class="help-code">⍞</span> is its inverse, turning an APL function into a plain value. <span class="help-code">#word</span> is shorthand for <span class="help-code">'word'</span>.</p>
           <div id="helpFFIList"></div>
         </section>
       </div>
@@ -1035,18 +1035,20 @@
       "dots←scatter pts         ⍝ one circle per point, for free",
       "⎕←(120 120)svg(ring)(dots)",
       "",
-      "⍝ Observable Plot, via ⍔: each mark has its own .plot() to render",
-      "⍝ itself standalone, so ⎕← below prints one chart per line.",
+      "⍝ Observable Plot, via ⍠+⍔: ⍠ gets a bound, callable reference to a",
+      "⍝ method (⍔ then just relabels it as an applicable function - the",
+      "⍝ inverse of ⍞); each mark has its own .plot() to render itself",
+      "⍝ standalone, so ⎕← below prints one chart per line.",
       "vals←2 4 6 3 8 5 7",
-      "⎕←(Plot⍔#barY⊢⊂vals)⍔#plot⊢⍬     ⍝ bar chart",
-      "⎕←(Plot⍔#lineY⊢⊂vals)⍔#plot⊢⍬    ⍝ line chart",
-      "⎕←(Plot⍔#dotY⊢⊂vals)⍔#plot⊢⍬     ⍝ dot/scatter chart",
+      "⎕←(((Plot⍠#barY)⍔⊢⊂vals)⍠#plot)⍔⊢⍬     ⍝ bar chart",
+      "⎕←(((Plot⍠#lineY)⍔⊢⊂vals)⍠#plot)⍔⊢⍬    ⍝ line chart",
+      "⎕←(((Plot⍠#dotY)⍔⊢⊂vals)⍠#plot)⍔⊢⍬     ⍝ dot/scatter chart",
       "",
       "⍝ Plot.plot(options) combines several marks into one chart - the",
       "⍝ options object is built with ⍠, same as any other JS object here.",
-      "bars←Plot⍔#barY⊢⊂vals",
-      "line←Plot⍔#lineY⊢⊂vals",
-      "(Plot⍔#plot)⊢⊂⍠('marks' bars line)"
+      "bars←(Plot⍠#barY)⍔⊢⊂vals",
+      "line←(Plot⍠#lineY)⍔⊢⊂vals",
+      "(Plot⍠#plot)⍔⊢⊂⍠('marks' bars line)"
     ].join("\n");
 
     const APL_ESCAPES = {
@@ -1094,7 +1096,7 @@
       jot: "∘",
       object: "⍠",
       quote: "⍞",
-      bind: "⍔",
+      unquote: "⍔",
       let: '←',
       reduce: "⌿",
       scan: "⍀",
@@ -1176,9 +1178,9 @@
       { glyph: "↑", name: "Take", dyadic: "<code>3↑1 2 3 4 5</code> → 1 2 3" },
       { glyph: "↓", name: "Drop", dyadic: "<code>2↓1 2 3 4 5</code> → 3 4 5" },
       { glyph: "⍥", name: "Over (operator)", dyadic: "Apply g to both args, then f: <code>a f⍥g w</code>" },
-      { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>" },
+      { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>. A function property comes back already bound to obj, so it's still correctly callable even stored away and used later." },
       { glyph: "⍞", name: "FFI: quote a function", monadic: "Turn a function/operator into a plain value (no call) - lets it be stored, put in an array, or handed to JS: <code>⍞+</code>" },
-      { glyph: "⍔", name: "FFI: bind JS method (operator)", dyadic: "<code>obj⍔'method'</code> derives a function that calls <code>obj.method(...args)</code>. The args must not sit directly adjacent (they'd strand with the method name first) - either parenthesize, <code>(obj⍔'method')(args)</code>, or separate with ⊢: <code>obj⍔'method'⊢args</code>" },
+      { glyph: "⍔", name: "FFI: value → function (operator)", monadic: "The inverse of ⍞: relabels a value as an applicable function, e.g. to call a JS method fetched via ⍠: <code>(obj⍠'method')⍔⊢args</code>" },
       { glyph: "○", name: "Circle (trig)", monadic: "π×⍵: <code>○1</code> → 3.14159", dyadic: "Circular fns: <code>1○0</code> → sin(0), <code>2○0</code> → cos(0)" },
       { glyph: "⊤", name: "Encode", dyadic: "Mixed radix: <code>2 2 2⊤5</code> → 1 0 1" },
       { glyph: "⊥", name: "Decode", dyadic: "Mixed radix: <code>2 2 2⊥1 0 1</code> → 5" },
@@ -1210,28 +1212,28 @@
     const FFI_EXAMPLES = [
       {
         title: "d3: a simple statistic",
-        desc: "Call a plain d3 function through ⍔. The data array must be enclosed (⊂) so it arrives as one argument, not spread as several.",
-        code: "(d3⍔#max)⊢⊂1 2 3 4 5"
+        desc: "⍠ gets a bound, callable reference to a plain d3 function (bound to d3 itself, though a free function like this doesn't actually need it); ⍔ relabels it as an applicable function. The data array must be enclosed (⊂) so it arrives as one argument, not spread as several.",
+        code: "(d3⍠#max)⍔⊢⊂1 2 3 4 5"
       },
       {
         title: "d3: color scale feeding our own style/circle",
         desc: "d3.interpolateViridis(t) returns a CSS color string - build the attrs object with ⍠ and hand it to style, same as any hand-picked color.",
-        code: "(⍠(#fill((d3⍔#interpolateViridis)⊢⊂0.5)))style((0 0)circle 20)"
+        code: "(⍠(#fill((d3⍠#interpolateViridis)⍔⊢⊂0.5)))style((0 0)circle 20)"
       },
       {
         title: "Plot: a bar chart, no options object",
-        desc: "Plot.barY(data) returns a mark - and a mark has its own .plot() to render itself standalone, so no ⍠('marks' ...) wrapping is needed for a single-mark chart.",
-        code: "(Plot⍔#barY⊢⊂1 2 3 4 5)⍔#plot⊢⍬"
+        desc: "Plot.barY(data) returns a mark - and a mark has its own .plot() to render itself standalone, so no ⍠('marks' ...) wrapping is needed for a single-mark chart. .plot() reads its own mark via `this`, so ⍠'s bind (not just ⍔'s relabel) is what keeps this correct.",
+        code: "(((Plot⍠#barY)⍔⊢⊂1 2 3 4 5)⍠#plot)⍔⊢⍬"
       },
       {
         title: "Plot: a line chart",
         desc: "Same shape as the bar chart above, with Plot.lineY instead.",
-        code: "(Plot⍔#lineY⊢⊂3 1 4 1 5 9 2 6)⍔#plot⊢⍬"
+        code: "(((Plot⍠#lineY)⍔⊢⊂3 1 4 1 5 9 2 6)⍠#plot)⍔⊢⍬"
       },
       {
         title: "⍞ + ⍔: an APL function as a JS callback",
-        desc: "⍞ turns a dfn into a plain value (the same JS closure, uncalled) so it can be handed to a higher-order JS method like Array.map. Note the callback receives (element, index) - inside the dfn, ⍺ is the index, not a left argument in the usual APL sense.",
-        code: "double←{2×⍵} ⋄ ((1 2 3)⍔#map)⊢⊂⍞double"
+        desc: "⍞ turns a dfn into a plain value (the same JS closure, uncalled) so it can be handed to a higher-order JS method like Array.map. ⍔ is its inverse - relabels a value back into an applicable function, here the array's own (bound) .map. Note the callback receives (element, index) - inside the dfn, ⍺ is the index, not a left argument in the usual APL sense.",
+        code: "double←{2×⍵} ⋄ ((1 2 3)⍠#map)⍔⊢⊂⍞double"
       }
     ];
 

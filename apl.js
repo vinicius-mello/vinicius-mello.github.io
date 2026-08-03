@@ -120,7 +120,12 @@ const global_category = {
   // the underlying JS function/HOF instead of being applied. No G.quote
   // function actually exists - this name is never emitted.
   '⍞': { category:'Q', name: 'quote' },
-  '⍔': { category:'D', name: 'bindMethod' },
+  // The inverse of ⍞: a genuine monadic operator (unlike ⍞'s special-cased
+  // Q marker) that relabels its V operand as F, so it can be applied like
+  // any other function. ⍠'s dyadic form already binds an extracted
+  // function to its receiver (see buildObject below), so (obj⍠'method')⍔
+  // is what obj⍔'method' used to be - a properly-bound, callable reference.
+  '⍔': { category:'M', name: 'asFunction' },
   '→': { category:'F', name: 'emptyFunc' },
   '○': { category:'F', name: 'circle' },
   '⊤': { category:'F', name: 'encode' },
@@ -815,18 +820,26 @@ const G = {
       }
       return result;
     }
-    return a[w];
-  },
-  // Dyadic operator (⍔): obj⍔'method' derives a monadic function that spreads
-  // its argument array as the call's parameters - obj⍔'method' applied to
-  // args calls obj.method(...args). A bare (non-array) arg is wrapped so
-  // (obj⍔'toFixed')2 works without forcing ,2.
-  bindMethod: (obj, methodName) => (args) => {
-    if (typeof obj[methodName] !== 'function') {
-      throw new Error(`${methodName} is not a function`);
+    const v = a[w];
+    if (typeof v !== 'function') {
+      return v;
     }
-    return obj[methodName](...(Array.isArray(args) ? args : [args]));
+    // Extracting a function loses its receiver the moment it's a bare
+    // value (a[w] detached from a), so bind it here, at the get - this way
+    // it stays correctly bound no matter where the extracted value ends up
+    // (stored in a variable, passed around, applied much later...), unlike
+    // binding it inside ⍔ instead, which would only work if ⍔ sits right
+    // next to this exact ⍠ call. Also FFI-friendly like the old bindMethod
+    // was: an array argument spreads as positional JS params, a bare
+    // scalar/string becomes the sole argument, so (obj⍠'toFixed')⍔2 works
+    // without forcing ,2.
+    return (args) => v.apply(a, Array.isArray(args) ? args : [args]);
   },
+  // The inverse of ⍞ - see global_category above. Purely a category
+  // relabel (V to F); nothing to do at runtime, the value was already
+  // whatever it was (buildObject's dyadic form above is what actually
+  // binds an extracted function to its receiver).
+  asFunction: (f) => f,
   Math,
   Date,
   JSON,
