@@ -72,7 +72,6 @@ const global_category = {
   '⍀': { category:'M', name: 'scan' },
   '⍨': { category:'M', name: 'selfie' },
   ',': { category:'F', name: 'comma' },
-  '⍪': { category:'F', name: 'double_comma' },
   '⍳': { category:'F', name: 'iota' },
   '⍸': { category:'F', name: 'iota_index' },
   '⍋': { category:'F', name: 'grade_up' },
