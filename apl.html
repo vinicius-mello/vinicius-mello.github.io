@@ -1178,7 +1178,7 @@
       { glyph: "↑", name: "Take", dyadic: "<code>3↑1 2 3 4 5</code> → 1 2 3" },
       { glyph: "↓", name: "Drop", dyadic: "<code>2↓1 2 3 4 5</code> → 3 4 5" },
       { glyph: "⍥", name: "Over (operator)", dyadic: "Apply g to both args, then f: <code>a f⍥g w</code>" },
-      { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>. A function property comes back already bound to obj, so it's still correctly callable even stored away and used later." },
+      { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>. A function property comes back already bound to obj, so it's still correctly callable even stored away and used later. A command-list right argument chains calls instead: <code>obj⍠('x' a b)('y' c d)</code> is <code>obj.x(a,b).y(c,d)</code>; a command with no args is a bare (bound) get rather than a call (<code>obj⍠('x' a)('y')</code> gets <code>.y</code> without calling it), and <code>('name' ⍬)</code> calls with zero real arguments." },
       { glyph: "⍞", name: "FFI: quote a function", monadic: "Turn a function/operator into a plain value (no call) - lets it be stored, put in an array, or handed to JS: <code>⍞+</code>" },
       { glyph: "⍔", name: "FFI: value → function (operator)", monadic: "The inverse of ⍞: relabels a value as an applicable function, e.g. to call a JS method fetched via ⍠: <code>(obj⍠'method')⍔⊢args</code>" },
       { glyph: "○", name: "Circle (trig)", monadic: "π×⍵: <code>○1</code> → 3.14159", dyadic: "Circular fns: <code>1○0</code> → sin(0), <code>2○0</code> → cos(0)" },
@@ -1210,6 +1210,16 @@
     ];
 
     const FFI_EXAMPLES = [
+      {
+        title: "⍠: chained method calls",
+        desc: "A command-list right argument chains: each command calls the previous step's result, threading through like obj.x(a,b).y(c,d)... Each individual argument is its own separate JS positional param here (no ⊂/spread ambiguity, unlike the single-key form's single argument).",
+        code: "(1 2 3)⍠('concat' 4 5)('join' '-')"
+      },
+      {
+        title: "⍠: a d3 scale, zero-argument call and all",
+        desc: "The classic d3.scaleLinear().domain([0,10]).range([0,100]) chain. scaleLinear takes no arguments at all - ('scaleLinear' ⍬) is what makes that an actual zero-argument call rather than a bare (uncalled) get. domain/range each take one array argument, so it's parenthesized into a single value rather than left as several elements.",
+        code: "d3⍠('scaleLinear' ⍬)('domain' (0 10))('range' (0 100))"
+      },
       {
         title: "d3: a simple statistic",
         desc: "⍠ gets a bound, callable reference to a plain d3 function (bound to d3 itself, though a free function like this doesn't actually need it); ⍔ relabels it as an applicable function. The data array must be enclosed (⊂) so it arrives as one argument, not spread as several.",

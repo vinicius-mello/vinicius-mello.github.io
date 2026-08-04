@@ -820,19 +820,35 @@ const G = {
       }
       return result;
     }
+    // obj⍠('x' a b)('y' c d)('z') chains: obj.x(a,b) first, then .y(c,d)
+    // on *that* result, then a bare get of .z off of that (no args = get,
+    // not call - same command-list shape buildObject's monadic form above
+    // already accepts). Every step's get rebinds a function property to
+    // its own immediate receiver, the same rule the plain obj⍠'key' case
+    // below uses (bind-on-get is what survives storing/passing the result
+    // around - binding inside ⍔ instead would only work if ⍔ sits right
+    // next to this exact ⍠ call). A command whose one and only argument is
+    // ⍬ - ('name' ⍬) - calls with zero real arguments instead (same "empty
+    // means nothing to pass" idiom as ⊢⍬ elsewhere in this file's FFI
+    // examples), distinct from a bare ('name') get-not-call.
+    const isZeroArgMarker = (args) => args.length === 1 && Array.isArray(args[0]) && args[0].length === 0;
+    if (Array.isArray(w)) {
+      let current = a;
+      for (const cmd of normalizeCommandList(w)) {
+        const [name, ...args] = cmd;
+        const prop = current[name];
+        const bound = typeof prop === 'function' ? prop.bind(current) : prop;
+        current = args.length === 0 ? bound : isZeroArgMarker(args) ? bound() : bound(...args);
+      }
+      return current;
+    }
     const v = a[w];
     if (typeof v !== 'function') {
       return v;
     }
-    // Extracting a function loses its receiver the moment it's a bare
-    // value (a[w] detached from a), so bind it here, at the get - this way
-    // it stays correctly bound no matter where the extracted value ends up
-    // (stored in a variable, passed around, applied much later...), unlike
-    // binding it inside ⍔ instead, which would only work if ⍔ sits right
-    // next to this exact ⍠ call. Also FFI-friendly like the old bindMethod
-    // was: an array argument spreads as positional JS params, a bare
-    // scalar/string becomes the sole argument, so (obj⍠'toFixed')⍔2 works
-    // without forcing ,2.
+    // FFI-friendly like the old bindMethod was: an array argument spreads
+    // as positional JS params, a bare scalar/string becomes the sole
+    // argument, so (obj⍠'toFixed')⍔2 works without forcing ,2.
     return (args) => v.apply(a, Array.isArray(args) ? args : [args]);
   },
   // The inverse of ⍞ - see global_category above. Purely a category
