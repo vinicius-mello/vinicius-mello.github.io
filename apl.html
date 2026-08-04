@@ -964,6 +964,7 @@
     import { EditorState, Prec } from "https://esm.sh/@codemirror/state@6";
     import { EditorView, keymap, lineNumbers } from "https://esm.sh/@codemirror/view@6";
     import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6";
+    import { closeBrackets, closeBracketsKeymap } from "https://esm.sh/@codemirror/autocomplete@6";
     import { StreamLanguage } from "https://esm.sh/@codemirror/language@6";
     import { syntaxHighlighting, HighlightStyle, bracketMatching } from "https://esm.sh/@codemirror/language@6";
     import { tags } from "https://esm.sh/@lezer/highlight@1";
@@ -2000,12 +2001,14 @@
               }
             ])),
             keymap.of([
+              ...closeBracketsKeymap,
               ...defaultKeymap,
               ...historyKeymap
             ]),
             StreamLanguage.define(aplModeNoHashComment),
             syntaxHighlighting(highlight),
             bracketMatching(),
+            closeBrackets(),
             editorTheme,
             EditorView.updateListener.of((update) => {
               if (update.docChanged) {
