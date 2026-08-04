@@ -1907,11 +1907,15 @@ const breakExpressions = (tokens, from) => {
 // module scope so they're allocated once instead of on every token shift
 // (reduceStack runs once per token, potentially several times per token).
 const CAT_V_F_D_M = ['V', 'F', 'D', 'M'];
-const CAT_BOUNDARY_F = ['F', '(', '←', 'Edge', ':'];
-const CAT_BOUNDARY_MVF = ['M', 'V', 'F', '(', '←', 'Edge', ':'];
-const CAT_BOUNDARY_MF = ['M', 'F', '(', '←', 'Edge', ':'];
+// 'Q' (⍞) is included below so it acts as a left boundary too - e.g.
+// ⍞1⌷⊢ can build the whole train 1⌷⊢ before ⍞ quotes it, without needing
+// ⍞(1⌷⊢). Left out of CAT_BOUNDARY_MF_NOCOLON on purpose: that one's for
+// what precedes an assignment target, unrelated to what ⍞ quotes.
+const CAT_BOUNDARY_F = ['F', '(', '←', 'Edge', ':', 'Q'];
+const CAT_BOUNDARY_MVF = ['M', 'V', 'F', '(', '←', 'Edge', ':', 'Q'];
+const CAT_BOUNDARY_MF = ['M', 'F', '(', '←', 'Edge', ':', 'Q'];
 const CAT_F_V = ['F', 'V'];
-const CAT_BOUNDARY = ['(', '←', 'Edge', ':'];
+const CAT_BOUNDARY = ['(', '←', 'Edge', ':', 'Q'];
 const CAT_BOUNDARY_MF_NOCOLON = ['(', '←', 'M', 'F', 'Edge'];
 const CAT_V_CLOSEPAREN = ['V', ')'];
 
@@ -2138,17 +2142,6 @@ const parseExpression = (expression, scope) => {
         foundReduction = true;
         continue;
       }
-      if (AB &&
-        A.category === 'Q' &&
-        belong(B.category, CAT_V_F_D_M)
-      ) {
-        // ⍞ quotes whatever sits to its right into a plain value - same
-        // generated code, just relabeled so it can be stored, put in an
-        // array, or handed to a JS callback instead of being applied.
-        stack.splice(size - 2, 2, { category: 'V', node: B.node });
-        foundReduction = true;
-        continue;
-      }
       if (ABC &&
         !belong(A.category, CAT_V_CLOSEPAREN) &&
         B.category === 'V' &&
@@ -2258,6 +2251,22 @@ const parseExpression = (expression, scope) => {
         const node = { type: 'Atop', f: B.node, g: C.node };
         stack.splice(size - 3, 3,
           { category: 'F', node }, A);
+        foundReduction = true;
+        continue;
+      }
+      if (AB &&
+        A.category === 'Q' &&
+        belong(B.category, CAT_V_F_D_M)
+      ) {
+        // ⍞ quotes whatever sits to its right into a plain value - same
+        // generated code, just relabeled so it can be stored, put in an
+        // array, or handed to a JS callback instead of being applied.
+        // Checked only after every wider rule above (function application,
+        // operators, trains...) has had its chance, so e.g. ⍞1⌷⊢ builds the
+        // whole train 1⌷⊢ (via the CAT_BOUNDARY* lists above now including
+        // 'Q') before this narrower 2-element match would otherwise fire on
+        // just ⍞ and the very next token.
+        stack.splice(size - 2, 2, { category: 'V', node: B.node });
         foundReduction = true;
         continue;
       }
