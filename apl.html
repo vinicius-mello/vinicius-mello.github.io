@@ -965,7 +965,7 @@
     import { EditorView, keymap, lineNumbers } from "https://esm.sh/@codemirror/view@6";
     import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6";
     import { StreamLanguage } from "https://esm.sh/@codemirror/language@6";
-    import { syntaxHighlighting, HighlightStyle } from "https://esm.sh/@codemirror/language@6";
+    import { syntaxHighlighting, HighlightStyle, bracketMatching } from "https://esm.sh/@codemirror/language@6";
     import { tags } from "https://esm.sh/@lezer/highlight@1";
     import { apl } from "https://esm.sh/@codemirror/legacy-modes@6/mode/apl";
     import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, isSceneNode, sceneToSvgElement, roundValue } from "./apl.js";
@@ -1148,8 +1148,10 @@
       { glyph: "∇", name: "Self-reference", monadic: "Recursive call inside a dfn" },
       { glyph: "≢", name: "Tally", monadic: "Length: <code>≢1 2 3</code> → 3", dyadic: "Not-match: <code>1 2≢1 2</code> → 0" },
       { glyph: "⎕", name: "Quad", monadic: "Print/emit a value: <code>⎕←value</code>" },
-      { glyph: "⎕TYPEOF", name: "Type of", monadic: "JS type of a value: <code>⎕TYPEOF 5</code> → \"number\", <code>⎕TYPEOF 1 2 3</code> → \"array\"" },
-      { glyph: "⎕PP", name: "Print precision", monadic: "Read/write variable: significant digits shown by <code>⍕</code> and <code>⎕←</code> (default 10): <code>⎕PP←4 ⋄ ⍕2÷3</code> → \"0.6667\". Stored values keep full precision - only display rounds." },
+      { glyph: "⎕typeof", name: "Type of", monadic: "JS type of a value: <code>⎕typeof 5</code> → \"number\", <code>⎕typeof 1 2 3</code> → \"array\"" },
+      { glyph: "⎕pp", name: "Print precision", monadic: "Read/write variable: significant digits shown by <code>⍕</code> and <code>⎕←</code> (default 10): <code>⎕pp←4 ⋄ ⍕2÷3</code> → \"0.6667\". Stored values keep full precision - only display rounds." },
+      { glyph: "⎕null", name: "JS null", monadic: "Read/write variable holding JS's <code>null</code>: <code>⎕typeof ⎕null</code> → \"null\"" },
+      { glyph: "⎕undefined", name: "JS undefined", monadic: "Read/write variable holding JS's <code>undefined</code>: <code>⎕typeof ⎕undefined</code> → \"undefined\"" },
       { glyph: "⊢", name: "Right", monadic: "Identity: <code>⊢5</code> → 5", dyadic: "Right value: <code>1⊢2</code> → 2" },
       { glyph: "⊣", name: "Left", monadic: "Identity: <code>⊣5</code> → 5", dyadic: "Left value: <code>1⊣2</code> → 1" },
       { glyph: ".", name: "Dot (operator)", dyadic: "Inner/matrix product: <code>A+.×B</code>" },
@@ -1178,7 +1180,7 @@
       { glyph: "↑", name: "Take", dyadic: "<code>3↑1 2 3 4 5</code> → 1 2 3" },
       { glyph: "↓", name: "Drop", dyadic: "<code>2↓1 2 3 4 5</code> → 3 4 5" },
       { glyph: "⍥", name: "Over (operator)", dyadic: "Apply g to both args, then f: <code>a f⍥g w</code>" },
-      { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>. A function property comes back already bound to obj, so it's still correctly callable even stored away and used later. A command-list right argument chains calls instead: <code>obj⍠('x' a b)('y' c d)</code> is <code>obj.x(a,b).y(c,d)</code>; a command with no args is a bare (bound) get rather than a call (<code>obj⍠('x' a)('y')</code> gets <code>.y</code> without calling it), and <code>('name' ⍬)</code> calls with zero real arguments." },
+      { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>. A function property comes back already bound to obj, so it's still correctly callable even stored away and used later. A command-list right argument chains calls instead: <code>obj⍠('x' a b)('y' c d)</code> is <code>obj.x(a,b).y(c,d)</code>; a command with no args is a bare (bound) get rather than a call (<code>obj⍠('x' a)('y')</code> gets <code>.y</code> without calling it), and <code>('name' ⎕null)</code> calls with zero real arguments (⎕null rather than ⍬, so ⍬ stays free to mean an actual empty-array argument)." },
       { glyph: "⍞", name: "FFI: quote a function", monadic: "Turn a function/operator into a plain value (no call) - lets it be stored, put in an array, or handed to JS: <code>⍞+</code>" },
       { glyph: "⍔", name: "FFI: value → function (operator)", monadic: "The inverse of ⍞: relabels a value as an applicable function, e.g. to call a JS method fetched via ⍠: <code>(obj⍠'method')⍔⊢args</code>" },
       { glyph: "○", name: "Circle (trig)", monadic: "π×⍵: <code>○1</code> → 3.14159", dyadic: "Circular fns: <code>1○0</code> → sin(0), <code>2○0</code> → cos(0)" },
@@ -1217,8 +1219,8 @@
       },
       {
         title: "⍠: a d3 scale, zero-argument call and all",
-        desc: "The classic d3.scaleLinear().domain([0,10]).range([0,100]) chain. scaleLinear takes no arguments at all - ('scaleLinear' ⍬) is what makes that an actual zero-argument call rather than a bare (uncalled) get. domain/range each take one array argument, so it's parenthesized into a single value rather than left as several elements.",
-        code: "d3⍠('scaleLinear' ⍬)('domain' (0 10))('range' (0 100))"
+        desc: "The classic d3.scaleLinear().domain([0,10]).range([0,100]) chain. scaleLinear takes no arguments at all - ('scaleLinear' ⎕null) is what makes that an actual zero-argument call rather than a bare (uncalled) get (⎕null rather than ⍬, so ⍬ is still free to mean an actual empty-array argument elsewhere). domain/range each take one array argument, so it's parenthesized into a single value rather than left as several elements.",
+        code: "d3⍠('scaleLinear' ⎕null)('domain' (0 10))('range' (0 100))"
       },
       {
         title: "d3: a simple statistic",
@@ -1336,7 +1338,7 @@
       { tag: [tags.operator, tags.arithmeticOperator], color: "var(--syntax-operator)", fontWeight: "700" },
       { tag: tags.number, color: "var(--syntax-number)" },
       { tag: tags.string, color: "var(--syntax-string)" },
-      { tag: tags.special(tags.string), color: "var(--syntax-string-alt)", fontStyle: "italic" },
+      { tag: tags.special(tags.string), color: "var(--editor-fg)", fontWeight: "700", textDecoration: "underline" },
       { tag: tags.comment, color: "var(--syntax-comment)", fontStyle: "italic" },
       { tag: tags.variableName, color: "var(--syntax-variable)" }
     ]);
@@ -1366,6 +1368,16 @@
       },
       ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
         backgroundColor: "var(--editor-selection)"
+      },
+      ".cm-matchingBracket": {
+        color: "var(--syntax-operator)",
+        fontWeight: "700",
+        backgroundColor: "var(--editor-active-line)",
+        outline: "1px solid var(--syntax-operator)"
+      },
+      ".cm-nonmatchingBracket": {
+        color: "var(--syntax-string-alt)",
+        outline: "1px solid var(--syntax-string-alt)"
       }
     });
 
@@ -1828,7 +1840,7 @@
           const fn = new Function("G", jsCode);
           const result = fn(replRuntime);
 
-          // Rounded for display only (⎕PP) - the underlying values (and
+          // Rounded for display only (⎕pp) - the underlying values (and
           // anything derived from them in later cells) stay full-precision.
           lastEmissions.forEach((item) => newOutputs.push(buildOutputCell("emit", roundValue(item, replRuntime.pp))));
           if (result !== undefined) {
@@ -1993,6 +2005,7 @@
             ]),
             StreamLanguage.define(aplModeNoHashComment),
             syntaxHighlighting(highlight),
+            bracketMatching(),
             editorTheme,
             EditorView.updateListener.of((update) => {
               if (update.docChanged) {

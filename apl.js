@@ -15,7 +15,7 @@ const tokenizer = (text) => {
     { regex: /^\}/, type: 'BRACE_CLOSE' },
     { regex: /^←/u, type: 'ASSIGN' },
     { regex: /^:/, type: 'GUARD' },
-    { regex: /^⎕[A-Z]+/u, type: 'IDENTIFIER' },
+    { regex: /^⎕[a-z]+/u, type: 'IDENTIFIER' },
     { regex: /^∘\./u, type: 'SYMBOL' },
     { regex: /^[@\\!\?\*¨,-\/\p{Math}\p{Sm}\p{So}]/u, type: 'SYMBOL' },
     { regex: /^[\p{L}_][\p{L}0-9_]*/u, type: 'IDENTIFIER' }
@@ -141,11 +141,16 @@ const global_category = {
   '⍤': { category:'D', name: 'rank' },
   '⌸': { category:'M', name: 'key' },
   '⌹': { category:'F', name: 'domino' },
-  '⎕TYPEOF': { category:'F', name: 'typeOf' },
+  '⎕typeof': { category:'F', name: 'typeOf' },
   // Print precision: how many significant digits formatNum/⎕←/⍕ show for a
   // number. A plain read/write variable (category V, not a function), same
-  // as ⎕ itself - ⎕PP←4 compiles to a normal assignment (G.pp = 4).
-  '⎕PP': { category:'V', name: 'pp' },
+  // as ⎕ itself - ⎕pp←4 compiles to a normal assignment (G.pp = 4).
+  '⎕pp': { category:'V', name: 'pp' },
+  // Constant JS values, same read/write-variable shape as ⎕pp - ⎕null and
+  // ⎕undefined are two genuinely different "nothing" values in JS/JSON,
+  // neither of which any APL primitive here otherwise produces.
+  '⎕null': { category:'V', name: 'null' },
+  '⎕undefined': { category:'V', name: 'undefined' },
   // Graphics library (Phase 3): plain lowercase words resolving to G.<name>,
   // exactly like any other global identifier binding.
   circle: { category:'F', name: 'svgCircle' },
@@ -657,10 +662,10 @@ const uniqueItems = (items) => {
   return result;
 };
 
-// Rounds x to `digits` significant figures (⎕PP's unit - unlike ⍕'s dyadic
+// Rounds x to `digits` significant figures (⎕pp's unit - unlike ⍕'s dyadic
 // form, which rounds to a fixed number of *decimal places* instead).
 // digits===undefined means "no rounding", so every caller below stays a
-// no-op unless a ⎕PP value is actually threaded through.
+// no-op unless a ⎕pp value is actually threaded through.
 const roundSignificant = (x, digits) => {
   if (digits === undefined || !Number.isFinite(x) || x === 0) {
     return x;
@@ -828,10 +833,12 @@ const G = {
     // below uses (bind-on-get is what survives storing/passing the result
     // around - binding inside ⍔ instead would only work if ⍔ sits right
     // next to this exact ⍠ call). A command whose one and only argument is
-    // ⍬ - ('name' ⍬) - calls with zero real arguments instead (same "empty
-    // means nothing to pass" idiom as ⊢⍬ elsewhere in this file's FFI
-    // examples), distinct from a bare ('name') get-not-call.
-    const isZeroArgMarker = (args) => args.length === 1 && Array.isArray(args[0]) && args[0].length === 0;
+    // ⎕null - ('name' ⎕null) - calls with zero real arguments instead,
+    // distinct from a bare ('name') get-not-call. ⎕null (not ⍬) is the
+    // sentinel specifically so ⍬ stays free to mean an actual empty-array
+    // argument (e.g. .domain(⍬) to really pass []), which a same-shape ⍬
+    // sentinel would have made impossible to express here.
+    const isZeroArgMarker = (args) => args.length === 1 && args[0] === null;
     if (Array.isArray(w)) {
       let current = a;
       for (const cmd of normalizeCommandList(w)) {
@@ -868,12 +875,14 @@ const G = {
   get Plot() { return globalThis.Plot; },
   zilde: [],
   emptyFunc: (w, a) => [],
-  // ⎕PP: significant digits shown for numeric output (formatNum/⍕/⎕←) -
+  // ⎕pp: significant digits shown for numeric output (formatNum/⍕/⎕←) -
   // Dyalog's own default. A plain data property, not an accessor: each
   // session's Object.create(G) context gets its own value the moment it's
-  // assigned (⎕PP←4 compiles to a normal G.pp = 4), same as any other
+  // assigned (⎕pp←4 compiles to a normal G.pp = 4), same as any other
   // reassignable global.
   pp: 10,
+  null: null,
+  undefined: undefined,
   set quad(value) {
     console.log('⎕:', roundValue(value, this.pp));
   },
@@ -1653,8 +1662,8 @@ const G = {
   },
   // Not an arrow function on purpose - needs `this` bound to the calling
   // context (see `execute` below for the same trick) to read the caller's
-  // own ⎕PP for the monadic form. The dyadic form (fixed decimal places)
-  // is a separate, explicitly-requested precision and ignores ⎕PP.
+  // own ⎕pp for the monadic form. The dyadic form (fixed decimal places)
+  // is a separate, explicitly-requested precision and ignores ⎕pp.
   format: function (w, a) {
     if (a === undefined) {
       return formatArray(w, this.pp);
