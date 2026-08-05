@@ -650,9 +650,9 @@
       overflow: auto;
     }
 
-    /* Theme-driven defaults for shapes from the graphics library (Phase 3).
+    /* Theme-driven defaults for SVG shapes produced via d3.
        :not([...]) means these only fill in what the APL code didn't already
-       set via `style` - explicit fill/stroke attrs always win untouched. */
+       set via .attr(...) - explicit fill/stroke attrs always win untouched. */
     .svg-wrap svg :where(circle, rect, polygon, path):not([fill]) {
       fill: var(--svg-fill);
     }
@@ -944,8 +944,8 @@
           </table>
         </section>
         <section id="helpTabGraphics" class="help-tab-panel">
-          <p>Shapes are plain data (<span class="help-code">{tag, attrs, children}</span>), not live DOM/SVG.js objects - they compose with ordinary APL arrays and only turn into real SVG when displayed.</p>
-          <p><strong>d3</strong> and <strong>Plot</strong> (Observable Plot) are also loaded and reachable as globals via ⍠+⍔ - e.g. <span class="help-code">(((Plot⍠#barY)⍔⊢⊂1 2 3 4 5)⍠#plot)⍔⊢⍬</span> (a mark's own <span class="help-code">.plot()</span> renders it standalone, no options object needed). Any real DOM element a cell evaluates to - what <span class="help-code">Plot.plot(...)</span> returns, or anything else built via the FFI - is displayed directly, not just the shapes above.</p>
+          <p>There's no separate shape-primitive layer - SVG is built by driving <strong>d3</strong> directly through ⍠/⍔ chains, and any real DOM element a cell evaluates to (an <span class="help-code">&lt;svg&gt;</span> from d3, or a chart from <strong>Plot</strong>/Observable Plot) is displayed as-is.</p>
+          <p>A command-list right argument to ⍠ chains calls, each one calling the previous step's result - so <span class="help-code">d3⍠(#create #svg)(#attr #width 120)</span> is <span class="help-code">d3.create('svg').attr('width', 120)</span>. End with <span class="help-code">⍠(#node ⎕null)</span> to pull out the plain DOM element to display.</p>
           <div id="helpGraphicsList"></div>
         </section>
         <section id="helpTabFFI" class="help-tab-panel">
@@ -969,7 +969,7 @@
     import { syntaxHighlighting, HighlightStyle, bracketMatching } from "https://esm.sh/@codemirror/language@6";
     import { tags } from "https://esm.sh/@lezer/highlight@1";
     import { apl } from "https://esm.sh/@codemirror/legacy-modes@6/mode/apl";
-    import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, isSceneNode, sceneToSvgElement, roundValue } from "./apl.js";
+    import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, roundValue } from "./apl.js";
 
     const baseAplToken = apl.token.bind(apl);
     // Matches the tokenizer's own unquoted-string rule in apl.js
@@ -1026,15 +1026,16 @@
     ].join("\n");
 
     const GRAPHICS_SAMPLE = [
-      "⍝ shapes are plain data: {tag, attrs, children} - build them with",
-      "⍝ ordinary APL arrays, no SVG string wrangling needed",
+      "⍝ SVG output goes straight through d3 - build a real <svg> element",
+      "⍝ with ⍠ chains, then join a per-point selection of circles the",
+      "⍝ same way as any other d3 chart.",
       "n←12 ⋄ cx←60 ⋄ cy←60 ⋄ r←50",
       "ang←(○2×⍳n)÷n            ⍝ n angles around the circle",
       "xs←cx+r×1○ang ⋄ ys←cy+r×2○ang",
       "pts←⍉2 n⍴xs,ys           ⍝ n×2 matrix of points",
-      "ring←(⍠('fill' 'none')('stroke' '#2ea043')('stroke-width' 2))style(polygon pts)",
-      "dots←scatter pts         ⍝ one circle per point, for free",
-      "⎕←(120 120)svg(ring)(dots)",
+      "dotsSVG←d3⍠(#create #svg) (#attr #width 120) (#attr #height 120)",
+      "dotsSVG⍠(#selectAll #circle) (#data pts) (#join #circle) (#attr #cx ⍞0⌷⊢) (#attr #cy ⍞1⌷⊢) (#attr #r 4) (#attr #fill '#2ea043')",
+      "⎕←dotsSVG⍠(#node ⎕null)",
       "",
       "⍝ Observable Plot, via ⍠+⍔: ⍠ gets a bound, callable reference to a",
       "⍝ method (⍔ then just relabels it as an applicable function - the",
@@ -1199,17 +1200,12 @@
     ];
 
     const GRAPHICS_DOCS = [
-      { name: "circle", sig: "(cx cy)circle r", desc: "Circle shape.", example: "(10 20)circle 5" },
-      { name: "rect", sig: "(x y)rect(width height)", desc: "Rectangle shape.", example: "(0 0)rect(40 20)" },
-      { name: "line", sig: "(x1 y1)line(x2 y2)", desc: "Line segment.", example: "(0 0)line(50 50)" },
-      { name: "polyline", sig: "polyline points", desc: "Open polyline from an n×2 point matrix.", example: "polyline 3 2⍴0 0 10 0 5 10" },
-      { name: "polygon", sig: "polygon points", desc: "Closed polygon from an n×2 point matrix.", example: "polygon 3 2⍴0 0 10 0 5 10" },
-      { name: "path", sig: "path d", desc: "Raw SVG path - escape hatch for the \"d\" attribute.", example: "path 'M0 0 L10 10'" },
-      { name: "text", sig: "(x y)text string", desc: "Text label.", example: "(10 10)text 'hello'" },
-      { name: "group", sig: "group children  /  attrs group children", desc: "Groups shapes into one node; the dyadic form also sets group-level attrs.", example: "group((0 0)circle 5)(1 1 rect 2 2)" },
-      { name: "svg", sig: "(width height)svg children", desc: "Top-level canvas wrapper - this is what the REPL renders as an image.", example: "(120 120)svg((0 0)circle 5)" },
-      { name: "style", sig: "attrs style shape", desc: "Merges extra SVG attributes into a shape (fill, stroke, stroke-width, transform...). Build <code>attrs</code> with ⍠ instead of growing this function's argument list.", example: "(⍠('fill' 'red'))style((0 0)circle 5)" },
-      { name: "scatter", sig: "scatter points  /  r scatter points", desc: "One circle per row of an n×2 point matrix - bulk plotting in a single call.", example: "scatter 2 2⍴0 0 1 1" }
+      { name: "create", sig: "d3⍠(#create tag)", desc: "Create a detached element (wrapped in a d3 selection) - the usual starting point, with <code>tag</code> <span class=\"help-code\">#svg</span>.", example: "d3⍠(#create #svg)" },
+      { name: "attr", sig: "selection⍠(#attr name value)", desc: "Set an attribute on every selected element and return the selection, so it chains.", example: "svg⍠(#attr #width 120)" },
+      { name: "append", sig: "selection⍠(#append tag)", desc: "Append a new child element to each selected element; returns a selection of the new children.", example: "svg⍠(#append #circle)" },
+      { name: "selectAll / data / join", sig: "selection⍠(#selectAll tag)(#data items)(#join tag)", desc: "The standard d3 join: one <code>tag</code> element per item in <code>items</code>, bound as each element's datum.", example: "svg⍠(#selectAll #circle)(#data pts)(#join #circle)" },
+      { name: "accessor attrs", sig: "join⍠(#attr name (⍞k⌷⊢))", desc: "An attribute value can be a function of the bound datum - <code>⍞k⌷⊢</code> reads field <code>k</code> of each row, turned into a plain callable value via ⍞.", example: "join⍠(#attr #cx ⍞0⌷⊢)(#attr #cy ⍞1⌷⊢)" },
+      { name: "node", sig: "selection⍠(#node ⎕null)", desc: "Pull the plain DOM element back out of a selection - <code>⎕null</code> makes this an actual zero-argument call. This is what the REPL displays.", example: "svg⍠(#node ⎕null)" }
     ];
 
     const FFI_EXAMPLES = [
@@ -1229,9 +1225,9 @@
         code: "(d3⍠#max)⍔⊢⊂1 2 3 4 5"
       },
       {
-        title: "d3: color scale feeding our own style/circle",
-        desc: "d3.interpolateViridis(t) returns a CSS color string - build the attrs object with ⍠ and hand it to style, same as any hand-picked color.",
-        code: "(⍠(#fill((d3⍠#interpolateViridis)⍔⊢⊂0.5)))style((0 0)circle 20)"
+        title: "d3: color scale feeding a d3-built circle",
+        desc: "d3.interpolateViridis(t) returns a CSS color string - feed it straight into a d3 selection's attr, same as any hand-picked color. Ending on the &lt;svg&gt; selection's own #node ⎕null (not the appended circle's) is what makes this display correctly.",
+        code: "svgSel←d3⍠(#create #svg)(#attr #width 40)(#attr #height 40) ⋄ svgSel⍠(#append #circle)(#attr #cx 20)(#attr #cy 20)(#attr #r 20)(#attr #fill ((d3⍠#interpolateViridis)⍔⊢⊂0.5)) ⋄ svgSel⍠(#node ⎕null)"
       },
       {
         title: "Plot: a bar chart, no options object",
@@ -1585,29 +1581,6 @@
       return renderSvgStringMaybe(host, value);
     };
 
-    const renderSceneMaybe = (host, value) => {
-      if (!isSceneNode(value)) {
-        return false;
-      }
-      const root = value.tag === "svg"
-        ? value
-        : { tag: "svg", attrs: { width: 300, height: 300, viewBox: "0 0 300 300" }, children: [value] };
-      try {
-        return appendSvgNode(host, sceneToSvgElement(root));
-      } catch (error) {
-        return false;
-      }
-    };
-
-    const renderSceneListMaybe = (host, value) => {
-      if (!Array.isArray(value) || value.length === 0 || !value.every(isSceneNode)) {
-        return false;
-      }
-      // Treat the list as an implicit group so every shape shares one
-      // coordinate space/canvas - same as wrapping them in `group` by hand.
-      return renderSceneMaybe(host, { tag: "g", children: value });
-    };
-
     const buildOutputCell = (kind, value) => {
       const cell = document.createElement("article");
       const className = kind === "error" ? "cell cell-output cell-error" : "cell cell-output";
@@ -1628,9 +1601,8 @@
         body.appendChild(pre);
       } else if (Array.isArray(value) && (isVector(value) || isMatrix(value))) {
         renderTable(body, value);
-      } else if (Array.isArray(value) && renderSceneListMaybe(body, value)) {
       } else if (Array.isArray(value) && renderTensor(body, value)) {
-      } else if (!renderSceneMaybe(body, value) && !renderSvgMaybe(body, value)) {
+      } else if (!renderSvgMaybe(body, value)) {
         const pre = document.createElement("pre");
         pre.className = "result-pre";
         pre.textContent = formatValue(value);

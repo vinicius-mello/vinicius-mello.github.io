@@ -151,19 +151,6 @@ const global_category = {
   // neither of which any APL primitive here otherwise produces.
   '⎕null': { category:'V', name: 'null' },
   '⎕undefined': { category:'V', name: 'undefined' },
-  // Graphics library (Phase 3): plain lowercase words resolving to G.<name>,
-  // exactly like any other global identifier binding.
-  circle: { category:'F', name: 'svgCircle' },
-  rect: { category:'F', name: 'rect' },
-  line: { category:'F', name: 'line' },
-  polyline: { category:'F', name: 'polyline' },
-  polygon: { category:'F', name: 'polygon' },
-  path: { category:'F', name: 'path' },
-  text: { category:'F', name: 'text' },
-  group: { category:'F', name: 'group' },
-  svg: { category:'F', name: 'svg' },
-  style: { category:'F', name: 'style' },
-  scatter: { category:'F', name: 'scatter' },
   // Curated JS globals, exposed by name so ⍔/⍠ have real objects to reach
   // into without needing a raw eval escape hatch.
   Math: { category:'V', name: 'Math' },
@@ -177,10 +164,10 @@ const global_category = {
 }
 
 // Reverse lookup used only by emitGraph's node labels, so a graph shows the
-// glyph/keyword a user actually typed (e.g. "⍵", "circle") instead of the
-// internal JS name it resolves to (e.g. "_w_", "svgCircle"). First writer
-// wins on name collisions (e.g. the repeated '⍣' entry above) - harmless,
-// since duplicates always share the same name anyway.
+// glyph/keyword a user actually typed (e.g. "⍵") instead of the internal JS
+// name it resolves to (e.g. "_w_"). First writer wins on name collisions
+// (e.g. the repeated '⍣' entry above) - harmless, since duplicates always
+// share the same name anyway.
 const NAME_TO_GLYPH = {};
 for (const [glyph, entry] of Object.entries(global_category)) {
   if (!(entry.name in NAME_TO_GLYPH)) {
@@ -766,44 +753,6 @@ const totalCompare = (a, b) => {
   if (a > b) return 1;
   return 0;
 }
-
-// --- SVG scene-graph graphics (Phase 3) ---
-// Shape functions below build plain, DOM-free data objects
-// ({tag, attrs, children}) so they stay ordinary APL values: they can be
-// stored in variables, put in arrays, and passed to `group`/`style`. Actual
-// DOM conversion happens only in sceneToSvgElement, called lazily by a host
-// page (apl.html), so importing this module under Node never touches `document`.
-const SVG_NS = 'http://www.w3.org/2000/svg';
-
-const isSceneNode = (value) =>
-  Boolean(value) && typeof value === 'object' && typeof value.tag === 'string';
-
-const sceneToSvgElement = (node) => {
-  if (!isSceneNode(node)) {
-    throw new Error('Invalid scene node');
-  }
-  const el = document.createElementNS(SVG_NS, node.tag);
-  const attrs = node.attrs || {};
-  for (const key in attrs) {
-    const value = attrs[key];
-    if (value !== undefined && value !== null) {
-      el.setAttribute(key, String(value));
-    }
-  }
-  if (typeof node.text === 'string') {
-    el.textContent = node.text;
-  }
-  if (Array.isArray(node.children)) {
-    node.children.forEach((child) => el.appendChild(sceneToSvgElement(child)));
-  }
-  return el;
-};
-
-const sceneToSvgString = (node) => {
-  const root = node.tag === 'svg' ? node
-    : { tag: 'svg', attrs: { width: 300, height: 300, viewBox: '0 0 300 300' }, children: [node] };
-  return new XMLSerializer().serializeToString(sceneToSvgElement(root));
-};
 
 // Rank operator (⍤) helper: given the requested rank `k` and an operand's
 // actual rank `n`, returns the cell rank per Dyalog's clamping rule -
@@ -1700,55 +1649,6 @@ const G = {
     }
     return typeof w;
   },
-  svgCircle: (w, a) => {
-    const [cx, cy] = a ?? [0, 0];
-    return { tag: 'circle', attrs: { cx, cy, r: w } };
-  },
-  rect: (w, a) => {
-    const [x, y] = a ?? [0, 0];
-    const [width, height] = w;
-    return { tag: 'rect', attrs: { x, y, width, height } };
-  },
-  line: (w, a) => {
-    const [x1, y1] = a ?? [0, 0];
-    const [x2, y2] = w;
-    return { tag: 'line', attrs: { x1, y1, x2, y2 } };
-  },
-  polyline: (w) => {
-    const points = w.map(([x, y]) => `${x},${y}`).join(' ');
-    return { tag: 'polyline', attrs: { points } };
-  },
-  polygon: (w) => {
-    const points = w.map(([x, y]) => `${x},${y}`).join(' ');
-    return { tag: 'polygon', attrs: { points } };
-  },
-  path: (w) => {
-    return { tag: 'path', attrs: { d: w } };
-  },
-  text: (w, a) => {
-    const [x, y] = a ?? [0, 0];
-    return { tag: 'text', attrs: { x, y }, text: String(w) };
-  },
-  group: (w, a) => {
-    const children = Array.isArray(w) ? w : [w];
-    return { tag: 'g', attrs: a || {}, children };
-  },
-  svg: (w, a) => {
-    const [width, height] = a ?? [300, 300];
-    const children = Array.isArray(w) ? w : [w];
-    return { tag: 'svg', attrs: { width, height, viewBox: `0 0 ${width} ${height}` }, children };
-  },
-  style: (w, a) => {
-    if (!isSceneNode(w)) {
-      throw new Error('style requires a scene node');
-    }
-    return { ...w, attrs: { ...w.attrs, ...a } };
-  },
-  scatter: (w, a) => {
-    const r = a ?? 2;
-    const children = w.map(([x, y]) => ({ tag: 'circle', attrs: { cx: x, cy: y, r } }));
-    return { tag: 'g', children };
-  },
   member: (w, a) => {
     if (a === undefined) {
       if (typeof w === 'string') {
@@ -2416,8 +2316,5 @@ export {
   G,
   global_category,
   AplJS,
-  roundValue,
-  isSceneNode,
-  sceneToSvgElement,
-  sceneToSvgString
+  roundValue
 };
