@@ -7,6 +7,166 @@ local factorize, factorization
 
 local len = rawlen or function(a) return #a end
 
+-- Number Theory
+-- (kept ahead of the Kernel: Rat construction validates via gcd/isInt on
+-- every call, and later code in this file constructs concrete Rat/Power
+-- values at load time, not just inside deferred rule closures.)
+
+gcd = function(a, b)
+  while b ~= 0 do a, b = b, a % b end
+  return abs(a)
+end
+
+invmodp = function(a, p)
+  local t, newt = 0, 1
+  local r, newr = p, a
+  while newr ~= 0 do
+    local quotient = floor(r/newr)
+    t, newt = newt, t-quotient*newt
+    r, newr = newr, r-quotient*newr
+  end
+  if r > 1 then
+      error "a is not invertible"
+  end
+  if t < 0 then
+      t = t+p
+  end
+  return t
+end
+
+isInt = function(a) return type(a) == 'number' and a == floor(a) end
+
+binomial = function(n, k)
+  if k > n then return nil end
+  if k > n / 2 then k = n - k end
+  local numer, denom = 1, 1
+  for i = 1, k do
+    numer = numer * (n - i + 1)
+    denom = denom * i
+  end
+  return floor(numer / denom) -- lua 5.3
+end
+
+factorial = function(n)
+  local r = 1
+  for i=1,n do
+    r = r*i
+  end
+  return r
+end
+
+--- Calculate the modular power for any exponent
+fmodpow = function(bse, exp, mod)
+  bse = bse % mod
+  local prod = 1
+  while exp > 0 do
+    if exp % 2 == 1 then prod = prod * bse % mod end
+    exp = floor(exp / 2)
+    bse = (bse * bse) % mod
+  end
+  return prod
+end
+
+local function witnesses(n)
+  if n < 1373653 then
+    return 2, 3
+  elseif n < 4759123141 then
+    return 2, 7, 61
+  elseif n < 2152302898747 then
+    return 2, 3, 5, 7, 11
+  elseif n < 3474749660383 then
+    return 2, 3, 5, 7, 11, 13
+  else
+    return 2, 325, 9375, 28178, 450775, 9780504, 1795265022
+  end
+end
+
+--- Given a number n, returns numbers r and d such that 2^r*d+1 == n
+--- Miller-Rabin primality test
+local function miller_rabin(n, ...)
+  local s, d = 0, n - 1
+  while d % 2 == 0 do d, s = d / 2, s + 1 end
+  for i = 1, select('#', ...) do
+    local witness = select(i, ...)
+    if witness >= n then break end
+    local x = fmodpow(witness, d, n)
+    if (x ~= 1) then
+      local t = s
+      while x ~= n - 1 do
+        t = t - 1
+        if t <= 0 then return false end
+        x = (x * x) % n
+        if x == 1 then return false end
+      end
+    end
+  end
+  return true
+end
+
+local mrthreshold = 1e3
+
+primes = setmetatable({
+  2, 3 --[[just hard-code the even special case and following number]]
+}, {
+  __index = function(self, index)
+    if type(index) == 'number' then
+      for i = #self, index - 1 do local dummy = self[i] end -- Precalculate previous primes to avoid building up a stack
+      for candidate = self[index - 1] + 2 --[[All primes >2 are odd]] , infinite do
+        if index > mrthreshold then
+          if miller_rabin(candidate, witnesses(candidate)) then
+            rawset(self, index, candidate)
+            return candidate
+          end
+        else
+          local half = floor(candidate / 2)
+          for i = 1, index - 1 do
+            local div = self[i]
+            if div > half then
+              rawset(self, index, candidate);
+              return candidate
+            end -- A number can't possibly be divisible by something greater than its half
+            if candidate % div == 0 then break end -- Candidate is divisible by a prime, this not prime itself
+          end
+        end
+      end
+    end
+  end
+})
+
+factorize = function(subject)
+  if subject == 1 then
+    return -- Can be ommitted for implicit return ;)
+  elseif subject > 0 then
+    for i = 1, infinite do
+      local candidate = primes[i]
+      if subject % candidate == 0 then
+        return candidate, factorize(subject / candidate)
+      end
+    end
+  else
+    return nil,
+           "Can't be bothered to look up if negative numbers have a prime factorization"
+  end
+end
+
+factorization = function(n)
+  local a = {factorize(n)}
+  local count = 0
+  local cur = a[1]
+  local r = {}
+  for i = 1, len(a) + 1 do
+    local ai = a[i]
+    if ai == cur then
+      count = count + 1
+    else
+      r[len(r) + 1] = {cur, count}
+      cur = ai
+      count = 1
+    end
+  end
+  return r
+end
+
 -- Kernel
 local guacyra = {}
 guacyra.__symbols = {}
@@ -14,7 +174,7 @@ guacyra.__symbols = {}
 local Symbol = {'Symbol'}
 Symbol[0] = Symbol
 setmetatable(Symbol, guacyra)
-guacyra.version = '0.6.0'
+guacyra.version = '0.7.1'
 
 local function makeAtom(s)
   local t = {s}
@@ -46,23 +206,23 @@ local function isObject(e)
 end
 
 local function isAtomHead(e)
-  return rawequal(e, Symbol) or 
+  return rawequal(e, Symbol) or
     rawequal(e, Int) or
-    rawequal(e, Rat) or 
+    rawequal(e, Rat) or
     rawequal(e, Str) or
-    rawequal(e, Bool) or 
-    rawequal(e, Fun) or 
+    rawequal(e, Bool) or
+    rawequal(e, Fun) or
     rawequal(e, Nil)
 end
 
 local function isAtom(e)
   local h = e[0]
-  return rawequal(h, Symbol) or 
+  return rawequal(h, Symbol) or
     rawequal(h, Int) or
-    rawequal(h, Rat) or 
+    rawequal(h, Rat) or
     rawequal(h, Str) or
-    rawequal(h, Bool) or 
-    rawequal(h, Fun) or 
+    rawequal(h, Bool) or
+    rawequal(h, Fun) or
     rawequal(e, Nil)
 end
 guacyra.isAtom = isAtom
@@ -81,23 +241,23 @@ local _, __, ___
 
 local function isBlank(e)
   local h = e[0]
-  return rawequal(h, _) or 
+  return rawequal(h, _) or
     rawequal(h, __) or
     rawequal(h, ___)
 end
 
-local Slot1, Slot2, Slot3 
+local Slot1, Slot2, Slot3
 
 local function isSlot(e)
-  return rawequal(e, Slot1) or 
+  return rawequal(e, Slot1) or
     rawequal(e, Slot2) or
     rawequal(e, Slot3)
 end
 
-local function lhead(e) 
+local function lhead(e)
   if isSymbol(e) then
     return e
-  else 
+  else
     return lhead(e[0])
   end
 end
@@ -106,24 +266,38 @@ local makeExp
 
 local List
 
+-- Best rational approximation of a float via continued-fraction convergents
+-- (a linear search over denominators, tried first, can't reach eps=1e-15
+-- within any reasonable denominator bound for a "generic" irrational).
+local function floatToRat(a, eps, dmax)
+  local h_prev, h = 1, floor(a)
+  local k_prev, k = 0, 1
+  local x = a
+  while k < dmax and abs(h/k-a) > eps do
+    local rem = x - floor(x)
+    if rem < 1e-14 then break end
+    x = 1/rem
+    local ai = floor(x)
+    h_prev, h = h, ai*h + h_prev
+    k_prev, k = k, ai*k + k_prev
+  end
+  return h, k
+end
+
 local function conv(a)
   if not isObject(a) then
     local ta = type(a)
     if ta == 'number' then
       if a ~= floor(a) then
-        local n, d, dmax, eps = 1, 1, 1e7, 1e-15
-        while math.abs(n/d-a)>eps and d<dmax do
-          d=d+1
-          n=floor(a*d)
-        end
+        local n, d = floatToRat(a, 1e-15, 1e7)
         a = Rat(n, d)
-      else 
+      else
         a = Int(a)
       end
     elseif ta == 'string' then
       a = Str(a)
     elseif ta == 'boolean' then
-      a = Bool(a) 
+      a = Bool(a)
     elseif ta == 'table' then
       a = makeExp(List, unpack(a))
     elseif ta == 'function' then
@@ -190,7 +364,7 @@ makeExp = function(h, ...)
       if isSlot(t[i]) then
         f = true
       end
-      f = f or t[i].isPattern  
+      f = f or t[i].isPattern 
     end
     if not f then
       local r = eval(t)
@@ -217,7 +391,7 @@ local function cat(h, ...)
   return t
 end
 
-local function Symbols(vl, global) 
+local function Symbols(vl, global)
   local vars = {}
   for var in vl:gmatch("%S+") do
     local sym = Symbol(var)
@@ -248,7 +422,7 @@ function guacyraOn()
         local l = len(bl)
         if l == 1 and k == '' and (h=='1' or h=='2' or h=='3') then
           r = slots['Slot'..h]
-        else 
+        else
           if h ~= "" and guacyra.__symbols[h] == nil then
             error("Undefined head: "..h)
             return rawget(tab, var)
@@ -265,7 +439,7 @@ function guacyraOn()
           end
           guacyra.__symbols[var] = r
         end
-      else 
+      else
         r = Symbol(var)
         guacyra.__symbols[var] = r
       end
@@ -275,7 +449,7 @@ function guacyraOn()
 })
 end
 
-function guacyraOff() 
+function guacyraOff()
   setmetatable(_G,nil)
 end
 
@@ -289,7 +463,7 @@ local False = Bool(false)
 guacyra.__symbols.True = True
 guacyra.__symbols.False = False
 
-local function test(v) 
+local function test(v)
   if isObject(v) and rawequal(v[0], Bool) then
     return v[1]
   end
@@ -384,13 +558,13 @@ local function equal(ea, eb)
   local sb = len(eb)
   if sa ~= sb then return false end
   if isAtom(ea) and isAtom(eb) then
-    for i = 0, len(ea) do 
+    for i = 0, len(ea) do
       if ea[i] ~= eb[i] then return false end
     end
     return true
   end
   if not isAtom(ea) and not isAtom(eb) then
-    for i = 0, len(ea) do 
+    for i = 0, len(ea) do
       if not equal(ea[i], eb[i]) then return false end
     end
     return true
@@ -569,7 +743,7 @@ local function subst(ex, sub)
     if sub[t] ~= nil then
       local a = conv(sub[t])
       return copy(a)
-    else 
+    else
       return ex
     end
   else
@@ -680,7 +854,7 @@ local function algSubst(ex)
       local bsj = bs[j]
       if v<0 then
         sub[bsj] = bl[bsj]
-      else 
+      else
         sub[bsj] = Int(v)
       end
       k = floor(k / 3)
@@ -696,26 +870,44 @@ local function tablelen(T)
   return count
 end
 
+-- orderless heads sort blanks before concrete terms (less(), rule O7), so a
+-- leftover __/___ surviving a probe substitution can land anywhere; matchR
+-- requires it last, so move it back before matching.
+local function fixSeqBlankOrder(p)
+  if isAtom(p) then return p end
+  local n = len(p)
+  for i = 1, n do
+    local pi = p[i]
+    if not isAtom(pi) and (rawequal(pi[0], __) or rawequal(pi[0], ___)) then
+      if i ~= n then
+        table.remove(p, i)
+        p[n] = pi
+      end
+      break
+    end
+  end
+  return p
+end
+
 local function algMatch(ex, pat, cap)
   local capm, ss
-  local m = 0
+  local m = -1
   for s in algSubst(pat) do
     local cap2 = {}
-    local p = pat:subst(s):eval(true)
-    print(ex, p)
+    local p = fixSeqBlankOrder(pat:subst(s):eval(true))
     if matchR(ex, p, cap2) then
-      local mm = tablelen(cap2) 
+      local mm = tablelen(cap2)
       if mm>m then
         m, capm, ss = mm, cap2, s
       end
     end
   end
-  if m==0 then return false end
+  if m<0 then return false end
   for k,v in pairs(capm) do
     cap[k] = v
   end
   for k,v in pairs(ss) do
-    local kk = string.sub(k, 1, -2)
+    local kk = k:match('^(.-)_+$') or k
     if cap[kk] == nil then
       cap[kk] = v
     end
@@ -729,7 +921,7 @@ local function evalR(e, rec)
   --print('eval: ', e)
   local head = e[0]
   local ex = cat(head)
-  if rec and not head.holdAll then 
+  if rec and not head.holdAll then
     for i = 1, len(e) do ex[i] = eval(e[i], rec) end
   else
     for i = 1, len(e) do ex[i] = e[i] end
@@ -772,7 +964,7 @@ local function evalR(e, rec)
     if uphead.up then
       for j = 1, len(uphead.up) do
         tex = uphead.up[j](ex)
-        if tex then 
+        if tex then
           return --[[eval]](tex)
         end
       end
@@ -815,8 +1007,8 @@ local function getArgs(pat)
   local args = {}
   local argt = {}
   local function tra(pat, args)
-    if isAtom(pat) then 
-      return 
+    if isAtom(pat) then
+      return
     end
     if isBlank(pat) then
       local s = pat[1][1]
@@ -846,7 +1038,7 @@ local function getArgs(fun)
     if 'pcall' ~= info.name then return end
     for i = 1, max_args do
       local name, value = debug.getlocal(2, i)
-      if '(*temporary)' == name 
+      if '(*temporary)' == name
         or '(temporary)' == name then
         debug.sethook(hook)
         error('')
@@ -910,8 +1102,8 @@ guacyra.AlgRule = AlgRule
 local function replR(ex, pat, fu, lvl, args)
   local cap = {}
   if lvl==0 then
-    return ex 
-  end 
+    return ex
+  end
   if ex:match(pat, cap) then
     local cargs = {}
     for i=1,len(args) do cargs[len(cargs)+1] = cap[args[i]] end
@@ -939,11 +1131,11 @@ guacyra.repl = repl
 
 Rule(Equal(a_, b_),
 function(a, b) return Bool(equal(a, b)) end)
-guacyra.EQ = Equal 
+guacyra.EQ = Equal
 
 Rule(Less(a_, b_),
 function(a, b) return Bool(less(a, b)) end)
-guacyra.LT = Less 
+guacyra.LT = Less
 
 Rule(GT(a_, b_),
 function(a, b) return Bool(less(b, a)) end)
@@ -996,6 +1188,16 @@ guacyra.__symbols.NumericQ = NumericQ
 Rule(GCD(a_Int, b_Int),
 function(a, b)
   return Int(gcd(a[1], b[1]))
+end)
+
+Rule(GCD(a_Int, l__Int),
+function(a, l)
+  return GCD(a, GCD(l))
+end)
+
+Rule(GCD(List(l__Int)),
+function(l)
+  return GCD(l)
 end)
 
 Rule(Binomial(a_Int, b_Int),
@@ -1061,7 +1263,7 @@ function(a, b)
   return  Apply(b[0], l)
 end)
 
-Rule(If(a_, b_, c_), 
+Rule(If(a_, b_, c_),
 function(a, b, c)
   local t = eval(a, true)
   if test(t) then
@@ -1069,7 +1271,7 @@ function(a, b, c)
   else
     return eval(c, true)
   end
-end) 
+end)
 If.holdAll = true
 
 Rule(First(a_(b_, c___)),
@@ -1138,7 +1340,7 @@ Rule(Outer(a_, b_, c_),
 function(a, b, c)
   local l = cat(List)
   for i=1,len(b) do
-    local r = cat(List) 
+    local r = cat(List)
     for j=1,len(c) do
       r[len(r)+1] = a(b[i], c[j])
     end
@@ -1181,7 +1383,7 @@ end)
 Rule(Range(a_RatQ, b_RatQ, c_RatQ),
 function(a, b, c)
   local t = cat(List)
-  local na, nb = 
+  local na, nb =
     numericValue(a), numericValue(b)
   c = Abs(c)
   if na>nb then
@@ -1240,13 +1442,13 @@ function(n, m)
     local t = Rand({1, j})
     local f = true
     for i=1,len(s) do
-      if s[i]:eq(t) then 
+      if s[i]:eq(t) then
         s[len(s)+1] = Int(j)
         f = false
         break
       end
-    end 
-    if f then 
+    end
+    if f then
       s[len(s)+1] = t
     end
   end
@@ -1286,7 +1488,7 @@ guacyra.__unm = function(a) return Times(-1, a) end
 guacyra.__mul = Times
 guacyra.__div = function(a, b) return Times(a, Power(b, -1)) end
 guacyra.__pow = Power
-local val = function(a) 
+local val = function(a)
   if isAtom(a) then
     if rawequal(a[0], Rat) then
       return a[1]/a[2]
@@ -1385,9 +1587,9 @@ function(a)
     end
   end
   l[len(l)+1] = last
-  if flag then 
+  if flag then
     return Apply(Plus, l)
-  else 
+  else
     return nil
   end
 end)
@@ -1412,9 +1614,9 @@ function(a)
     end
   end
   l[len(l)+1] = last
-  if flag then 
+  if flag then
     return Apply(Times, l)
-  else 
+  else
     return nil
   end
 end)
@@ -1513,7 +1715,7 @@ end)
 
 Rule(Power(Times(a__), b_),
 function(a, b)
-  return Apply(Times, 
+  return Apply(Times,
     Map(function(t) return Power(t, b) end, List(a)))
 end)
 
@@ -1562,6 +1764,7 @@ end)
 
 Rule(Expand(Power(Plus(a_, b_), n_Int)),
 function(a, b, n)
+  if n[1] < 0 then return nil end -- binomial expansion isn't defined for negative exponents; leave e.g. 1/(x-1) unexpanded rather than looping zero times into a bogus Plus()=0
   local l = cat(List)
   for i=0,n[1] do
     l[len(l)+1] = Expand(
@@ -1574,6 +1777,7 @@ end)
 
 Rule(Expand(Power(Plus(a_, b__), n_Int)),
 function(a, b, n)
+  if n[1] < 0 then return nil end
   local l = cat(List)
   for i=0,n[1] do
     l[len(l)+1] = Expand(
@@ -1584,7 +1788,7 @@ function(a, b, n)
   return Apply(Plus, l)
 end)
 
-Rule(Expand(Plus(a__)), 
+Rule(Expand(Plus(a__)),
 function(a)
   return Apply(Plus, Map(Expand, List(a)))
 end)
@@ -1599,7 +1803,7 @@ function(a, b)
   end
 end)
 
-Rule(Expand(a_), 
+Rule(Expand(a_),
 function(a)
   return a
 end)
@@ -1703,7 +1907,7 @@ function(c)
       flag = true
     end
   end
-  if flag then 
+  if flag then
     return r
   end
   return nil
@@ -1723,7 +1927,7 @@ function(a, b)
   local i = 1
   local j = 1
   while i<=len(a) and j<=len(b) do
-    if less(a[i],b[j]) then 
+    if less(a[i],b[j]) then
       i = i+1
     elseif less(b[j], a[i]) then
       j = j+1
@@ -1765,10 +1969,10 @@ function(a)
     local k = 1
     while j~=0 do
       if j%2==1 then
-        s = Union(s,Set(a[k])) 
+        s = Union(s,Set(a[k]))
       end
       k = k+1
-      j = floor(j/2) 
+      j = floor(j/2)
     end
     r = Union(r,Set(s))
   end
@@ -1784,7 +1988,7 @@ function(a, b)
     local r = Tuple()
     for i=1,n do r[i]=a[i]+b[i] end
     return r
-  else 
+  else
     return nil
   end
 end)
@@ -1804,7 +2008,7 @@ function(a, b)
     local r = 0
     for i=1,n do r=r+a[i]*b[i] end
     return r
-  else 
+  else
     return nil
   end
 end)
@@ -1817,12 +2021,12 @@ function(a, b)
     l[2] = a[3]*b[1]-a[1]*b[3]
     l[3] = a[1]*b[2]-a[2]*b[1]
     return l
-  else 
+  else
     return nil
   end
 end)
 
-local function deg(m) 
+local function deg(m)
   local r = 0
   local l = m[2]
   for i=1,len(l) do
@@ -1833,7 +2037,7 @@ end
 
 local function deglex(m1, m2)
   local d1, d2 = deg(m1), deg(m2)
-  if d1<d2 then 
+  if d1<d2 then
     return false
   elseif d1>d2 then
     return true
@@ -1844,7 +2048,7 @@ end
 Mono.order = deglex
 
 Rule(Power(Mono(c_NumericQ, l_Tuple), p_Int),
-function(c, l, p) 
+function(c, l, p)
   return Mono(c^p, p*l)
 end, Mono)
 
@@ -1875,7 +2079,7 @@ function(m)
     if equal(m[i][2], last) then
       f = false
       c = c+m[i][1]
-    else 
+    else
       if not equal(c, Int(0)) then
         r[len(r)+1] = Mono(c, last)
       else
@@ -1901,16 +2105,16 @@ local function isPolynomial(p, var)
     var[p[1]] = p
     return true
   elseif Numeric(p):test() then
-    return true 
+    return true
   elseif rawequal(p[0], Plus) or rawequal(p[0], Times) then
     for i=1,len(p) do
       if not isPolynomial(p[i], var) then
         return false
       end
     end
-    return true 
+    return true
   elseif rawequal(p[0], Power) then
-    if isPolynomial(p[1], var) 
+    if isPolynomial(p[1], var)
       and rawequal(p[2][0], Int) and p[2][1]>0 then
       return true
     end
@@ -1923,9 +2127,9 @@ local function isMonomial(p, var)
     var[p[1]] = p
     return true
   elseif Numeric(p):test() then
-    return true 
+    return true
   elseif rawequal(p[0], Power) then
-    if isSymbol(p[1]) 
+    if isSymbol(p[1])
       and rawequal(p[2][0], Int) and p[2][1]>0 then
       var[p[1][1]] = p[1]
       return true
@@ -1936,7 +2140,7 @@ local function isMonomial(p, var)
         return false
       end
     end
-    return true 
+    return true
   end
   return false
 end
@@ -1950,7 +2154,7 @@ local function isExpandedPolynomial(p, var)
         return false
       end
     end
-    return true 
+    return true
   end
   return false
 end
@@ -1966,7 +2170,7 @@ local function expToPoly(p, var)
   local n = len(s)
   local l = cat(Tuple)
   for i=1,n do l[i] = Int(0) end
-  for i=1,n do 
+  for i=1,n do
     local ll = copy(l)
     ll[i] = Int(1)
     subs[s[i][1]] = cat(Mono, 1, ll)
@@ -1977,6 +2181,368 @@ local function expToPoly(p, var)
   r = r:eval(true)
   return r, s
 end
+
+-- Univariate polynomial toolkit (PolyQuotient/PolyRemainder/PolyGCD/Factor/
+-- Cancel/CoefficientList): operates on plain Lua arrays of guacyra Int/Rat
+-- coefficients in DESCENDING degree order (arr[1] = leading coefficient),
+-- independent of the multivariate Mono/Poly representation above, which has
+-- no division/GCD operations of its own.
+
+-- classifies a single Expand()ed summand as c*x^k, returning (k, c); nil if
+-- the term isn't a simple power of x times a factor free of x.
+local function termCoeff(term, x)
+  if not has(term, x) then
+    return 0, term
+  end
+  if equal(term, x) then
+    return 1, Int(1)
+  end
+  if rawequal(term[0], Power) and equal(term[1], x)
+    and rawequal(term[2][0], Int) and term[2][1] >= 0 then
+    return term[2][1], Int(1)
+  end
+  if rawequal(term[0], Times) then
+    local k, c = 0, Int(1)
+    for i = 1, len(term) do
+      local f = term[i]
+      if not has(f, x) then
+        c = c * f
+      elseif equal(f, x) then
+        k = k + 1
+      elseif rawequal(f[0], Power) and equal(f[1], x)
+        and rawequal(f[2][0], Int) and f[2][1] >= 0 then
+        k = k + f[2][1]
+      else
+        return nil
+      end
+    end
+    return k, c
+  end
+  return nil
+end
+
+-- p (in x) -> array of Int/Rat coefficients, descending degree, leading
+-- zeros trimmed; nil if p isn't a polynomial in x of the shape termCoeff
+-- understands.
+local function coeffArray(p, x)
+  local e = Expand(p)
+  local terms = rawequal(e[0], Plus) and e or cat(Plus, e)
+  local coeffs, maxk = {}, 0
+  for i = 1, len(terms) do
+    local k, c = termCoeff(terms[i], x)
+    if k == nil then return nil end
+    coeffs[k] = (coeffs[k] or Int(0)) + c
+    if k > maxk then maxk = k end
+  end
+  while maxk > 0 and equal(coeffs[maxk] or Int(0), Int(0)) do
+    maxk = maxk - 1
+  end
+  local arr = {}
+  for k = maxk, 0, -1 do
+    arr[#arr+1] = coeffs[k] or Int(0)
+  end
+  return arr, maxk
+end
+
+-- inverse of coeffArray
+local function arrayToPoly(arr, x)
+  local n = #arr - 1
+  local result = Int(0)
+  for i = 1, #arr do
+    local k = n - (i - 1)
+    local c = arr[i]
+    if not equal(c, Int(0)) then
+      result = result + (k == 0 and c or c * x^k)
+    end
+  end
+  return result
+end
+
+-- schoolbook long division on descending-degree coefficient arrays
+local function polyDivMod(A, B)
+  local dA, dB = #A - 1, #B - 1
+  if dA < dB then
+    return {Int(0)}, A
+  end
+  local rem = {}
+  for i = 1, #A do rem[i] = A[i] end
+  local q = {}
+  local lcB = B[1]
+  for i = 1, dA - dB + 1 do
+    local coef = rem[i] / lcB
+    q[i] = coef
+    if not equal(coef, Int(0)) then
+      for j = 1, #B do
+        rem[i+j-1] = rem[i+j-1] - coef*B[j]
+      end
+    end
+  end
+  local remainder = {}
+  for i = dA - dB + 2, #rem do remainder[#remainder+1] = rem[i] end
+  if #remainder == 0 then remainder = {Int(0)} end
+  while #remainder > 1 and equal(remainder[1], Int(0)) do
+    table.remove(remainder, 1)
+  end
+  return q, remainder
+end
+
+-- Euclidean algorithm; result is monic (never mutates A or B).
+local function polyGCDArr(A, B)
+  local a, b = A, B
+  while not (#b == 1 and equal(b[1], Int(0))) do
+    local _, r = polyDivMod(a, b)
+    a, b = b, r
+  end
+  if #a == 1 and equal(a[1], Int(0)) then
+    return a
+  end
+  local lc = a[1]
+  local g = {}
+  for i = 1, #a do g[i] = a[i] / lc end
+  return g
+end
+
+Rule(PolyQuotient(a_, b_, x_Symbol),
+function(a, b, x)
+  local A, B = coeffArray(a, x), coeffArray(b, x)
+  if A == nil or B == nil or (#B == 1 and equal(B[1], Int(0))) then
+    return nil
+  end
+  return arrayToPoly((polyDivMod(A, B)), x)
+end)
+
+Rule(PolyRemainder(a_, b_, x_Symbol),
+function(a, b, x)
+  local A, B = coeffArray(a, x), coeffArray(b, x)
+  if A == nil or B == nil or (#B == 1 and equal(B[1], Int(0))) then
+    return nil
+  end
+  local _, R = polyDivMod(A, B)
+  return arrayToPoly(R, x)
+end)
+
+Rule(PolyGCD(a_, b_, x_Symbol),
+function(a, b, x)
+  local A, B = coeffArray(a, x), coeffArray(b, x)
+  if A == nil or B == nil then return nil end
+  return arrayToPoly(polyGCDArr(A, B), x)
+end)
+
+Rule(CoefficientList(p_, x_Symbol),
+function(p, x)
+  local A = coeffArray(p, x)
+  if A == nil then return nil end
+  local asc = {}
+  for i = #A, 1, -1 do asc[#asc+1] = A[i] end
+  return Apply(List, asc)
+end)
+
+local function divisorsOfInt(n)
+  n = abs(n)
+  if n == 0 then return {1} end
+  local ds = {}
+  for d = 1, n do
+    if n % d == 0 then ds[#ds+1] = d end
+  end
+  return ds
+end
+
+local function rationalRootCandidates(a0, an)
+  local pds, qds = divisorsOfInt(a0[1]), divisorsOfInt(an[1])
+  local seen, cands = {}, {}
+  for _, p in ipairs(pds) do
+    for _, q in ipairs(qds) do
+      for _, sgn in ipairs({1, -1}) do
+        local r = Rat(sgn*p, q)
+        local key = tostr(r)
+        if not seen[key] then
+          seen[key] = true
+          cands[#cands+1] = r
+        end
+      end
+    end
+  end
+  return cands
+end
+
+local function evalArrAt(arr, v)
+  local r = arr[1]
+  for i = 2, #arr do r = r*v + arr[i] end
+  return r
+end
+
+local function findRationalRoot(cur, candidates)
+  if equal(cur[#cur], Int(0)) then return Int(0) end
+  for i = 1, #candidates do
+    if equal(evalArrAt(cur, candidates[i]), Int(0)) then
+      return candidates[i]
+    end
+  end
+  return nil
+end
+
+-- Extracts rational linear factors via the rational root theorem; any
+-- remaining irreducible-over-Q factor (degree >= 2, or degree 1 with an
+-- irrational-only... n/a here since roots are always rational by
+-- construction) is left as a single opaque cofactor. Only handles
+-- univariate polynomials with integer coefficients; anything else is left
+-- unevaluated (returns nil) so Factor(Int) and the identity fallback still
+-- apply.
+Rule(Factor(p_),
+function(p)
+  local vars = {}
+  if not isPolynomial(p, vars) then return nil end
+  local x, nvars = nil, 0
+  for _, v in pairs(vars) do nvars = nvars + 1; x = v end
+  if nvars ~= 1 then return nil end
+  local A = coeffArray(p, x)
+  if A == nil or #A <= 1 then return nil end
+  for i = 1, #A do
+    if not rawequal(A[i][0], Int) then return nil end
+  end
+  local candidates = rationalRootCandidates(A[#A], A[1])
+  local roots, cur = {}, A
+  while #cur - 1 >= 1 do
+    local root = findRationalRoot(cur, candidates)
+    if root == nil then break end
+    roots[#roots+1] = root
+    cur = (polyDivMod(cur, coeffArray(x - root, x)))
+  end
+  if #roots == 0 then return nil end
+  table.sort(roots, less)
+  local result = Int(1)
+  local i = 1
+  while i <= #roots do
+    local j = i
+    while j < #roots and equal(roots[j+1], roots[i]) do j = j + 1 end
+    local mult = j - i + 1
+    local factor = x - roots[i]
+    result = result * (mult == 1 and factor or factor^mult)
+    i = j + 1
+  end
+  local remainder = arrayToPoly(cur, x)
+  if not equal(remainder, Int(1)) then
+    result = result * remainder
+  end
+  return result
+end)
+
+Rule(Cancel(a_),
+function(a)
+  local nd = NumDen(a)
+  local num, den = nd[1], nd[2]
+  local varsN, varsD = {}, {}
+  if not isPolynomial(num, varsN) or not isPolynomial(den, varsD) then
+    return Together(a)
+  end
+  local x
+  for k, v in pairs(varsN) do
+    if varsD[k] then x = v end
+  end
+  if not x then return Together(a) end
+  local An, Ad = coeffArray(num, x), coeffArray(den, x)
+  if An == nil or Ad == nil then return Together(a) end
+  local G = polyGCDArr(An, Ad)
+  if #G <= 1 then return Together(a) end
+  local newNum = arrayToPoly((polyDivMod(An, G)), x)
+  local newDen = arrayToPoly((polyDivMod(Ad, G)), x)
+  return newNum/newDen
+end)
+
+-- Simplify: tries a handful of standard strategies (identity, Expand,
+-- Cancel, Expand-then-Cancel) and keeps whichever has the fewest nodes.
+-- Never worse than the input since the input itself is always a candidate;
+-- not a general simplifier (no trig identities, no CSE).
+local function nodeCount(e)
+  if isAtom(e) then return 1 end
+  local c = 1
+  for i = 1, len(e) do c = c + nodeCount(e[i]) end
+  return c
+end
+
+Rule(Simplify(e_),
+function(e)
+  local best, bestC = e, nodeCount(e)
+  local candidates = {Expand(e), Cancel(e), Cancel(Expand(e))}
+  for i = 1, #candidates do
+    local c = nodeCount(candidates[i])
+    if c < bestC then
+      best, bestC = candidates[i], c
+    end
+  end
+  return best
+end)
+
+-- Solve(expr, x): solves expr == 0 for x, returning the solution Set (empty
+-- Set() means provably no solution; an unevaluated Solve(...) means "not
+-- solved", not "no solution"). Linear and quadratic are closed-form;
+-- quadratic promotes to a proper Complex(...) result on negative discriminant
+-- (I, the imaginary unit, is a genuine Lua global set up later in this file
+-- -- looked up at call time, so the forward reference is fine). Degree >= 3
+-- peels rational roots via the Factor machinery above and, if what's left
+-- reduces to degree <= 2, finishes with the same closed forms; an
+-- irreducible residual of degree >= 3 is left unsolved.
+local function solveQuadratic(a, b, c)
+  local D = Expand(b*b - 4*a*c)
+  if isRational(D) then
+    if equal(D, Int(0)) then
+      return Set(-b/(2*a))
+    elseif numericValue(D) > 0 then
+      local sq = Sqrt(D)
+      return Set((-b-sq)/(2*a), (-b+sq)/(2*a))
+    else
+      local sq = Sqrt(-D)
+      return Set(Complex(-b/(2*a), -sq/(2*a)), Complex(-b/(2*a), sq/(2*a)))
+    end
+  else
+    local sq = Sqrt(D)
+    return Set((-b-sq)/(2*a), (-b+sq)/(2*a))
+  end
+end
+
+local function solveHigherDegree(A, x)
+  for i = 1, #A do
+    if not rawequal(A[i][0], Int) then return nil end
+  end
+  local candidates = rationalRootCandidates(A[#A], A[1])
+  local roots, cur = {}, A
+  while #cur - 1 >= 1 do
+    local root = findRationalRoot(cur, candidates)
+    if root == nil then break end
+    roots[#roots+1] = root
+    cur = (polyDivMod(cur, coeffArray(x - root, x)))
+  end
+  local sols = {}
+  for i = 1, #roots do sols[#sols+1] = roots[i] end
+  local remDeg = #cur - 1
+  if remDeg == 1 then
+    sols[#sols+1] = -cur[2]/cur[1]
+  elseif remDeg == 2 then
+    local qs = solveQuadratic(cur[1], cur[2], cur[3])
+    for i = 1, len(qs) do sols[#sols+1] = qs[i] end
+  elseif remDeg >= 3 then
+    return nil -- no closed form attempted for an irreducible cubic+ residual
+  end
+  if #sols == 0 then return nil end
+  return Apply(Set, List(unpack(sols)))
+end
+
+Rule(Solve(expr_, x_Symbol),
+function(expr, x)
+  local A = coeffArray(expr, x)
+  if A == nil then return nil end
+  local deg = #A - 1
+  if deg == 0 then
+    if equal(A[1], Int(0)) then return nil end -- 0==0: identically true, no clean way to say "all x"
+    return Set()
+  elseif deg == 1 then
+    return Set(-A[2]/A[1])
+  elseif deg == 2 then
+    return solveQuadratic(A[1], A[2], A[3])
+  else
+    return solveHigherDegree(A, x)
+  end
+end)
 
 local TeXP = Symbol("TeXP")
 
@@ -2035,7 +2601,7 @@ function(a)
 end)
 
 Rule(TeX(Times(-1,a__)),
-function(a) 
+function(a)
   return Cat('-', TeXP(Times(a)))
 end)
 
@@ -2096,14 +2662,14 @@ Rule(TeX(Mono(c_NumericQ, l_Tuple)),
 function(c, l)
   local s
   local vars = Poly.vars or defaultVars
-  local p = Mono(c, l) 
+  local p = Mono(c, l)
   if equal(p[1], Int(1)) then
     if deg(p)==0 then return Str('1') end
     s = ''
   elseif equal(p[1], Int(-1)) then
     if deg(p)==0 then return Str('-1') end
     s = '-'
-  else 
+  else
     s = TeX(p[1])[1]
   end
   local l = p[2]
@@ -2114,7 +2680,7 @@ function(c, l)
     elseif ll[1]>1 then
       local ls = ''..ll[1]
       if len(ls)==1 then
-        s = s..vars[i][1]..'^'..ls        
+        s = s..vars[i][1]..'^'..ls       
       else
         s = s..vars[i][1]..'^{'..ls..'}'
       end
@@ -2154,17 +2720,17 @@ function(c)
   return Str(s)
 end)
 
-Rule(TeX(Dec(n_RatQ)), 
+Rule(TeX(Dec(n_RatQ)),
 function (n)
   return Str(#n.."")
 end, Dec)
 
-Rule(TeX(Dec(n_RatQ, m_Int)), 
+Rule(TeX(Dec(n_RatQ, m_Int)),
 function (n, m)
   if #m>=0 then
     return Str(string.format('%.'..(#m)..'f', #n))
   end
-  return nil  
+  return nil 
 end, Dec)
 
 Rule(TeX(Plus(c__)),
@@ -2247,6 +2813,12 @@ function() return Int(1) end)
 Rule(Log(1),
 function() return Int(0) end)
 
+Rule(Log(Exp(x_)),
+function(x) return x end)
+
+Rule(Exp(Log(x_)),
+function(x) return x end)
+
 Rule(Sin(0),
 function() return Int(0) end)
 
@@ -2259,7 +2831,7 @@ function(n) return Int(0) end)
 Rule(Sin(Times(p_Rat, Pi)),
 function(p)
   local a, b = p[1], p[2]
-  if a < 0 then 
+  if a < 0 then
     return -Sin((-a)*Pi/b)
   elseif a/b > 2 then
     return Sin((a%(2*b))*Pi/b)
@@ -2292,7 +2864,7 @@ function(n) return (-1)^n end)
 Rule(Cos(Times(p_Rat, Pi)),
 function(p)
   local a, b = p[1], p[2]
-  if a < 0 then 
+  if a < 0 then
     return Cos((-a)*Pi/b)
   elseif a/b > 2 then
     return Cos((a%(2*b))*Pi/b)
@@ -2312,6 +2884,137 @@ function(p)
     return nil
   end
 end)
+
+Rule(Tan(0),
+function() return Int(0) end)
+
+Rule(Tan(Pi),
+function() return Int(0) end)
+
+Rule(Tan(Times(n_Int, Pi)),
+function(n) return Int(0) end)
+
+Rule(Tan(Times(p_Rat, Pi)),
+function(p)
+  local s, c = Sin(p*Pi), Cos(p*Pi)
+  if rawequal(s[0], Sin) or rawequal(c[0], Cos) or equal(c, Int(0)) then
+    return nil
+  end
+  return s/c
+end)
+
+-- Cot/Csc are undefined at integer multiples of Pi (division by Sin=0),
+-- so deliberately no rule is given for Times(n_Int,Pi): they stay symbolic.
+Rule(Cot(Times(p_Rat, Pi)),
+function(p)
+  local s, c = Sin(p*Pi), Cos(p*Pi)
+  if rawequal(s[0], Sin) or rawequal(c[0], Cos) or equal(s, Int(0)) then
+    return nil
+  end
+  return c/s
+end)
+
+Rule(Sec(0),
+function() return Int(1) end)
+
+Rule(Sec(Pi),
+function() return Int(-1) end)
+
+Rule(Sec(Times(n_Int, Pi)),
+function(n) return (-1)^n end)
+
+Rule(Sec(Times(p_Rat, Pi)),
+function(p)
+  local c = Cos(p*Pi)
+  if rawequal(c[0], Cos) or equal(c, Int(0)) then
+    return nil
+  end
+  return 1/c
+end)
+
+Rule(Csc(Times(p_Rat, Pi)),
+function(p)
+  local s = Sin(p*Pi)
+  if rawequal(s[0], Sin) or equal(s, Int(0)) then
+    return nil
+  end
+  return 1/s
+end)
+
+Rule(ArcSin(0),
+function() return Int(0) end)
+
+Rule(ArcSin(1),
+function() return Pi/2 end)
+
+Rule(ArcSin(-1),
+function() return -Pi/2 end)
+
+Rule(ArcSin(Rat(1, 2)),
+function() return Pi/6 end)
+
+Rule(ArcSin(Rat(-1, 2)),
+function() return -Pi/6 end)
+
+Rule(ArcSin(Sqrt(2)/2),
+function() return Pi/4 end)
+
+Rule(ArcSin(-Sqrt(2)/2),
+function() return -Pi/4 end)
+
+Rule(ArcSin(Sqrt(3)/2),
+function() return Pi/3 end)
+
+Rule(ArcSin(-Sqrt(3)/2),
+function() return -Pi/3 end)
+
+Rule(ArcCos(0),
+function() return Pi/2 end)
+
+Rule(ArcCos(1),
+function() return Int(0) end)
+
+Rule(ArcCos(-1),
+function() return Pi end)
+
+Rule(ArcCos(Rat(1, 2)),
+function() return Pi/3 end)
+
+Rule(ArcCos(Rat(-1, 2)),
+function() return 2*Pi/3 end)
+
+Rule(ArcCos(Sqrt(2)/2),
+function() return Pi/4 end)
+
+Rule(ArcCos(-Sqrt(2)/2),
+function() return 3*Pi/4 end)
+
+Rule(ArcCos(Sqrt(3)/2),
+function() return Pi/6 end)
+
+Rule(ArcCos(-Sqrt(3)/2),
+function() return 5*Pi/6 end)
+
+Rule(ArcTan(0),
+function() return Int(0) end)
+
+Rule(ArcTan(1),
+function() return Pi/4 end)
+
+Rule(ArcTan(-1),
+function() return -Pi/4 end)
+
+Rule(ArcTan(Sqrt(3)),
+function() return Pi/3 end)
+
+Rule(ArcTan(-Sqrt(3)),
+function() return -Pi/3 end)
+
+Rule(ArcTan(Sqrt(3)/3),
+function() return Pi/6 end)
+
+Rule(ArcTan(-Sqrt(3)/3),
+function() return -Pi/6 end)
 
 Rule(Diff(k_, x_Symbol),
 function(k, x)
@@ -2337,17 +3040,38 @@ function(x) return Cos(x) end)
 Rule(Derivative(Cos)(1)(x_),
 function(x) return -Sin(x) end)
 
+Rule(Derivative(Tan)(1)(x_),
+function(x) return Sec(x)^2 end)
+
+Rule(Derivative(Cot)(1)(x_),
+function(x) return -Csc(x)^2 end)
+
+Rule(Derivative(Sec)(1)(x_),
+function(x) return Sec(x)*Tan(x) end)
+
+Rule(Derivative(Csc)(1)(x_),
+function(x) return -Csc(x)*Cot(x) end)
+
+Rule(Derivative(ArcSin)(1)(x_),
+function(x) return 1/Sqrt(1-x^2) end)
+
+Rule(Derivative(ArcCos)(1)(x_),
+function(x) return -1/Sqrt(1-x^2) end)
+
+Rule(Derivative(ArcTan)(1)(x_),
+function(x) return 1/(1+x^2) end)
+
 Rule(Diff(Times(k_, a__), x_Symbol),
 function(k, a, x)
-  if not has(k, x) then 
+  if not has(k, x) then
     return k*Diff(Times(a), x)
   else
     return Times(Diff(k, x), a)+k*Diff(Times(a), x)
   end
 end)
 
-Rule(Diff(Plus(a__), x_Symbol), 
-function(a, x) 
+Rule(Diff(Plus(a__), x_Symbol),
+function(a, x)
   return Map(function(t) return Diff(t,x) end, Plus(a))
 end)
 
@@ -2384,10 +3108,253 @@ function(a)
   return Cat('\\cos{', TeX(a), '}')
 end, Cos)
 
+Rule(TeX(Tan(a_)),
+function(a)
+  return Cat('\\tan{', TeX(a), '}')
+end, Tan)
+
+Rule(TeX(Cot(a_)),
+function(a)
+  return Cat('\\cot{', TeX(a), '}')
+end, Cot)
+
+Rule(TeX(Sec(a_)),
+function(a)
+  return Cat('\\sec{', TeX(a), '}')
+end, Sec)
+
+Rule(TeX(Csc(a_)),
+function(a)
+  return Cat('\\csc{', TeX(a), '}')
+end, Csc)
+
+Rule(TeX(ArcSin(a_)),
+function(a)
+  return Cat('\\arcsin{', TeX(a), '}')
+end, ArcSin)
+
+Rule(TeX(ArcCos(a_)),
+function(a)
+  return Cat('\\arccos{', TeX(a), '}')
+end, ArcCos)
+
+Rule(TeX(ArcTan(a_)),
+function(a)
+  return Cat('\\arctan{', TeX(a), '}')
+end, ArcTan)
+
 Rule(TeX(Derivative(f_)(1)(x_)),
 function(f, x)
   return Cat(TeX(f), "{'}\\left(", TeX(x),'\\right)')
 end, Derivative)
+
+-- Returns a Lua number for e, or nil if e isn't reducible to one (kept
+-- outside the Rule/pattern machinery since it recurses over plain Lua
+-- numbers, not guacyra expressions).
+local function nval(e)
+  if isRational(e) then
+    return numericValue(e)
+  elseif equal(e, Pi) then
+    return math.pi
+  elseif rawequal(e[0], Plus) or rawequal(e[0], Times) then
+    local isPlus = rawequal(e[0], Plus)
+    local r = isPlus and 0 or 1
+    for i = 1, len(e) do
+      local v = nval(e[i])
+      if not v then return nil end
+      r = isPlus and (r+v) or (r*v)
+    end
+    return r
+  elseif rawequal(e[0], Power) then
+    local b, p = nval(e[1]), nval(e[2])
+    if not b or not p then return nil end
+    if b < 0 and p ~= floor(p) then return nil end
+    return b^p
+  elseif rawequal(e[0], Sin) then
+    local v = nval(e[1]); return v and math.sin(v)
+  elseif rawequal(e[0], Cos) then
+    local v = nval(e[1]); return v and math.cos(v)
+  elseif rawequal(e[0], Tan) then
+    local v = nval(e[1]); return v and math.tan(v)
+  elseif rawequal(e[0], Exp) then
+    local v = nval(e[1]); return v and math.exp(v)
+  elseif rawequal(e[0], Log) then
+    local v = nval(e[1]); return (v and v > 0) and math.log(v) or nil
+  elseif rawequal(e[0], ArcSin) then
+    local v = nval(e[1]); return v and math.asin(v)
+  elseif rawequal(e[0], ArcCos) then
+    local v = nval(e[1]); return v and math.acos(v)
+  elseif rawequal(e[0], ArcTan) then
+    local v = nval(e[1]); return v and math.atan(v)
+  end
+  return nil
+end
+
+Rule(N(a_),
+function(a)
+  if isRational(a) then return a end
+  local v = nval(a)
+  if v == nil then return nil end
+  return conv(v)
+end)
+
+-- Integrate: table + linearity, generalized to affine arguments a*x+b via
+-- coeffArray (Integrate(f(a*x+b),x) = F(a*x+b)/a). No general substitution
+-- or integration by parts: anything outside the table stays unevaluated.
+Rule(Integrate(c_, x_Symbol),
+function(c, x)
+  if not has(c, x) then return c*x end
+  return nil
+end)
+
+Rule(Integrate(Plus(a__), x_Symbol),
+function(a, x)
+  return Map(function(t) return Integrate(t, x) end, Plus(a))
+end)
+
+Rule(Integrate(Times(k_, a__), x_Symbol),
+function(k, a, x)
+  if not has(k, x) then
+    return k*Integrate(Times(a), x)
+  end
+  return nil
+end)
+
+Rule(Integrate(x_Symbol, x_Symbol),
+function(x) return x^2/2 end)
+
+Rule(Integrate(Power(x_Symbol, n_Int), x_Symbol),
+function(x, n)
+  if n[1] == -1 then return Log(x) end
+  return x^(n+1)/(n+1)
+end)
+
+Rule(Integrate(Power(x_Symbol, n_Rat), x_Symbol),
+function(x, n) return x^(n+1)/(n+1) end)
+
+Rule(Integrate(Sin(x_Symbol), x_Symbol),
+function(x) return -Cos(x) end)
+
+Rule(Integrate(Cos(x_Symbol), x_Symbol),
+function(x) return Sin(x) end)
+
+Rule(Integrate(Exp(x_Symbol), x_Symbol),
+function(x) return Exp(x) end)
+
+-- returns (a,b) with u = a*x+b (a,b free of x), or nil if u isn't affine in
+-- x -- used to generalize the table above to Integrate(f(a*x+b),x). u==x
+-- (a=1,b=0) is intentionally allowed through: table entries that also have
+-- a direct x_Symbol rule win by registration order regardless, and entries
+-- with no direct counterpart (Sec(u_)^2, the ArcTan form) need this case.
+local function affineOf(u, x)
+  if not has(u, x) then return nil end
+  local A = coeffArray(u, x)
+  if A == nil or #A ~= 2 then return nil end
+  return A[1], A[2]
+end
+
+Rule(Integrate(Sin(u_), x_Symbol),
+function(u, x)
+  local a = affineOf(u, x)
+  if not a then return nil end
+  return -Cos(u)/a
+end)
+
+Rule(Integrate(Cos(u_), x_Symbol),
+function(u, x)
+  local a = affineOf(u, x)
+  if not a then return nil end
+  return Sin(u)/a
+end)
+
+Rule(Integrate(Exp(u_), x_Symbol),
+function(u, x)
+  local a = affineOf(u, x)
+  if not a then return nil end
+  return Exp(u)/a
+end)
+
+Rule(Integrate(Power(Sec(u_), 2), x_Symbol),
+function(u, x)
+  local a = affineOf(u, x)
+  if not a then return nil end
+  return Tan(u)/a
+end)
+
+Rule(Integrate(Power(Plus(1, Power(u_, 2)), -1), x_Symbol),
+function(u, x)
+  local a = affineOf(u, x)
+  if not a then return nil end
+  return ArcTan(u)/a
+end)
+
+-- 1/(1+c*u^2): (2*x)^2 etc. auto-distributes to 4*x^2 (Power(Times(a__),b_)
+-- above), so the coefficient-free rule alone would miss it; c<=0 has a log-
+-- form antiderivative instead of arctan and is deliberately left uncovered.
+Rule(Integrate(Power(Plus(1, Times(c_RatQ, Power(u_, 2))), -1), x_Symbol),
+function(c, u, x)
+  local a = affineOf(u, x)
+  if not a or not (numericValue(c) > 0) then return nil end
+  local sc = Sqrt(c)
+  return ArcTan(sc*u)/(a*sc)
+end)
+
+Rule(Integrate(Power(u_, n_Int), x_Symbol),
+function(u, n, x)
+  local a = affineOf(u, x)
+  if not a then return nil end
+  if n[1] == -1 then return Log(u)/a end
+  return Power(u, n+1)/(a*(n+1))
+end)
+
+Rule(Integrate(Power(u_, n_Rat), x_Symbol),
+function(u, n, x)
+  local a = affineOf(u, x)
+  if not a then return nil end
+  return Power(u, n+1)/(a*(n+1))
+end)
+
+-- Limit: direct substitution when the denominator doesn't vanish, otherwise
+-- L'Hopital (bounded depth) on genuine 0/0 forms; anything else (nonzero/0,
+-- or an indeterminate form L'Hopital doesn't resolve within the bound)
+-- deliberately stays unevaluated rather than guessing at an Infinity value
+-- the library has no representation for.
+local function limitAt(e, x, a, depth)
+  local nd = NumDen(e)
+  local sub = {[x[1]] = a}
+  local numAtA = eval(nd[1]:subst(sub), true)
+  local denAtA = eval(nd[2]:subst(sub), true)
+  if not (rawequal(denAtA[0], Int) and denAtA[1] == 0) then
+    return numAtA/denAtA
+  end
+  if rawequal(numAtA[0], Int) and numAtA[1] == 0 then
+    if depth <= 0 then return nil end
+    return limitAt(Diff(nd[1], x)/Diff(nd[2], x), x, a, depth-1)
+  end
+  return nil
+end
+
+Rule(Limit(e_, x_Symbol, a_),
+function(e, x, a)
+  return limitAt(e, x, a, 12)
+end)
+
+-- Series: plain Taylor polynomial of degree n around x=a (no explicit O()
+-- remainder term), built by repeated Diff + evaluation at the point.
+Rule(Series(f_, x_Symbol, a_, n_Int),
+function(f, x, a, n)
+  local term = f
+  local fact = Int(1)
+  local sub = {[x[1]] = a}
+  local result = eval(term:subst(sub), true)
+  for k = 1, n[1] do
+    term = Diff(term, x)
+    fact = fact * k
+    local coeff = eval(term:subst(sub), true) / fact
+    result = result + coeff*(x-a)^k
+  end
+  return result
+end)
 
 Rule(Numeric(Zm(a_Int, p_Int)),
 function(a, p)
@@ -2448,27 +3415,27 @@ end, Complex)
 
 I = Complex(0, 1)
 
-Rule(Complex(a_, 0), 
+Rule(Complex(a_, 0),
 function(a)
   return a
 end)
 
-Rule(Conj(Complex(a_, b_)), 
+Rule(Conj(Complex(a_, b_)),
 function(a, b)
   return Complex(a, -b)
 end)
 
-Rule(Abs(a_Int), 
+Rule(Abs(a_Int),
 function(a)
   return Int(abs(a[1]))
 end)
 
-Rule(Abs(a_Rat), 
+Rule(Abs(a_Rat),
 function(a)
   return Rat(abs(a[1]), a[2])
 end)
 
-Rule(Abs(Complex(a_, b_)), 
+Rule(Abs(Complex(a_, b_)),
 function(a, b)
   return Sqrt(a^2+b^2)
 end)
@@ -2476,37 +3443,37 @@ end)
 Rule(Plus(Complex(a_, b_),
           Complex(c_, d_)),
 function(a, b, c, d)
-  return Complex(a+c, b+d) 
+  return Complex(a+c, b+d)
 end, Complex)
 
 Rule(Plus(a_,
           Complex(c_, d_)),
 function(a, c, d)
-  return Complex(a+c, d) 
+  return Complex(a+c, d)
 end, Complex)
 
 Rule(Plus(Complex(c_, d_),
           a_),
 function(c, d, a)
-  return Complex(a+c, d) 
+  return Complex(a+c, d)
 end, Complex)
 
 Rule(Times(Complex(a_, b_),
            Complex(c_, d_)),
 function(a, b, c, d)
-  return Complex(a*c-b*d, a*d+b*c) 
+  return Complex(a*c-b*d, a*d+b*c)
 end, Complex)
 
 Rule(Times(a_,
           Complex(c_, d_)),
 function(a, c, d)
-  return Complex(a*c, a*d) 
+  return Complex(a*c, a*d)
 end, Complex)
 
 Rule(Times(Complex(c_, d_),
            a_ ),
 function(c, d, a)
-  return Complex(a*c, a*d) 
+  return Complex(a*c, a*d)
 end, Complex)
 
 Rule(Power(z_Complex, n_Int),
@@ -2532,7 +3499,7 @@ function(a, b)
     return Cat(TeX(a),b)
   else
     return Cat(TeX(a),'+',b)
-  end 
+  end
 end, Complex)
 
 Rule(Matrix({a_}),
@@ -2553,7 +3520,7 @@ function(m, n, f)
   return Apply(Matrix, rs)
 end)
 
-local function dims(m) 
+local function dims(m)
   return len(m), len(m[1])
 end
 
@@ -2575,7 +3542,7 @@ function(s)
       else
         v = Int(tonumber(ss))
       end
-      c[len(c)+1] = v 
+      c[len(c)+1] = v
     end
     m[len(m)+1] = c
   end
@@ -2663,7 +3630,7 @@ Y[len(Y)+1],X[len(X)+1]={},x end
   for l=1,n-1 do
   yl=Int(0)
   for i=1,n do for j=1,n do Y[i][j]=Int(0) end end
-  for i=n-l+1,1,-1 do for j=n,i,-1 do  
+  for i=n-l+1,1,-1 do for j=n,i,-1 do 
   y = j>i and -X[i][j] or (i==n and Int(0) or yl+X[i+1][i+1])
   yl = i==j and y or yl
   for k=1,n do Y[i][k]=Y[i][k]+y*A[j][k] end
@@ -2673,9 +3640,9 @@ Y[len(Y)+1],X[len(X)+1]={},x end
   return X[1][1]
 end
 
-local function det(A) 
+local function det(A)
   local m, n = dims(A)
-  if m~=n then 
+  if m~=n then
     return nil
   end
   if n==2 then
@@ -2745,7 +3712,7 @@ local function rref(A)
         local k = Times(-1, A[i][j]/A[ii][j])
         if not equal(k, Int(0)) then
           A[i][j] = Int(0)
-          for jj=j+1,n do 
+          for jj=j+1,n do
             A[i][jj] = Expand(A[i][jj]+k*A[ii][jj])
           end
         end
@@ -2754,7 +3721,7 @@ local function rref(A)
         local k = Times(-1, A[i][j]/A[ii][j])
         if not equal(k, Int(0)) then
           A[i][j] = Int(0)
-          for jj=j+1,n do 
+          for jj=j+1,n do
             A[i][jj] = Expand(A[i][jj]+k*A[ii][jj])
           end
         end
@@ -2786,7 +3753,7 @@ Rule(Matrix(m_Int, n_Int, k_RatQ),
 function(m, n, k)
   return Matrix(m, n,
     function(i,j)
-      if i:eq(j) then 
+      if i:eq(j) then
         return k
       else
         return Int(0)
@@ -2808,13 +3775,13 @@ Rule(Diag(List(d__)),
 function(d)
   return Matrix(len(d), len(d),
     function(i,j)
-      if i:eq(j) then 
+      if i:eq(j) then
         return d[i[1]]
       else
         return Int(0)
       end
     end)
-end)  
+end) 
 
 Rule(Diag(A_Matrix),
 function(A)
@@ -2823,7 +3790,7 @@ function(A)
   n = min(m, n)
   for i=1,n do l[len(l)+1] = A[i][i] end
   return l
-end)  
+end) 
 
 Rule(Tr(A_Matrix),
 function(A)
@@ -2832,19 +3799,58 @@ function(A)
   n = min(m, n)
   for i=1,n do r = r+A[i][i] end
   return r
-end)  
+end) 
 
 Rule(Inv(A_Matrix),
 function(A)
   local m, n = dims(A)
-  if n~=m then 
+  if n~=m then
+    return nil
+  end
+  -- rank of A alone: rref on the augmented [A|I] block can't be used for
+  -- this check, since pivots can be found in the appended identity columns
+  -- even when A itself is rank-deficient, masking a singular A.
+  if rref(copy(A)) < n then
     return nil
   end
   local AI = Block({A, Matrix(n, n, 1)})
   AI = RREF(AI)
   return Sub(AI,{1,n},{n+1,2*n})
 end)
-  
+
+-- LinearSolve(A,b): unique-solution case only (square A, consistent, full
+-- column rank) -- rank is computed the same way the Inv fix above does,
+-- since RREF on the augmented [A|b] can likewise "borrow" a pivot from b
+-- and mask a rank-deficient A. Underdetermined/inconsistent systems are
+-- left unevaluated rather than guessing at a parametrized family of
+-- solutions this doesn't attempt to represent.
+Rule(LinearSolve(A_Matrix, b_List),
+function(A, b)
+  local m, n = dims(A)
+  if len(b) ~= m or rref(copy(A)) < n then
+    return nil
+  end
+  local bmat = Matrix(m, 1, function(i, j) return b[i[1]] end)
+  local Ab = RREF(Block({A, bmat}))
+  local sol = List()
+  for i = 1, n do
+    sol[i] = Ab[i][n+1]
+  end
+  return sol
+end)
+
+Rule(CharPoly(A_Matrix, x_Symbol),
+function(A, x)
+  local m, n = dims(A)
+  if m ~= n then return nil end
+  return Expand(Det(A - x*Matrix(n, n, 1)))
+end)
+
+Rule(Eigenvalues(A_Matrix, x_Symbol),
+function(A, x)
+  return Solve(CharPoly(A, x), x)
+end)
+
 Rule(Sub(a_Matrix,
   List(i1_Int, i2_Int),
   List(j1_Int, j2_Int)),
@@ -2916,7 +3922,7 @@ local function gramSchmidt(B)
     local br = copy(bi)
     for j=1,i-1 do
       local bj = Sub(R,j,{1,n})
-      mu[i][j] = (bi..Trans(bj))/mu[j][j] 
+      mu[i][j] = (bi..Trans(bj))/mu[j][j]
       br = br - mu[i][j]*bj
     end
     mu[i][i] = br..Trans(br)
@@ -3001,7 +4007,7 @@ function (a)
   local ir = 1
   for ib=1,mb do
     local m = len(a[ib][1])
-    for i = 1,m do 
+    for i = 1,m do
       local l = List()
       for jb=1,nb do
         local mm, n = dims(a[ib][jb])
@@ -3073,7 +4079,7 @@ function(a)
 end)
 
 Rule(Output(Times(-1,a__)),
-function(a) 
+function(a)
   return Cat('-', OutputP(Times(a)))
 end)
 
@@ -3149,167 +4155,10 @@ _G['Symbols'] = Symbols
 _G['Rule'] = Rule
 _G['Clear'] = function(...)
 local s = {...}
-  for i=1,#s do 
+  for i=1,#s do
     guacyra.__symbols[s[i][1]] = nil
-  end 
+  end
 end
 _G['texcmd'] = texcmd
-
--- Number Theory
-
-gcd = function(a, b)
-  while b ~= 0 do a, b = b, a % b end
-  return abs(a)
-end
-
-invmodp = function(a, p)
-  local t, newt = 0, 1
-  local r, newr = p, a
-  while newr ~= 0 do
-    local quotient = floor(r/newr)
-    t, newt = newt, t-quotient*newt
-    r, newr = newr, r-quotient*newr
-  end
-  if r > 1 then
-      error "a is not invertible"
-  end
-  if t < 0 then
-      t = t+p
-  end
-  return t
-end
-
-isInt = function(a) return type(a) == 'number' and a == floor(a) end
-
-binomial = function(n, k)
-  if k > n then return nil end
-  if k > n / 2 then k = n - k end
-  local numer, denom = 1, 1
-  for i = 1, k do
-    numer = numer * (n - i + 1)
-    denom = denom * i
-  end
-  return floor(numer / denom) -- lua 5.3
-end
-
-factorial = function(n)
-  local r = 1
-  for i=1,n do
-    r = r*i
-  end
-  return r
-end
-
---- Calculate the modular power for any exponent
-fmodpow = function(bse, exp, mod)
-  bse = bse % mod
-  local prod = 1
-  while exp > 0 do
-    if exp % 2 == 1 then prod = prod * bse % mod end
-    exp = floor(exp / 2)
-    bse = (bse * bse) % mod
-  end
-  return prod
-end
-
-local function witnesses(n)
-  if n < 1373653 then
-    return 2, 3
-  elseif n < 4759123141 then
-    return 2, 7, 61
-  elseif n < 2152302898747 then
-    return 2, 3, 5, 7, 11
-  elseif n < 3474749660383 then
-    return 2, 3, 5, 7, 11, 13
-  else
-    return 2, 325, 9375, 28178, 450775, 9780504, 1795265022
-  end
-end
-
---- Given a number n, returns numbers r and d such that 2^r*d+1 == n
---- Miller-Rabin primality test
-local function miller_rabin(n, ...)
-  local s, d = 0, n - 1
-  while d % 2 == 0 do d, s = d / 2, s + 1 end
-  for i = 1, select('#', ...) do
-    local witness = select(i, ...)
-    if witness >= n then break end
-    local x = fmodpow(witness, d, n)
-    if (x ~= 1) then
-      local t = s
-      while x ~= n - 1 do
-        t = t - 1
-        if t <= 0 then return false end
-        x = (x * x) % n
-        if x == 1 then return false end
-      end
-    end
-  end
-  return true
-end
-
-local mrthreshold = 1e3
-
-primes = setmetatable({
-  2, 3 --[[just hard-code the even special case and following number]]
-}, {
-  __index = function(self, index)
-    if type(index) == 'number' then
-      for i = #self, index - 1 do local dummy = self[i] end -- Precalculate previous primes to avoid building up a stack
-      for candidate = self[index - 1] + 2 --[[All primes >2 are odd]] , infinite do
-        if index > mrthreshold then
-          if miller_rabin(candidate, witnesses(candidate)) then
-            rawset(self, index, candidate)
-            return candidate
-          end
-        else
-          local half = floor(candidate / 2)
-          for i = 1, index - 1 do
-            local div = self[i]
-            if div > half then
-              rawset(self, index, candidate);
-              return candidate
-            end -- A number can't possibly be divisible by something greater than its half
-            if candidate % div == 0 then break end -- Candidate is divisible by a prime, this not prime itself
-          end
-        end
-      end
-    end
-  end
-})
-
-factorize = function(subject)
-  if subject == 1 then
-    return -- Can be ommitted for implicit return ;)
-  elseif subject > 0 then
-    for i = 1, infinite do
-      local candidate = primes[i]
-      if subject % candidate == 0 then
-        return candidate, factorize(subject / candidate)
-      end
-    end
-  else
-    return nil,
-           "Can't be bothered to look up if negative numbers have a prime factorization"
-  end
-end
-
-factorization = function(n)
-  local a = {factorize(n)}
-  local count = 0
-  local cur = a[1]
-  local r = {}
-  for i = 1, len(a) + 1 do
-    local ai = a[i]
-    if ai == cur then
-      count = count + 1
-    else
-      r[len(r) + 1] = {cur, count}
-      cur = ai
-      count = 1
-    end
-  end
-  return r
-end
 
 return guacyra
