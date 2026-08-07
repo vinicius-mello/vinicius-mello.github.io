@@ -1,0 +1,1963 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <title>obscnv</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="./js/jquery.min.js"></script>
+  <link rel="stylesheet" href="./css/observable.css">
+  <script src="./js/d3-require.js"></script>
+  <script src="./js/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script src="./js/ext-language_tools.js" type="text/javascript" charset="utf-8"></script>
+  <script src="./js/mode-javascript.js" type="text/javascript" charset="utf-8"></script>
+  <script src="./js/Sortable.min.js" type="text/javascript" charset="utf-8"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --bg-strong: #eef3ff;
+      --surface: rgba(255, 255, 255, 0.86);
+      --surface-strong: #ffffff;
+      --surface-muted: #f8faff;
+      --border: rgba(112, 132, 173, 0.22);
+      --border-strong: rgba(96, 120, 171, 0.38);
+      --text: #16324f;
+      --text-soft: #61758f;
+      --accent: #0f8b8d;
+      --accent-soft: rgba(15, 139, 141, 0.12);
+      --shadow: 0 18px 45px rgba(35, 62, 107, 0.12);
+      --radius-xl: 0;
+      --radius-lg: 0;
+      --radius-md: 0;
+      --radius-sm: 0;
+      --font-ui: "Aptos", "Segoe UI Variable", "Segoe UI", "IBM Plex Sans", system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      font-family: var(--font-ui);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(102, 170, 255, 0.18), transparent 28%),
+        radial-gradient(circle at right 18%, rgba(15, 139, 141, 0.12), transparent 24%),
+        linear-gradient(180deg, #fbfcff 0%, var(--bg) 100%);
+    }
+
+    body {
+      padding: 4px;
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    #app-shell {
+      max-width: 1680px;
+      margin: 0 auto;
+    }
+
+    #all {
+      display: flex;
+      gap: 0;
+      height: calc(100dvh - 8px);
+      min-height: 0;
+      padding: 3px;
+      border: 1px solid rgba(140, 160, 196, 0.22);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(247, 250, 255, 0.92));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+      overflow: hidden;
+    }
+
+    #left,
+    #right,
+    #board,
+    #editor_panel {
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #left {
+      padding: 3px;
+      overflow: hidden;
+    }
+
+    #right {
+      display: flex;
+      flex-direction: column;
+      padding: 3px;
+      overflow: hidden;
+    }
+
+    .pane-frame,
+    .pane-card {
+      height: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, var(--surface-strong) 0%, var(--surface) 100%);
+      box-shadow: 0 12px 30px rgba(76, 97, 136, 0.08);
+      overflow: hidden;
+    }
+
+    .pane-frame {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pane-heading,
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(115, 138, 182, 0.14);
+      background: linear-gradient(180deg, rgba(244, 248, 255, 0.95), rgba(255, 255, 255, 0.7));
+    }
+
+    .pane-heading h2,
+    .section-header h2 {
+      margin: 0;
+      font-size: 0.9rem;
+      letter-spacing: -0.02em;
+    }
+
+    #vars {
+      flex: 1;
+      padding: 4px 6px 6px;
+      overflow: auto;
+      scrollbar-gutter: stable;
+    }
+
+    #vars:empty::before {
+      content: "As variáveis renderizadas aparecem aqui.";
+      display: block;
+      padding: 14px 10px;
+      border: 1px dashed rgba(111, 138, 188, 0.28);
+      border-radius: var(--radius-md);
+      color: var(--text-soft);
+      background: rgba(243, 247, 255, 0.75);
+      font-size: 0.86rem;
+    }
+
+    .cell {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      margin: 0 0 4px;
+      padding: 6px 8px;
+      border: 1px solid rgba(108, 132, 180, 0.18);
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      box-shadow: 0 10px 24px rgba(73, 101, 156, 0.07);
+      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .cell:hover {
+      transform: translateY(-1px);
+      border-color: rgba(96, 123, 171, 0.28);
+      box-shadow: 0 16px 28px rgba(73, 101, 156, 0.1);
+    }
+
+    .handle {
+      flex: 0 0 auto;
+      align-self: start;
+      padding: 4px 6px;
+      font-size: 0.74rem;
+      line-height: 1;
+      border: 1px solid rgba(111, 137, 188, 0.16);
+      background: var(--surface-muted);
+      color: var(--text-soft);
+      cursor: grab;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .handle:active {
+      cursor: grabbing;
+    }
+
+    .handle:hover {
+      border-color: rgba(96, 123, 171, 0.3);
+      color: var(--text);
+    }
+
+    #board {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: auto;
+      padding: 4px;
+    }
+
+    #board > * {
+      margin: 0;
+    }
+
+    #interactive_canvas_host {
+      position: relative;
+      flex: 1 1 320px;
+      width: 100%;
+      height: clamp(240px, 42vh, 500px);
+      margin-top: 6px;
+      min-height: 240px;
+      border: 1px solid rgba(111, 138, 188, 0.28);
+      background:
+        linear-gradient(180deg, rgba(252, 254, 255, 0.96), rgba(244, 249, 255, 0.94)),
+        repeating-linear-gradient(45deg, rgba(15, 139, 141, 0.04) 0, rgba(15, 139, 141, 0.04) 8px, transparent 8px, transparent 16px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    #interactive_canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #interactive_canvas_overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    #board:empty::after {
+      content: "Interactive results, visualizations, and reactive outputs can appear here.";
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      min-height: 140px;
+      border: 1px dashed rgba(111, 138, 188, 0.28);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(247, 252, 255, 0.9)),
+        repeating-linear-gradient(45deg, rgba(15, 139, 141, 0.05) 0, rgba(15, 139, 141, 0.05) 10px, transparent 10px, transparent 20px);
+      color: var(--text-soft);
+      text-align: center;
+      line-height: 1.35;
+      padding: 10px;
+      font-size: 0.86rem;
+    }
+
+    #editor_panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #editor_panel.is-collapsed #editor {
+      display: none;
+    }
+
+    #editor_panel.is-collapsed #toolbar {
+      padding: 4px 6px;
+    }
+
+    #editor_panel.is-collapsed .toolbar-actions {
+      flex-wrap: nowrap;
+      gap: 4px;
+    }
+
+    #editor_panel.is-collapsed #toolbar button {
+      min-height: 26px;
+      padding: 0 6px;
+      font-size: 0.72rem;
+    }
+
+    #toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(115, 138, 182, 0.14);
+      background: linear-gradient(180deg, rgba(246, 249, 255, 0.96), rgba(255, 255, 255, 0.74));
+    }
+
+    .toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+
+    #toolbar button {
+      border: 1px solid rgba(96, 123, 171, 0.18);
+      background: #fff;
+      color: var(--text);
+      min-height: 30px;
+      box-shadow: 0 8px 18px rgba(69, 96, 145, 0.08);
+    }
+
+    #toolbar button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 9px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    }
+
+    #toolbar button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(66, 109, 178, 0.3);
+      box-shadow: 0 12px 22px rgba(69, 96, 145, 0.12);
+    }
+
+    #update {
+      background: linear-gradient(135deg, #0f8b8d, #0b6f8a);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    #clear {
+      background: linear-gradient(135deg, #ffffff, #f3f7ff);
+    }
+
+    #save {
+      background: linear-gradient(135deg, #eff7ff, #e8fbf7);
+    }
+
+    #load {
+      color: var(--text-soft);
+      background: linear-gradient(135deg, #ffffff, #f8fbff);
+    }
+
+    #toggle_editor {
+      color: var(--text-soft);
+      background: linear-gradient(135deg, #ffffff, #f8fbff);
+    }
+
+    #inputFile {
+      display: none;
+    }
+
+    #editor {
+      flex: 1;
+      min-height: 0;
+      margin: 4px;
+      border: 1px solid rgba(107, 132, 181, 0.18);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .cell-error {
+      margin: 0 4px;
+      padding: 6px 8px;
+      border: 1px solid rgba(214, 68, 68, 0.35);
+      border-radius: var(--radius-sm);
+      background: rgba(214, 68, 68, 0.08);
+      color: #a5222c;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .cell-error[hidden] {
+      display: none;
+    }
+
+    .ace_editor,
+    .ace_gutter {
+      font-family: var(--font-mono) !important;
+      font-size: 12px;
+    }
+
+    .gutter {
+      position: relative;
+      flex: 0 0 auto;
+      background: transparent;
+    }
+
+    .gutter::before {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      background: linear-gradient(180deg, rgba(136, 164, 212, 0.24), rgba(136, 164, 212, 0.06));
+    }
+
+    .gutter.gutter-horizontal {
+      width: 6px;
+      cursor: col-resize;
+    }
+
+    .gutter.gutter-horizontal::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 2px;
+      height: 28px;
+      background: rgba(87, 116, 167, 0.34);
+      transform: translate(-50%, -50%);
+      box-shadow: -4px 0 0 rgba(87, 116, 167, 0.16), 4px 0 0 rgba(87, 116, 167, 0.16);
+    }
+
+    .gutter.gutter-vertical {
+      height: 6px;
+      cursor: row-resize;
+    }
+
+    .gutter.gutter-vertical::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 28px;
+      height: 2px;
+      background: rgba(87, 116, 167, 0.34);
+      transform: translate(-50%, -50%);
+      box-shadow: 0 -4px 0 rgba(87, 116, 167, 0.16), 0 4px 0 rgba(87, 116, 167, 0.16);
+    }
+
+    @media (max-width: 960px) {
+      body {
+        padding: 3px;
+      }
+
+      #all {
+        min-height: 0;
+        height: calc(100dvh - 6px);
+        padding: 2px;
+      }
+
+      #left,
+      #right {
+        padding: 2px;
+      }
+
+      .pane-heading,
+      .section-header,
+      #toolbar {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+
+      #editor {
+        margin: 3px;
+      }
+
+      #interactive_canvas_host {
+        min-height: 180px;
+        height: clamp(180px, 30vh, 340px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="app-shell">
+    <div id="all" class="split">
+      <aside id="left" aria-label="Variáveis reativas">
+        <div class="pane-frame">
+          <div class="pane-heading">
+            <h2>Variables</h2>
+          </div>
+          <div id="vars" aria-live="polite"></div>
+        </div>
+      </aside>
+
+      <div id="right" class="split">
+        <section id="board" class="pane-card" aria-label="Área de saída"></section>
+
+        <section id="editor_panel" class="pane-card" aria-label="Editor de código">
+          <div id="toolbar">
+            <div class="toolbar-actions">
+              <button id="toggle_editor" type="button" onclick="toggleEditorPanel()">Collapse editor</button>
+              <button id="update" onclick="updateVar()" title="Shift-Enter">Update</button>
+              <button id="clear" onclick="clearEditor()">Clear</button>
+              <button id="save" onclick="save()" title="Ctrl-S">Save</button>
+              <button id="load" type="button" onclick="document.getElementById('inputFile').click()" title="Ctrl-F">Open</button>
+              <input type="file" accept=".js" id="inputFile" aria-label="Carregar arquivo JavaScript">
+            </div>
+          </div>
+          <div id="cell_error" class="cell-error" role="alert" hidden></div>
+          <div id="editor"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+<script type="importmap">
+  {
+    "imports": {
+      "isoformat": "./modules/isoformat/index.js",
+      "htl": "./modules/htl/index.js",
+      "promises": "./modules/promises/index.js",
+      "generators": "./modules/generators/index.js",
+      "runtime": "./modules/runtime/index.js",
+      "inspector": "./modules/inspector/index.js",
+      "inputs": "./modules/inputs/index.js",
+      "split": "./modules/split/split.js"
+    }
+  }
+</script>
+<script type="module">
+
+function inspect(object, indent) {
+  if (indent == null) indent = "";
+  switch (typeof(object)) {
+  case "undefined":
+    return "undefined";
+  case "string":
+    return "\`" + object + "\`";
+  case "object":
+    if (object == null) {
+      return "null";
+    }
+    var a = [];
+    if (object instanceof Array) {
+      for (var i in object) {
+        a.push(inspect(object[i], indent));
+      }
+      return "[" + a.join(", ") + "]";
+    } else {
+      for (var key in object) {
+        if (object.hasOwnProperty(key)) {
+          a.push(key + ": " + inspect(object[key], indent + "  "));
+        }
+      }
+      return "\n" + indent + "{\n" + indent + "  " + a.join(",\n" + indent + "  ") + "\n" + indent + "}";
+    }
+  default:
+    return object.toString();
+  }
+}
+
+function saveFile(name, type, data) {
+  if (data !== null && navigator.msSaveBlob) {
+    return navigator.msSaveBlob(new Blob([data], { type: type }), name);
+  }
+  var a = $("<a style='display: none;'/>");
+  var url = window.URL.createObjectURL(new Blob([data], { type: type }));
+  a.attr("href", url);
+  a.attr("download", name);
+  $("body").append(a);
+  a[0].click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+}
+
+window.save = function() {
+  const ordered = topologicalSortDFS(variableDeps);
+  saveFile("file.js", "data:attachment/text", inspect(
+    ordered.map(v => variableText[v])
+  ));
+};
+
+import { Runtime } from "runtime";
+import { Inspector } from "inspector";
+import * as Inputs from "inputs";
+import * as htl from "htl";
+import * as Promises from "promises";
+import Split from "split";
+import * as Generators from "generators";
+
+const GeneratorFunction = function* () {}.constructor;
+
+window.html = htl.html;
+window.Inputs = Inputs;
+window.Promises = Promises;
+window.Generators = Generators;
+window.Inspector = Inspector;
+window.require = d3.require;
+
+function Handle(x, y) {
+  return FreeHandle(x, y);
+}
+
+function toFinitePointLike(value) {
+  if (value === null || typeof value !== "object") {
+    return null;
+  }
+  const x = Number(value.x);
+  const y = Number(value.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  return { x, y };
+}
+
+function attachHandleMeta(point, meta) {
+  Object.defineProperty(point, "__handleMeta", {
+    value: meta,
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+  return point;
+}
+
+function FreeHandle(x, y) {
+  return {
+    x: Number(x),
+    y: Number(y)
+  };
+}
+
+function FixedHandle(x, y) {
+  return attachHandleMeta({
+    x: Number(x),
+    y: Number(y)
+  }, {
+    kind: "fixed"
+  });
+}
+
+function SegmentHandle(h1, h2, t = 0.5) {
+  const p1 = toFinitePointLike(h1);
+  const p2 = toFinitePointLike(h2);
+  const ratio = clamp(Number(t), 0, 1);
+  if (!p1 || !p2 || !Number.isFinite(ratio)) {
+    return { x: NaN, y: NaN };
+  }
+  return attachHandleMeta({
+    x: (1 - ratio) * p1.x + ratio * p2.x,
+    y: (1 - ratio) * p1.y + ratio * p2.y
+  }, {
+    kind: "segment",
+    h1: p1,
+    h2: p2,
+    t: ratio
+  });
+}
+
+function LineHandle(h1, h2, t = 0.5) {
+  const p1 = toFinitePointLike(h1);
+  const p2 = toFinitePointLike(h2);
+  const ratio = Number(t);
+  if (!p1 || !p2 || !Number.isFinite(ratio)) {
+    return { x: NaN, y: NaN };
+  }
+  return attachHandleMeta({
+    x: (1 - ratio) * p1.x + ratio * p2.x,
+    y: (1 - ratio) * p1.y + ratio * p2.y
+  }, {
+    kind: "line",
+    h1: p1,
+    h2: p2,
+    t: ratio
+  });
+}
+
+function CircleHandle(h1, h2, angle = null) {
+  const center = toFinitePointLike(h1);
+  const boundary = toFinitePointLike(h2);
+  if (!center || !boundary) {
+    return { x: NaN, y: NaN };
+  }
+  const dx = boundary.x - center.x;
+  const dy = boundary.y - center.y;
+  const radius = Math.hypot(dx, dy);
+  const theta = angle === null ? Math.atan2(dy, dx) : Number(angle);
+  if (!Number.isFinite(radius) || !Number.isFinite(theta)) {
+    return { x: NaN, y: NaN };
+  }
+  return attachHandleMeta({
+    x: center.x + radius * Math.cos(theta),
+    y: center.y + radius * Math.sin(theta)
+  }, {
+    kind: "circle",
+    h1: center,
+    h2: boundary,
+    radius,
+    angle: theta
+  });
+}
+
+window.Handle = Handle;
+window.FreeHandle = FreeHandle;
+window.FixedHandle = FixedHandle;
+window.SegmentHandle = SegmentHandle;
+window.LineHandle = LineHandle;
+window.CircleHandle = CircleHandle;
+
+const interactiveCanvasState = {
+  board: null,
+  host: null,
+  baseCanvas: null,
+  baseCtx: null,
+  canvas: null,
+  ctx: null,
+  width: 0,
+  height: 0,
+  dpr: 1,
+  clearMode: "auto",
+  drawLayers: new Map(),
+  baseRedrawQueued: false,
+  handles: new Map(),
+  handleSpecs: new Map(),
+  activeHandle: null,
+  redrawQueued: false,
+  resizeObserver: null
+};
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeHandlePoint(value) {
+  const point = toFinitePointLike(value);
+  if (!point) {
+    return null;
+  }
+  return {
+    x: point.x,
+    y: point.y,
+    meta: value && typeof value === "object" ? value.__handleMeta : null
+  };
+}
+
+function queueInteractiveRedraw() {
+  if (interactiveCanvasState.redrawQueued || !interactiveCanvasState.ctx) {
+    return;
+  }
+  interactiveCanvasState.redrawQueued = true;
+  window.requestAnimationFrame(() => {
+    interactiveCanvasState.redrawQueued = false;
+    drawInteractiveCanvas();
+  });
+}
+
+function clearMainCanvas() {
+  const { baseCtx, width, height } = interactiveCanvasState;
+  if (!baseCtx || width <= 0 || height <= 0) {
+    return;
+  }
+  baseCtx.clearRect(0, 0, width, height);
+}
+
+function drawMainCanvasLayers() {
+  const { baseCtx, baseCanvas, width, height, drawLayers, clearMode } = interactiveCanvasState;
+  if (!baseCtx || !baseCanvas || width <= 0 || height <= 0) {
+    return;
+  }
+
+  if (clearMode === "auto") {
+    clearMainCanvas();
+  }
+
+  drawLayers.forEach((drawFn, name) => {
+    try {
+      drawFn(baseCtx, baseCanvas, { width, height, dpr: interactiveCanvasState.dpr });
+    } catch (error) {
+      console.error(`Canvas2D layer '${name}' failed:`, error);
+    }
+  });
+}
+
+function queueMainCanvasRedraw() {
+  if (interactiveCanvasState.baseRedrawQueued || !interactiveCanvasState.baseCtx) {
+    return;
+  }
+  interactiveCanvasState.baseRedrawQueued = true;
+  window.requestAnimationFrame(() => {
+    interactiveCanvasState.baseRedrawQueued = false;
+    drawMainCanvasLayers();
+  });
+}
+
+function createCanvas2DApi(state) {
+  return {
+  setClearMode(mode) {
+    if (mode !== "auto" && mode !== "manual") {
+      throw new Error("Canvas2D.setClearMode aceita apenas 'auto' ou 'manual'.");
+    }
+    state.clearMode = mode;
+    queueMainCanvasRedraw();
+  },
+  getClearMode() {
+    return state.clearMode;
+  },
+  layer(name, drawFn) {
+    if (typeof name !== "string" || !name.trim()) {
+      throw new Error("Canvas2D.layer requer um nome de camada.");
+    }
+    if (typeof drawFn !== "function") {
+      throw new Error("Canvas2D.layer requer uma função de desenho.");
+    }
+    state.drawLayers.set(name, drawFn);
+    queueMainCanvasRedraw();
+    return name;
+  },
+  removeLayer(name) {
+    if (state.drawLayers.delete(name)) {
+      queueMainCanvasRedraw();
+    }
+  },
+  clearLayers() {
+    state.drawLayers.clear();
+    queueMainCanvasRedraw();
+  },
+  clear() {
+    clearMainCanvas();
+  },
+  render() {
+    queueMainCanvasRedraw();
+  }
+  };
+}
+
+function createCanvas2DPresets(canvasApi) {
+  return {
+  grid(name = "grid", options = {}) {
+    const step = Number.isFinite(Number(options.step)) ? Math.max(8, Number(options.step)) : 24;
+    const color = options.color || "rgba(84, 112, 166, 0.18)";
+    const lineWidth = Number.isFinite(Number(options.lineWidth)) ? Number(options.lineWidth) : 1;
+    return canvasApi.layer(name, (ctx, _canvas, meta) => {
+      const width = meta.width;
+      const height = meta.height;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      for (let x = step; x < width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, height);
+        ctx.stroke();
+      }
+      for (let y = step; y < height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(width, y + 0.5);
+        ctx.stroke();
+      }
+    });
+  },
+  segment(name, p1, p2, options = {}) {
+    return canvasApi.layer(name, ctx => {
+      if (!p1 || !p2) {
+        return;
+      }
+      const x1 = Number(p1.x);
+      const y1 = Number(p1.y);
+      const x2 = Number(p2.x);
+      const y2 = Number(p2.y);
+      if (![x1, y1, x2, y2].every(Number.isFinite)) {
+        return;
+      }
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = options.color || "#e4572e";
+      ctx.lineWidth = Number.isFinite(Number(options.lineWidth)) ? Number(options.lineWidth) : 2;
+      ctx.stroke();
+    });
+  },
+  point(name, p, options = {}) {
+    return canvasApi.layer(name, ctx => {
+      if (!p) {
+        return;
+      }
+      const x = Number(p.x);
+      const y = Number(p.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return;
+      }
+      const radius = Number.isFinite(Number(options.radius)) ? Number(options.radius) : 4;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = options.color || "#1f4b75";
+      ctx.fill();
+    });
+  },
+  label(name, p, text, options = {}) {
+    return canvasApi.layer(name, ctx => {
+      if (!p) {
+        return;
+      }
+      const x = Number(p.x);
+      const y = Number(p.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return;
+      }
+      ctx.fillStyle = options.color || "#123250";
+      ctx.font = options.font || "12px Aptos, Segoe UI, sans-serif";
+      ctx.textAlign = options.align || "left";
+      ctx.textBaseline = options.baseline || "middle";
+      ctx.fillText(String(text), x + (options.offsetX || 8), y + (options.offsetY || 0));
+    });
+  }
+};
+}
+
+function installCanvasGlobals() {
+  window.Canvas2D = createCanvas2DApi(interactiveCanvasState);
+  window.Canvas2DPresets = createCanvas2DPresets(window.Canvas2D);
+  window.clearCanvas = function() {
+    clearMainCanvas();
+  };
+  window.drawOnCanvas = function(name, drawFn) {
+    return window.Canvas2D.layer(name, drawFn);
+  };
+}
+
+function drawInteractiveCanvas() {
+  const { ctx, width, height, handles, activeHandle } = interactiveCanvasState;
+  if (!ctx || width <= 0 || height <= 0) {
+    return;
+  }
+
+  ctx.clearRect(0, 0, width, height);
+
+  ctx.strokeStyle = "rgba(84, 112, 166, 0.18)";
+  ctx.lineWidth = 1;
+  const step = 24;
+  for (let x = step; x < width; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, height);
+    ctx.stroke();
+  }
+  for (let y = step; y < height; y += step) {
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(width, y + 0.5);
+    ctx.stroke();
+  }
+
+  handles.forEach(handle => {
+    const isActive = activeHandle && activeHandle.varName === handle.varName;
+
+    ctx.beginPath();
+    ctx.arc(handle.x, handle.y, handle.radius + (isActive ? 3 : 0), 0, Math.PI * 2);
+    ctx.fillStyle = isActive ? "rgba(15, 139, 141, 0.30)" : "rgba(22, 50, 79, 0.14)";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(handle.x, handle.y, handle.radius, 0, Math.PI * 2);
+    ctx.fillStyle = isActive ? "#0f8b8d" : "#1f4b75";
+    ctx.fill();
+
+    ctx.fillStyle = "#123250";
+    ctx.font = "12px Aptos, Segoe UI, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(handle.varName, handle.x + handle.radius + 6, handle.y);
+  });
+}
+
+function interactiveCanvasPoint(event) {
+  const { canvas, width, height } = interactiveCanvasState;
+  if (!canvas) {
+    return null;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const x = clamp(event.clientX - rect.left, 0, width);
+  const y = clamp(event.clientY - rect.top, 0, height);
+  return { x, y };
+}
+
+function pickInteractiveHandle(point) {
+  const handles = Array.from(interactiveCanvasState.handles.values()).reverse();
+  for (const handle of handles) {
+    const dx = point.x - handle.x;
+    const dy = point.y - handle.y;
+    const radius = handle.radius + 4;
+    if (dx * dx + dy * dy <= radius * radius) {
+      return handle;
+    }
+  }
+  return null;
+}
+
+function syncHandleFromValue(varName, value) {
+  const point = normalizeHandlePoint(value);
+  if (!point) {
+    unregisterHandle(varName);
+    return;
+  }
+
+  const width = Math.max(1, interactiveCanvasState.width);
+  const height = Math.max(1, interactiveCanvasState.height);
+  const x = clamp(Math.round(point.x), 0, width);
+  const y = clamp(Math.round(point.y), 0, height);
+  const meta = point.meta || { kind: "free" };
+  const kind = meta.kind || "free";
+  const draggable = kind !== "fixed";
+  const existing = interactiveCanvasState.handles.get(varName);
+
+  if (existing) {
+    existing.x = x;
+    existing.y = y;
+    existing.kind = kind;
+    existing.draggable = draggable;
+    existing.meta = meta;
+  } else {
+    interactiveCanvasState.handles.set(varName, {
+      varName,
+      x,
+      y,
+      radius: 8,
+      kind,
+      draggable,
+      meta
+    });
+  }
+  queueInteractiveRedraw();
+}
+
+function unregisterHandle(varName) {
+  if (interactiveCanvasState.activeHandle && interactiveCanvasState.activeHandle.varName === varName) {
+    interactiveCanvasState.activeHandle = null;
+  }
+  if (interactiveCanvasState.handles.delete(varName)) {
+    queueInteractiveRedraw();
+  }
+}
+
+function formatHandleNumber(value) {
+  if (!Number.isFinite(value)) {
+    return "0";
+  }
+  const rounded = Number(value.toFixed(6));
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+function projectTOnLine(point, h1, h2) {
+  const vx = h2.x - h1.x;
+  const vy = h2.y - h1.y;
+  const denom = vx * vx + vy * vy;
+  if (denom <= 0) {
+    return 0;
+  }
+  return ((point.x - h1.x) * vx + (point.y - h1.y) * vy) / denom;
+}
+
+function redefineHandleVariable(varName, source) {
+  const dependencies = new Set();
+  const compiledSource = source.replaceAll(REACTIVE_REF_REGEX, reactiveName => {
+    dependencies.add(reactiveName);
+    return "$$" + reactiveName.slice(1);
+  });
+  const deps = Array.from(dependencies);
+  let fn;
+  try {
+    fn = Function(...deps.map(dep => "$$" + dep.slice(1)), "return " + compiledSource);
+  } catch (error) {
+    console.error(`Failed to redefine handle '${varName}':`, error);
+    return;
+  }
+  variableText[varName] = `${varName} = ${source}`;
+  variableDeps[varName] = deps;
+  if (variable[varName] !== undefined) {
+    variable[varName].define(varName, deps, fn);
+  }
+}
+
+function applyHandleDragValue(handle, point) {
+  const varName = handle.varName;
+  const spec = interactiveCanvasState.handleSpecs.get(varName);
+  const kind = handle.kind || "free";
+
+  if (kind === "fixed") {
+    return;
+  }
+
+  if (!spec) {
+    const source = `FreeHandle(${formatHandleNumber(point.x)}, ${formatHandleNumber(point.y)})`;
+    redefineHandleVariable(varName, source);
+    return;
+  }
+
+  if (kind === "free") {
+    const source = `FreeHandle(${formatHandleNumber(point.x)}, ${formatHandleNumber(point.y)})`;
+    redefineHandleVariable(varName, source);
+    return;
+  }
+
+  if ((kind === "segment" || kind === "line") && handle.meta && handle.meta.h1 && handle.meta.h2) {
+    const h1 = handle.meta.h1;
+    const h2 = handle.meta.h2;
+    let t = projectTOnLine(point, h1, h2);
+    if (kind === "segment") {
+      t = clamp(t, 0, 1);
+    }
+    const source = `${spec.kind}(${spec.args[0]}, ${spec.args[1]}, ${formatHandleNumber(t)})`;
+    redefineHandleVariable(varName, source);
+    return;
+  }
+
+  if (kind === "circle" && handle.meta && handle.meta.h1) {
+    const center = handle.meta.h1;
+    const angle = Math.atan2(point.y - center.y, point.x - center.x);
+    const source = `${spec.kind}(${spec.args[0]}, ${spec.args[1]}, ${formatHandleNumber(angle)})`;
+    redefineHandleVariable(varName, source);
+    return;
+  }
+
+  const fallback = `FreeHandle(${formatHandleNumber(point.x)}, ${formatHandleNumber(point.y)})`;
+  redefineHandleVariable(varName, fallback);
+}
+
+function onInteractivePointerDown(event) {
+  const point = interactiveCanvasPoint(event);
+  if (!point) {
+    return;
+  }
+  const handle = pickInteractiveHandle(point);
+  if (!handle) {
+    return;
+  }
+  if (!handle.draggable) {
+    return;
+  }
+
+  interactiveCanvasState.activeHandle = handle;
+  if (interactiveCanvasState.canvas && typeof interactiveCanvasState.canvas.setPointerCapture === "function") {
+    interactiveCanvasState.canvas.setPointerCapture(event.pointerId);
+  }
+  queueInteractiveRedraw();
+  event.preventDefault();
+}
+
+function onInteractivePointerMove(event) {
+  const activeHandle = interactiveCanvasState.activeHandle;
+  if (!activeHandle) {
+    return;
+  }
+
+  const point = interactiveCanvasPoint(event);
+  if (!point) {
+    return;
+  }
+
+  const nextX = Math.round(point.x);
+  const nextY = Math.round(point.y);
+  if (nextX === activeHandle.x && nextY === activeHandle.y) {
+    return;
+  }
+
+  applyHandleDragValue(activeHandle, { x: nextX, y: nextY });
+  queueInteractiveRedraw();
+  event.preventDefault();
+}
+
+function onInteractivePointerUp() {
+  if (!interactiveCanvasState.activeHandle) {
+    return;
+  }
+  interactiveCanvasState.activeHandle = null;
+  queueInteractiveRedraw();
+}
+
+function resizeInteractiveCanvas() {
+  const { host, baseCanvas, baseCtx, canvas, ctx } = interactiveCanvasState;
+  if (!host || !baseCanvas || !baseCtx || !canvas || !ctx) {
+    return;
+  }
+
+  const rect = host.getBoundingClientRect();
+  const width = Math.max(120, Math.round(rect.width));
+  const height = Math.max(220, Math.round(rect.height));
+  const dpr = window.devicePixelRatio || 1;
+
+  interactiveCanvasState.width = width;
+  interactiveCanvasState.height = height;
+  interactiveCanvasState.dpr = dpr;
+
+  const pixelWidth = Math.round(width * dpr);
+  const pixelHeight = Math.round(height * dpr);
+
+  baseCanvas.width = pixelWidth;
+  baseCanvas.height = pixelHeight;
+  baseCanvas.style.width = `${width}px`;
+  baseCanvas.style.height = `${height}px`;
+  baseCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  canvas.width = pixelWidth;
+  canvas.height = pixelHeight;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  interactiveCanvasState.handles.forEach(handle => {
+    handle.x = clamp(handle.x, 0, width);
+    handle.y = clamp(handle.y, 0, height);
+  });
+
+  queueMainCanvasRedraw();
+  queueInteractiveRedraw();
+}
+
+function initInteractiveCanvas() {
+  if (interactiveCanvasState.canvas) {
+    return;
+  }
+
+  const board = document.getElementById("board");
+  if (!board) {
+    return;
+  }
+
+  const host = document.createElement("div");
+  host.id = "interactive_canvas_host";
+  const baseCanvas = document.createElement("canvas");
+  baseCanvas.id = "interactive_canvas";
+  const overlayCanvas = document.createElement("canvas");
+  overlayCanvas.id = "interactive_canvas_overlay";
+  host.appendChild(baseCanvas);
+  host.appendChild(overlayCanvas);
+  board.appendChild(host);
+
+  interactiveCanvasState.board = board;
+  interactiveCanvasState.host = host;
+  interactiveCanvasState.baseCanvas = baseCanvas;
+  interactiveCanvasState.baseCtx = baseCanvas.getContext("2d");
+  interactiveCanvasState.canvas = overlayCanvas;
+  interactiveCanvasState.ctx = overlayCanvas.getContext("2d");
+  window.canvas = baseCanvas;
+  window.ctx = interactiveCanvasState.baseCtx;
+
+  overlayCanvas.addEventListener("pointerdown", onInteractivePointerDown);
+  window.addEventListener("pointermove", onInteractivePointerMove);
+  window.addEventListener("pointerup", onInteractivePointerUp);
+  window.addEventListener("pointercancel", onInteractivePointerUp);
+
+  if ("ResizeObserver" in window) {
+    interactiveCanvasState.resizeObserver = new ResizeObserver(() => resizeInteractiveCanvas());
+    interactiveCanvasState.resizeObserver.observe(host);
+  } else {
+    window.addEventListener("resize", resizeInteractiveCanvas);
+  }
+
+  resizeInteractiveCanvas();
+}
+
+function splitTopLevelArgs(text) {
+  const args = [];
+  let token = "";
+  let depthParen = 0;
+  let depthBracket = 0;
+  let depthBrace = 0;
+  let quote = null;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const prev = i > 0 ? text[i - 1] : "";
+
+    if (quote) {
+      token += char;
+      if (char === quote && prev !== "\\") {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === "\"" || char === "'" || char === "`") {
+      quote = char;
+      token += char;
+      continue;
+    }
+
+    if (char === "(") {
+      depthParen++;
+      token += char;
+      continue;
+    }
+    if (char === ")") {
+      depthParen--;
+      token += char;
+      continue;
+    }
+    if (char === "[") {
+      depthBracket++;
+      token += char;
+      continue;
+    }
+    if (char === "]") {
+      depthBracket--;
+      token += char;
+      continue;
+    }
+    if (char === "{") {
+      depthBrace++;
+      token += char;
+      continue;
+    }
+    if (char === "}") {
+      depthBrace--;
+      token += char;
+      continue;
+    }
+
+    if (char === "," && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
+      args.push(token.trim());
+      token = "";
+      continue;
+    }
+
+    token += char;
+  }
+
+  if (token.trim()) {
+    args.push(token.trim());
+  }
+
+  return args;
+}
+
+function parseHandleExpression(func) {
+  const normalized = func.trim();
+  const match = /^(Handle|FreeHandle|FixedHandle|SegmentHandle|LineHandle|CircleHandle)\((.*)\)$/s.exec(normalized);
+  if (!match) {
+    return null;
+  }
+  const kindAlias = match[1];
+  const kind = kindAlias === "Handle" ? "FreeHandle" : kindAlias;
+  const inner = match[2];
+  const args = splitTopLevelArgs(inner);
+  const valid = {
+    FreeHandle: [2],
+    FixedHandle: [2],
+    SegmentHandle: [2, 3],
+    LineHandle: [2, 3],
+    CircleHandle: [2, 3]
+  };
+  const expectedSizes = valid[kind];
+  if (!expectedSizes || !expectedSizes.includes(args.length) || args.some(arg => !arg)) {
+    return null;
+  }
+  return {
+    kind,
+    args
+  };
+}
+
+const REACTIVE_REF_REGEX = /(@[a-zA-Z]\w*)/gm;
+const VARIABLE_ASSIGNMENT_REGEX = /\s*(@[a-zA-Z]\w*)\s*=\s*(\S[\S\s]*)/;
+const SOURCE_COMMENT_REGEX = /\/\*[\s\S]*?\*\/|(?<=[^:])\/\/.*|^\/\/.*$/g;
+
+let variableText = {};
+let variable = {};
+let variableDeps = {};
+let runtime;
+let module;
+let editor;
+
+function stripSourceComments(text) {
+  return text.replace(SOURCE_COMMENT_REGEX, "");
+}
+
+function parseVariableSource(text) {
+  const match = VARIABLE_ASSIGNMENT_REGEX.exec(stripSourceComments(text));
+  if (!match) {
+    throw new Error("A célula deve estar no formato @nome = expressão.");
+  }
+
+  const [, varName, source] = match;
+  return {
+    varName,
+    source: source.trim()
+  };
+}
+
+function isGeneratorBlockSource(source) {
+  return source.startsWith("*{");
+}
+
+function isBlockSource(source) {
+  return source.startsWith("{");
+}
+
+function isViewSource(source) {
+  return source.startsWith("valueof ");
+}
+
+function createCellFrame(varName) {
+  const suffix = varName.slice(1);
+  $("#vars").append($("<div class='cell' id='var_" + suffix + "'></div>"));
+  $("#var_" + suffix).append($("<div id='insp_" + suffix + "'></div>"));
+  $("#var_" + suffix).prepend(
+    $("<button class='handle' data-id='" + varName + "'>···</button>").click(function() {
+      editorLoad($(this).data("id"));
+    })
+  );
+  return suffix;
+}
+
+function wrapInspectorObserver(inspector, options = {}) {
+  if (!options.onPending && !options.onFulfilled && !options.onRejected) {
+    return inspector;
+  }
+
+  return {
+    pending(...args) {
+      inspector.pending(...args);
+      if (options.onPending) {
+        options.onPending(...args);
+      }
+    },
+    fulfilled(...args) {
+      inspector.fulfilled(...args);
+      if (options.onFulfilled) {
+        options.onFulfilled(...args);
+      }
+    },
+    rejected(...args) {
+      inspector.rejected(...args);
+      if (options.onRejected) {
+        options.onRejected(...args);
+      }
+    }
+  };
+}
+
+function extractDependencies(source) {
+  const dependencies = new Set();
+  const compiledSource = source.replaceAll(REACTIVE_REF_REGEX, reactiveName => {
+    dependencies.add(reactiveName);
+    return "$$" + reactiveName.slice(1);
+  });
+  return { dependencies: Array.from(dependencies), compiledSource };
+}
+
+function prepareDefinition(module, varName, observerOptions = {}) {
+  const suffix = createCellFrame(varName);
+  const inspector = new Inspector($("#insp_" + suffix)[0]);
+  const observer = wrapInspectorObserver(inspector, observerOptions);
+
+  return {
+    suffix,
+    variable: module.variable(observer)
+  };
+}
+
+function compileFunction(dependencies, body, options = {}) {
+  const parameterNames = dependencies.map(dep => "$$" + dep.slice(1));
+  const Factory = options.generator ? GeneratorFunction : Function;
+  const source = options.returnsExpression ? "return " + body : body;
+  return Factory(...parameterNames, source);
+}
+
+// Each compileXVariable below does all the (possibly throwing) parsing and
+// Function/GeneratorFunction compilation up front, with no DOM or Runtime
+// side effects. Only the returned `commit` closure touches the DOM/Runtime,
+// and it cannot throw. This means a syntax error in the cell source is
+// caught before any existing cell is torn down — see upsertReactiveVariable.
+
+function compileHandleVariable(varName, handleSpec) {
+  const { dependencies, compiledSource } = extractDependencies(`${handleSpec.kind}(${handleSpec.args.join(", ")})`);
+  const definition = compileFunction(dependencies, compiledSource, { returnsExpression: true });
+  return {
+    dependencies,
+    handleSpec,
+    commit(module) {
+      const prepared = prepareDefinition(module, varName, {
+        onFulfilled(value) {
+          syncHandleFromValue(varName, value);
+        },
+        onRejected() {
+          unregisterHandle(varName);
+        }
+      });
+      prepared.variable.define(varName, dependencies, definition);
+      return prepared.variable;
+    }
+  };
+}
+
+function compileBlockVariable(varName, source) {
+  const isGenerator = isGeneratorBlockSource(source);
+  const blockStart = isGenerator ? 2 : 1;
+  const blockBody = source.slice(blockStart, source.lastIndexOf("}"));
+  const { dependencies, compiledSource } = extractDependencies(blockBody);
+  const definition = compileFunction(dependencies, compiledSource, { generator: isGenerator });
+  return {
+    dependencies,
+    commit(module) {
+      const prepared = prepareDefinition(module, varName);
+      prepared.variable.define(varName, dependencies, definition);
+      return prepared.variable;
+    }
+  };
+}
+
+function compileViewVariable(varName, source) {
+  const viewSource = source.slice(8);
+  const { dependencies, compiledSource } = extractDependencies(viewSource);
+  const definition = compileFunction(dependencies, compiledSource, { returnsExpression: true });
+  return {
+    dependencies,
+    commit(module) {
+      const prepared = prepareDefinition(module, varName);
+      const previousViewVariable = variable[varName + "__view"];
+
+      prepared.variable.define(varName + "__view", dependencies, definition);
+      if (previousViewVariable !== undefined) {
+        previousViewVariable.delete();
+      }
+      variable[varName + "__view"] = prepared.variable;
+
+      const inputVariable = module.variable();
+      inputVariable.define(varName, [varName + "__view"], view => Generators.input(view));
+      return inputVariable;
+    }
+  };
+}
+
+function compileExpressionVariable(varName, source) {
+  const { dependencies, compiledSource } = extractDependencies(source);
+  const definition = compileFunction(dependencies, compiledSource, { returnsExpression: true });
+  return {
+    dependencies,
+    commit(module) {
+      const prepared = prepareDefinition(module, varName);
+      prepared.variable.define(varName, dependencies, definition);
+      return prepared.variable;
+    }
+  };
+}
+
+function compileReactiveVariable(varName, source) {
+  const handleSpec = parseHandleExpression(source);
+
+  if (handleSpec) {
+    return compileHandleVariable(varName, handleSpec);
+  }
+  if (isGeneratorBlockSource(source) || isBlockSource(source)) {
+    return compileBlockVariable(varName, source);
+  }
+  if (isViewSource(source)) {
+    return compileViewVariable(varName, source);
+  }
+  return compileExpressionVariable(varName, source);
+}
+
+function clearVariableDom(varName) {
+  const suffix = varName.slice(1);
+  $("#var_" + suffix).remove();
+  $("#var_" + suffix + "__view").remove();
+}
+
+function deleteReactiveVariable(varName) {
+  clearVariableDom(varName);
+  unregisterHandle(varName);
+  interactiveCanvasState.handleSpecs.delete(varName);
+
+  if (variable[varName] !== undefined) {
+    variable[varName].delete();
+  }
+
+  if (variable[varName + "__view"] !== undefined) {
+    variable[varName + "__view"].delete();
+    delete variable[varName + "__view"];
+  }
+
+  delete variable[varName];
+  delete variableText[varName];
+  delete variableDeps[varName];
+  editor.setValue("");
+}
+
+function upsertReactiveVariable(module, varName, source) {
+  // Compile before touching any state. If this throws (invalid JS in the
+  // cell), the previous cell — DOM and Runtime variable alike — is left
+  // completely untouched, and the error propagates to the caller.
+  const compiled = compileReactiveVariable(varName, source);
+
+  variableText[varName] = `${varName} = ${source}`;
+  if (compiled.handleSpec) {
+    interactiveCanvasState.handleSpecs.set(varName, compiled.handleSpec);
+  } else {
+    unregisterHandle(varName);
+    interactiveCanvasState.handleSpecs.delete(varName);
+  }
+
+  const previousVariable = variable[varName];
+  if (previousVariable !== undefined) {
+    clearVariableDom(varName);
+  }
+
+  variable[varName] = compiled.commit(module);
+  variableDeps[varName] = compiled.dependencies;
+
+  if (previousVariable !== undefined) {
+    previousVariable.delete();
+  }
+
+  return variable[varName];
+}
+
+function varFromText(module, text) {
+  const { varName, source } = parseVariableSource(text);
+
+  if (source === "undefined") {
+    deleteReactiveVariable(varName);
+    return undefined;
+  }
+
+  variableText[varName] = text;
+  return upsertReactiveVariable(module, varName, source);
+}
+
+function editorLoad(id) {
+  window.editor.session.setValue(variableText[id]);
+  window.editor.focus();
+}
+
+function topologicalSortDFS(graph) {
+  const visited = new Set();
+  const recursionStack = new Set();
+  const result = [];
+
+  function dfs(node) {
+    visited.add(node);
+    recursionStack.add(node);
+
+    for (const neighbor of graph[node] || []) {
+      if (!visited.has(neighbor)) {
+        if (!dfs(neighbor)) {
+          return false;
+        }
+      } else if (recursionStack.has(neighbor)) {
+        console.log("Graph contains a cycle!");
+        return false;
+      }
+    }
+
+    recursionStack.delete(node);
+    result.push(node);
+    return true;
+  }
+
+  for (const node in graph) {
+    if (!visited.has(node)) {
+      if (!dfs(node)) {
+        return null;
+      }
+    }
+  }
+
+  return result;
+}
+
+$(function() {
+  initializeApp();
+});
+
+function createRuntimeModule() {
+  runtime = new Runtime();
+  module = runtime.module();
+}
+
+function resetReactiveState() {
+  variableText = {};
+  variable = {};
+  variableDeps = {};
+  interactiveCanvasState.drawLayers.clear();
+  queueMainCanvasRedraw();
+  interactiveCanvasState.handles.clear();
+  interactiveCanvasState.handleSpecs.clear();
+  interactiveCanvasState.activeHandle = null;
+  queueInteractiveRedraw();
+  $("#vars").empty();
+}
+
+const AUTOSAVE_STORAGE_KEY = "obscnv:autosave:v1";
+
+function persistProgram() {
+  try {
+    const ordered = topologicalSortDFS(variableDeps) || Object.keys(variableText);
+    const cells = ordered.map(v => variableText[v]).filter(cellSource => cellSource !== undefined);
+    localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(cells));
+  } catch (error) {
+    console.warn("Autosave failed:", error);
+  }
+}
+
+function loadAutosavedProgram() {
+  let raw;
+  try {
+    raw = localStorage.getItem(AUTOSAVE_STORAGE_KEY);
+  } catch (error) {
+    return false;
+  }
+  if (!raw) {
+    return false;
+  }
+
+  let cells;
+  try {
+    cells = JSON.parse(raw);
+  } catch (error) {
+    console.warn("Discarding corrupt autosave:", error);
+    return false;
+  }
+  if (!Array.isArray(cells) || cells.length === 0) {
+    return false;
+  }
+
+  loadProgram(cells);
+  return true;
+}
+
+function loadProgram(programCells) {
+  programCells.forEach(cellSource => varFromText(module, cellSource));
+}
+
+function loadProgramFromSerializedText(serializedText) {
+  createRuntimeModule();
+  resetReactiveState();
+  loadProgram(eval("(" + serializedText + ")"));
+  persistProgram();
+}
+
+function installLayout() {
+  const compactLayout = window.matchMedia("(max-width: 960px)").matches;
+  const defaultEditorSizes = compactLayout ? [42, 58] : [58, 42];
+  const editorPanel = $("#editor_panel");
+  const toggleEditorButton = $("#toggle_editor");
+  let editorCollapsed = false;
+  let expandedEditorSizes = [...defaultEditorSizes];
+
+  Split(["#left", "#right"], compactLayout
+    ? { sizes: [36, 64], direction: "vertical", gutterSize: 12 }
+    : { sizes: [26, 74], gutterSize: 12 });
+
+  const editorSplit = Split(["#board", "#editor_panel"], {
+    sizes: defaultEditorSizes,
+    direction: "vertical",
+    gutterSize: 12,
+    minSize: [60, 0],
+    snapOffset: 0,
+    onDragEnd(sizes) {
+      if (sizes[1] > 12) {
+        expandedEditorSizes = [...sizes];
+        if (editorCollapsed) {
+          editorCollapsed = false;
+          editorPanel.removeClass("is-collapsed");
+          toggleEditorButton.text("Collapse editor");
+        }
+      }
+    }
+  });
+
+  function collapsedEditorSizes() {
+    const rightHeight = $("#right").height() || 1;
+    const toolbarHeight = $("#toolbar").outerHeight(true) || 40;
+    const minPercent = compactLayout ? 8 : 6;
+    const toolbarPercent = Math.ceil((toolbarHeight / rightHeight) * 100);
+    const editorPercent = Math.max(minPercent, toolbarPercent + 1);
+    return [100 - editorPercent, editorPercent];
+  }
+
+  window.toggleEditorPanel = function() {
+    editorCollapsed = !editorCollapsed;
+
+    if (editorCollapsed) {
+      const currentSizes = editorSplit.getSizes();
+      if (currentSizes[1] > 12) {
+        expandedEditorSizes = [...currentSizes];
+      }
+      editorPanel.addClass("is-collapsed");
+      editorSplit.setSizes(collapsedEditorSizes());
+      toggleEditorButton.text("Expand editor");
+      return;
+    }
+
+    editorPanel.removeClass("is-collapsed");
+    editorSplit.setSizes(expandedEditorSizes);
+    toggleEditorButton.text("Collapse editor");
+    if (window.editor) {
+      window.editor.resize();
+      window.editor.focus();
+    }
+  };
+}
+
+function getAceLanguageTools() {
+  try {
+    return ace.require("ace/ext/language_tools");
+  } catch (error) {
+    console.warn("Ace language tools module not available:", error);
+    return null;
+  }
+}
+
+function createJavaScriptCompleter() {
+  const jsKeywordPool = [
+    "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do",
+    "else", "export", "extends", "false", "finally", "for", "function", "if", "import", "in",
+    "instanceof", "let", "new", "null", "return", "super", "switch", "this", "throw", "true",
+    "try", "typeof", "var", "void", "while", "with", "yield", "async", "await", "of"
+  ];
+
+  const jsBuiltins = [
+    "Array", "Boolean", "Date", "Error", "JSON", "Map", "Math", "Number", "Object", "Promise",
+    "RegExp", "Set", "String", "Symbol", "WeakMap", "WeakSet", "console", "document", "window",
+    "Inputs", "Promises", "Generators", "Handle", "FreeHandle", "FixedHandle", "SegmentHandle", "LineHandle", "CircleHandle", "Inspector", "html", "require",
+    "Canvas2D", "canvas", "ctx", "clearCanvas", "drawOnCanvas"
+  ];
+
+  return {
+    identifierRegexps: [/[a-zA-Z0-9_\\$]/],
+    getCompletions(editorInstance, session, pos, prefix, callback) {
+      if (session.getMode().$id !== "ace/mode/javascript") {
+        callback(null, []);
+        return;
+      }
+
+      const variableNames = Object.keys(variableText).map(name => name.startsWith("@") ? name.slice(1) : name);
+      const symbols = [...new Set([...jsKeywordPool, ...jsBuiltins, ...variableNames])];
+      callback(null, symbols.map(value => ({
+        caption: value,
+        value,
+        meta: jsKeywordPool.includes(value) ? "keyword" : "js",
+        score: jsKeywordPool.includes(value) ? 1000 : 800
+      })));
+    }
+  };
+}
+
+function configureEditor(editor, languageTools) {
+  if (languageTools && typeof languageTools.addCompleter === "function") {
+    languageTools.addCompleter(createJavaScriptCompleter());
+  }
+
+  editor.setOptions({
+    useWorker: false,
+    autoScrollEditorIntoView: true,
+    minLines: 20,
+    copyWithEmptySelection: true,
+    behavioursEnabled: true,
+    highlightActiveLine: true,
+    highlightSelectedWord: true,
+    showPrintMargin: false
+  });
+
+  if (languageTools) {
+    editor.setOptions({
+      enableBasicAutocompletion: true,
+      enableLiveAutocompletion: true,
+      enableSnippets: false
+    });
+  }
+
+  editor.session.setUseSoftTabs(true);
+  editor.session.setTabSize(2);
+  editor.session.setMode(new (ace.require("ace/mode/javascript").Mode)());
+  editor.session.on("change", () => clearCellError());
+}
+
+function installEditorCommands(editor) {
+  editor.commands.addCommand({
+    name: "updateVar",
+    bindKey: { win: "Shift-Enter", mac: "Shift-Enter" },
+    exec: () => {
+      updateVar();
+    }
+  });
+
+  editor.commands.addCommand({
+    name: "saveFile",
+    bindKey: { win: "Ctrl-S", mac: "Command-S" },
+    exec: () => {
+      save();
+    }
+  });
+
+  editor.commands.addCommand({
+    name: "openFile",
+    bindKey: { win: "Ctrl-F", mac: "Command-F" },
+    exec: () => {
+      document.getElementById("inputFile").click();
+    }
+  });
+}
+
+function installFileLoader() {
+  $("#inputFile").change(function onChange(event) {
+    const reader = new FileReader();
+    reader.onload = loadedEvent => {
+      console.log(loadedEvent.target.result);
+      loadProgramFromSerializedText(loadedEvent.target.result);
+    };
+    reader.readAsText(event.target.files[0]);
+  });
+}
+
+function showCellError(message) {
+  const el = document.getElementById("cell_error");
+  if (!el) {
+    return;
+  }
+  el.textContent = message;
+  el.hidden = false;
+}
+
+function clearCellError() {
+  const el = document.getElementById("cell_error");
+  if (!el || el.hidden) {
+    return;
+  }
+  el.hidden = true;
+  el.textContent = "";
+}
+
+function installUiActions() {
+  window.updateVar = function() {
+    try {
+      varFromText(module, editor.getValue());
+      clearCellError();
+      persistProgram();
+    } catch (error) {
+      showCellError(error.message);
+    }
+  };
+
+  window.clearEditor = function() {
+    editor.setValue("");
+    clearCellError();
+  };
+
+  window.showDeps = function() {
+    console.log(variableDeps);
+  };
+}
+
+function initializeApp() {
+  installLayout();
+  createRuntimeModule();
+  installCanvasGlobals();
+
+  editor = ace.edit("editor");
+  window.editor = editor;
+
+  configureEditor(editor, getAceLanguageTools());
+  installUiActions();
+  installEditorCommands(editor);
+  installFileLoader();
+
+  Sortable.create($("#vars")[0], {
+    handle: ".handle"
+  });
+
+  initInteractiveCanvas();
+  if (!loadAutosavedProgram()) {
+    loadProgram(["@a = 100", "@b = valueof Inputs.range([0,100],{step:1})"]);
+  }
+}
+</script>
+</html>
