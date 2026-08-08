@@ -2818,6 +2818,18 @@ function resetReactiveState() {
   $("#vars").empty();
 }
 
+// Loaded on first visit (no autosave yet) — a small vesica piscis
+// construction that shows off the range of the tool at a glance: draggable
+// points, a Line, two Circles, and a computed (read-only) Midpoint.
+const DEFAULT_PROGRAM = [
+  "@p1 = FreeHandle(-3, 0)",
+  "@p2 = FreeHandle(3, 0)",
+  "@mid = Midpoint(@p1, @p2)",
+  "@line = Line(@p1, @p2)",
+  "@c1 = Circle(@p1, @p2)",
+  "@c2 = Circle(@p2, @p1)"
+];
+
 const AUTOSAVE_STORAGE_KEY = "obscnv:autosave:v1";
 
 function persistProgram() {
@@ -3154,7 +3166,7 @@ function initializeApp() {
   initInteractiveCanvas();
   ensureViewportCell();
   if (!loadAutosavedProgram()) {
-    loadProgram(["@a = 100", "@b = valueof Inputs.range([0,100],{step:1})"]);
+    loadProgram(DEFAULT_PROGRAM);
   }
 }
 </script>
