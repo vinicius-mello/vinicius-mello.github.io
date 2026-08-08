@@ -42,21 +42,23 @@ Any cell whose value is a point (`{x, y}`) or a tagged shape is drawn automatica
 
 Every point value is a **world coordinate** in a real Cartesian plane (y grows upward), not a screen pixel. Screen pixels only exist at the boundary — drawing and pointer input convert through the transform, cell values never do. Axes and a grid (in round world units, not fixed pixels) are drawn automatically.
 
-The mapping between world and screen is itself a reactive cell, `@viewport`, shaped `{center: {x, y}, scaleX, scaleY}` (`scaleX`/`scaleY` are pixels per world unit). It behaves like any other cell — inspect it, edit it by hand, or drive it from the UI:
+The mapping between world and screen is itself a reactive cell, `@viewport`, shaped `{center: {x, y}, scaleX, scaleY, showGrid, showAxis}` (`scaleX`/`scaleY` are pixels per world unit). It behaves like any other cell — inspect it, edit it by hand, or drive it from the viewport controls, top-right of the canvas:
 
 - **Pan** tool — drag the canvas to move `@viewport.center`.
-- **Zoom controls** (top-right of the canvas) — `X −`/`X +` and `Y −`/`Y +` scale `scaleX`/`scaleY` independently, `Reset view` restores the default. Because the two axes can end up at different scales, a world-space `Circle` can render as a visual ellipse — that's correct, not a bug, the same as independent-axis zoom in Desmos.
+- **Zoom controls** — `X −`/`X +` and `Y −`/`Y +` scale `scaleX`/`scaleY` independently by 10% a click, `Reset view` restores every `@viewport` field to its default. Because the two axes can end up at different scales, a world-space `Circle` can render as a visual ellipse — that's correct, not a bug, the same as independent-axis zoom in Desmos.
+- **Grid** / **Axes** — toggle `showGrid`/`showAxis` on and off.
 
 Panning and zooming never change any point's stored `{x, y}` — only what's currently visible. Resizing the browser window behaves the same way (world coordinates are resolution-independent).
 
 ### Construction toolbar
 
-The strip of buttons above the canvas (Select / Pan / Point / Segment / Line / Ray / Circle / Midpoint) builds cells by clicking instead of typing:
+The strip of buttons above the canvas (Select / Point / Segment / Line / Ray / Circle / Midpoint) builds cells by clicking instead of typing:
 
 - **Point** — click empty canvas to drop a `FreeHandle` there, in world coordinates.
 - **Segment / Line / Ray / Circle / Midpoint** — click two existing points (draggable or computed) to construct between them. The first click highlights its point with a dashed ring; click it again to cancel, or click a second point to complete the construction.
 - **Select** is the default tool — drag draggable points around, same as before the toolbar existed.
-- **Pan** moves the viewport — see [Coordinate system](#coordinate-system).
+
+Pan lives with the [viewport controls](#coordinate-system) on the right, not this toolbar, since it moves the view rather than building anything.
 
 Every click just calls `varFromText` under the hood and loads the generated line into the editor, so what the toolbar builds is exactly the code from the sections below — nothing is hidden state.
 

@@ -701,7 +701,7 @@
 
       <section>
         <h3>Coordinate system</h3>
-        <p>Every point value is a real Cartesian world coordinate (y grows upward), not a screen pixel — axes and a grid in round world units are drawn automatically. The mapping between world and screen is itself a reactive cell, <code>@viewport</code> (shaped <code>{center: {x, y}, scaleX, scaleY}</code>) — inspect it, edit it by hand, or drive it from the UI.</p>
+        <p>Every point value is a real Cartesian world coordinate (y grows upward), not a screen pixel — axes and a grid in round world units are drawn automatically. The mapping between world and screen is itself a reactive cell, <code>@viewport</code> (shaped <code>{center: {x, y}, scaleX, scaleY, showGrid, showAxis}</code>) — inspect it, edit it by hand, or drive it from the UI.</p>
         <p>Panning and zooming only change what's visible; no point's stored <code>{x, y}</code> ever changes because of them. Since <code>scaleX</code> and <code>scaleY</code> can end up different, a world-space <code>Circle</code> can render as an ellipse — that's correct, the same as independent-axis zoom in Desmos.</p>
       </section>
 
@@ -710,12 +710,12 @@
         <table>
           <tbody>
             <tr><td><strong>Select</strong></td><td>Default tool: drag free points around</td></tr>
-            <tr><td><strong>Pan</strong></td><td>Drag the canvas to move the view (updates <code>@viewport.center</code>)</td></tr>
             <tr><td><strong>Point</strong></td><td>Click empty canvas to create a free point</td></tr>
             <tr><td><strong>Segment / Line / Ray / Circle / Midpoint</strong></td><td>Click an existing point (it gets marked with a dashed ring), then click a second point to complete the construction</td></tr>
           </tbody>
         </table>
-        <p>Every click just writes a normal cell and loads it into the editor — the construction is never hidden behind the UI. The <strong>X −/X +</strong> and <strong>Y −/Y +</strong> buttons top-right of the canvas zoom each axis independently; <strong>Reset view</strong> restores the default.</p>
+        <p>Every click just writes a normal cell and loads it into the editor — the construction is never hidden behind the UI.</p>
+        <p>The viewport controls, top-right of the canvas, are separate: <strong>Pan</strong> drags the view instead of building anything, <strong>X −/X +</strong> and <strong>Y −/Y +</strong> zoom each axis independently by 10% a click, <strong>Grid</strong>/<strong>Axes</strong> toggle the grid and axis lines, and <strong>Reset view</strong> restores every <code>@viewport</code> field to its default.</p>
       </section>
 
       <section>
@@ -1154,10 +1154,20 @@ window.Parallel = Parallel;
 // Midpoint, Intersection, ...) never touches this transform — it only ever
 // sees world coordinates.
 
-const DEFAULT_VIEWPORT = { center: { x: 0, y: 0 }, scaleX: 40, scaleY: 40 };
+const DEFAULT_VIEWPORT = { center: { x: 0, y: 0 }, scaleX: 40, scaleY: 40, showGrid: true, showAxis: true };
 const MIN_VIEWPORT_SCALE = 2;
 const MAX_VIEWPORT_SCALE = 4000;
-const VIEWPORT_ZOOM_FACTOR = 1.25;
+const VIEWPORT_ZOOM_FACTOR = 1.1;
+
+function cloneDefaultViewport() {
+  return {
+    center: { ...DEFAULT_VIEWPORT.center },
+    scaleX: DEFAULT_VIEWPORT.scaleX,
+    scaleY: DEFAULT_VIEWPORT.scaleY,
+    showGrid: DEFAULT_VIEWPORT.showGrid,
+    showAxis: DEFAULT_VIEWPORT.showAxis
+  };
+}
 
 function worldToScreen(point) {
   const { center, scaleX, scaleY } = interactiveCanvasState.viewport;
@@ -1202,7 +1212,8 @@ const interactiveCanvasState = {
   activeTool: "select",
   pendingPoint: null,
   toolbarEl: null,
-  viewport: { center: { ...DEFAULT_VIEWPORT.center }, scaleX: DEFAULT_VIEWPORT.scaleX, scaleY: DEFAULT_VIEWPORT.scaleY },
+  zoomToolbarEl: null,
+  viewport: cloneDefaultViewport(),
   panState: null
 };
 
@@ -1543,6 +1554,11 @@ function formatGridLabel(value) {
 }
 
 function drawCartesianGrid(ctx, width, height) {
+  const { showGrid, showAxis } = interactiveCanvasState.viewport;
+  if (!showGrid && !showAxis) {
+    return;
+  }
+
   const stepX = niceGridStep(interactiveCanvasState.viewport.scaleX, 60);
   const stepY = niceGridStep(interactiveCanvasState.viewport.scaleY, 60);
   const topLeftWorld = screenToWorld({ x: 0, y: 0 });
@@ -1552,21 +1568,27 @@ function drawCartesianGrid(ctx, width, height) {
   const minY = Math.min(topLeftWorld.y, bottomRightWorld.y);
   const maxY = Math.max(topLeftWorld.y, bottomRightWorld.y);
 
-  ctx.strokeStyle = "rgba(84, 112, 166, 0.18)";
-  ctx.lineWidth = 1;
-  for (let x = Math.ceil(minX / stepX) * stepX; x <= maxX; x += stepX) {
-    const sx = Math.round(worldToScreen({ x, y: 0 }).x) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(sx, 0);
-    ctx.lineTo(sx, height);
-    ctx.stroke();
+  if (showGrid) {
+    ctx.strokeStyle = "rgba(84, 112, 166, 0.18)";
+    ctx.lineWidth = 1;
+    for (let x = Math.ceil(minX / stepX) * stepX; x <= maxX; x += stepX) {
+      const sx = Math.round(worldToScreen({ x, y: 0 }).x) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(sx, 0);
+      ctx.lineTo(sx, height);
+      ctx.stroke();
+    }
+    for (let y = Math.ceil(minY / stepY) * stepY; y <= maxY; y += stepY) {
+      const sy = Math.round(worldToScreen({ x: 0, y }).y) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, sy);
+      ctx.lineTo(width, sy);
+      ctx.stroke();
+    }
   }
-  for (let y = Math.ceil(minY / stepY) * stepY; y <= maxY; y += stepY) {
-    const sy = Math.round(worldToScreen({ x: 0, y }).y) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, sy);
-    ctx.lineTo(width, sy);
-    ctx.stroke();
+
+  if (!showAxis) {
+    return;
   }
 
   const origin = worldToScreen({ x: 0, y: 0 });
@@ -1822,9 +1844,12 @@ function syncViewportFromValue(value) {
   const scaleY = Number.isFinite(Number(value.scaleY)) && Number(value.scaleY) > 0
     ? clamp(Number(value.scaleY), MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE)
     : interactiveCanvasState.viewport.scaleY;
-  interactiveCanvasState.viewport = { center, scaleX, scaleY };
+  const showGrid = typeof value.showGrid === "boolean" ? value.showGrid : interactiveCanvasState.viewport.showGrid;
+  const showAxis = typeof value.showAxis === "boolean" ? value.showAxis : interactiveCanvasState.viewport.showAxis;
+  interactiveCanvasState.viewport = { center, scaleX, scaleY, showGrid, showAxis };
   queueMainCanvasRedraw();
   queueInteractiveRedraw();
+  syncViewportToggleButtons();
 }
 
 function syncGeometryFromValue(varName, value) {
@@ -1912,13 +1937,24 @@ function redefineHandleVariable(varName, source) {
 // applied to the single reserved @viewport cell so panning/zooming stays
 // genuinely reactive (and autosaves/exports) instead of being invisible
 // app-only state.
-function redefineViewportCell(center, scaleX, scaleY) {
-  const clampedScaleX = clamp(scaleX, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE);
-  const clampedScaleY = clamp(scaleY, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE);
+// Accepts a partial viewport — only the fields being changed — and merges
+// them onto the current viewport, so callers (pan, zoom, toggles) don't
+// need to know about fields they're not touching.
+function redefineViewportCell(partial) {
+  const current = interactiveCanvasState.viewport;
+  const center = partial.center
+    ? { x: formatWorldNumber(partial.center.x), y: formatWorldNumber(partial.center.y) }
+    : current.center;
+  const scaleX = clamp(partial.scaleX ?? current.scaleX, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE);
+  const scaleY = clamp(partial.scaleY ?? current.scaleY, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE);
+  const showGrid = partial.showGrid ?? current.showGrid;
+  const showAxis = partial.showAxis ?? current.showAxis;
   const nextViewport = {
-    center: { x: formatWorldNumber(center.x), y: formatWorldNumber(center.y) },
-    scaleX: Math.round(clampedScaleX * 100) / 100,
-    scaleY: Math.round(clampedScaleY * 100) / 100
+    center,
+    scaleX: Math.round(scaleX * 100) / 100,
+    scaleY: Math.round(scaleY * 100) / 100,
+    showGrid,
+    showAxis
   };
   interactiveCanvasState.viewport = nextViewport;
 
@@ -1939,21 +1975,38 @@ function ensureViewportCell() {
   if (variableText["@viewport"] !== undefined) {
     return;
   }
-  const { center, scaleX, scaleY } = interactiveCanvasState.viewport;
-  varFromText(module, `@viewport = (${JSON.stringify({ center, scaleX, scaleY })})`);
+  const { center, scaleX, scaleY, showGrid, showAxis } = interactiveCanvasState.viewport;
+  varFromText(module, `@viewport = (${JSON.stringify({ center, scaleX, scaleY, showGrid, showAxis })})`);
 }
 
 function zoomViewport(axis, factor) {
   const vp = interactiveCanvasState.viewport;
-  const scaleX = axis === "x" ? vp.scaleX * factor : vp.scaleX;
-  const scaleY = axis === "y" ? vp.scaleY * factor : vp.scaleY;
-  redefineViewportCell(vp.center, scaleX, scaleY);
+  redefineViewportCell(axis === "x" ? { scaleX: vp.scaleX * factor } : { scaleY: vp.scaleY * factor });
   persistProgram();
 }
 
 function resetViewport() {
-  redefineViewportCell({ ...DEFAULT_VIEWPORT.center }, DEFAULT_VIEWPORT.scaleX, DEFAULT_VIEWPORT.scaleY);
+  redefineViewportCell(cloneDefaultViewport());
   persistProgram();
+  syncViewportToggleButtons();
+}
+
+// Both toggle buttons and hand-edits of @viewport (syncViewportFromValue)
+// need to refresh the toolbar's checked-looking state to match.
+function syncViewportToggleButtons() {
+  const toolbarEl = interactiveCanvasState.zoomToolbarEl;
+  if (!toolbarEl) {
+    return;
+  }
+  toolbarEl.querySelectorAll("button[data-viewport-toggle]").forEach(button => {
+    button.classList.toggle("active", !!interactiveCanvasState.viewport[button.dataset.viewportToggle]);
+  });
+}
+
+function toggleViewportFlag(key) {
+  redefineViewportCell({ [key]: !interactiveCanvasState.viewport[key] });
+  persistProgram();
+  syncViewportToggleButtons();
 }
 
 function applyHandleDragValue(handle, point) {
@@ -2109,7 +2162,7 @@ function onInteractivePointerMove(event) {
       x: startCenter.x - (point.x - startScreen.x) / scaleX,
       y: startCenter.y + (point.y - startScreen.y) / scaleY
     };
-    redefineViewportCell(newCenter, scaleX, scaleY);
+    redefineViewportCell({ center: newCenter });
     event.preventDefault();
     return;
   }
@@ -2191,7 +2244,6 @@ function resizeInteractiveCanvas() {
 
 const GEOMETRY_TOOL_BUTTONS = [
   { tool: "select", label: "Select" },
-  { tool: "pan", label: "Pan" },
   { tool: "point", label: "Point" },
   { tool: "segment", label: "Segment" },
   { tool: "line", label: "Line" },
@@ -2200,15 +2252,20 @@ const GEOMETRY_TOOL_BUTTONS = [
   { tool: "midpoint", label: "Midpoint" }
 ];
 
+// Tool buttons (data-tool) live in two separate toolbars — the construction
+// tools on the left and Pan alongside the viewport controls on the right —
+// so switching tools has to update the active state in both.
 function setActiveGeometryTool(tool) {
   interactiveCanvasState.activeTool = tool;
   interactiveCanvasState.pendingPoint = null;
-  const toolbarEl = interactiveCanvasState.toolbarEl;
-  if (toolbarEl) {
-    toolbarEl.querySelectorAll("button").forEach(button => {
+  [interactiveCanvasState.toolbarEl, interactiveCanvasState.zoomToolbarEl].forEach(toolbarEl => {
+    if (!toolbarEl) {
+      return;
+    }
+    toolbarEl.querySelectorAll("button[data-tool]").forEach(button => {
       button.classList.toggle("active", button.dataset.tool === tool);
     });
-  }
+  });
   queueInteractiveRedraw();
 }
 
@@ -2236,15 +2293,27 @@ const ZOOM_BUTTONS = [
   { label: "X −", onClick: () => zoomViewport("x", 1 / VIEWPORT_ZOOM_FACTOR) },
   { label: "X +", onClick: () => zoomViewport("x", VIEWPORT_ZOOM_FACTOR) },
   { label: "Y −", onClick: () => zoomViewport("y", 1 / VIEWPORT_ZOOM_FACTOR) },
-  { label: "Y +", onClick: () => zoomViewport("y", VIEWPORT_ZOOM_FACTOR) },
-  { label: "Reset view", onClick: () => resetViewport() }
+  { label: "Y +", onClick: () => zoomViewport("y", VIEWPORT_ZOOM_FACTOR) }
+];
+
+const VIEWPORT_TOGGLES = [
+  { key: "showGrid", label: "Grid" },
+  { key: "showAxis", label: "Axes" }
 ];
 
 function createZoomToolbar() {
   const toolbar = document.createElement("div");
   toolbar.className = "geom-toolbar geom-zoom-toolbar";
   toolbar.setAttribute("role", "toolbar");
-  toolbar.setAttribute("aria-label", "Zoom controls");
+  toolbar.setAttribute("aria-label", "Viewport controls");
+
+  const panButton = document.createElement("button");
+  panButton.type = "button";
+  panButton.textContent = "Pan";
+  panButton.dataset.tool = "pan";
+  panButton.className = interactiveCanvasState.activeTool === "pan" ? "active" : "";
+  panButton.addEventListener("click", () => setActiveGeometryTool("pan"));
+  toolbar.appendChild(panButton);
 
   ZOOM_BUTTONS.forEach(({ label, onClick }) => {
     const button = document.createElement("button");
@@ -2254,6 +2323,23 @@ function createZoomToolbar() {
     toolbar.appendChild(button);
   });
 
+  VIEWPORT_TOGGLES.forEach(({ key, label }) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.dataset.viewportToggle = key;
+    button.className = interactiveCanvasState.viewport[key] ? "active" : "";
+    button.addEventListener("click", () => toggleViewportFlag(key));
+    toolbar.appendChild(button);
+  });
+
+  const resetButton = document.createElement("button");
+  resetButton.type = "button";
+  resetButton.textContent = "Reset view";
+  resetButton.addEventListener("click", () => resetViewport());
+  toolbar.appendChild(resetButton);
+
+  interactiveCanvasState.zoomToolbarEl = toolbar;
   return toolbar;
 }
 
@@ -2727,7 +2813,7 @@ function resetReactiveState() {
   interactiveCanvasState.handleSpecs.clear();
   interactiveCanvasState.activeHandle = null;
   interactiveCanvasState.panState = null;
-  interactiveCanvasState.viewport = { center: { ...DEFAULT_VIEWPORT.center }, scaleX: DEFAULT_VIEWPORT.scaleX, scaleY: DEFAULT_VIEWPORT.scaleY };
+  interactiveCanvasState.viewport = cloneDefaultViewport();
   queueInteractiveRedraw();
   $("#vars").empty();
 }
