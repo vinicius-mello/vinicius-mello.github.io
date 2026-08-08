@@ -237,6 +237,40 @@
       cursor: crosshair;
     }
 
+    .geom-toolbar {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      max-width: calc(100% - 16px);
+    }
+
+    .geom-toolbar button {
+      border: 1px solid rgba(96, 123, 171, 0.25);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--text);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      padding: 3px 8px;
+      border-radius: 999px;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(69, 96, 145, 0.1);
+    }
+
+    .geom-toolbar button:hover {
+      border-color: rgba(66, 109, 178, 0.4);
+    }
+
+    .geom-toolbar button.active {
+      background: linear-gradient(135deg, #0f8b8d, #0b6f8a);
+      color: #fff;
+      border-color: transparent;
+    }
+
     #board:empty::after {
       content: "Interactive results, visualizations, and reactive outputs can appear here.";
       display: flex;
@@ -902,7 +936,10 @@ const interactiveCanvasState = {
   geomShapes: new Map(),
   activeHandle: null,
   redrawQueued: false,
-  resizeObserver: null
+  resizeObserver: null,
+  activeTool: "select",
+  pendingPoint: null,
+  toolbarEl: null
 };
 
 function normalizeHandlePoint(value) {
@@ -1201,7 +1238,7 @@ function installCanvasGlobals() {
 }
 
 function drawInteractiveCanvas() {
-  const { ctx, width, height, handles, computedPoints, activeHandle } = interactiveCanvasState;
+  const { ctx, width, height, handles, computedPoints, activeHandle, pendingPoint } = interactiveCanvasState;
   if (!ctx || width <= 0 || height <= 0) {
     return;
   }
@@ -1262,6 +1299,21 @@ function drawInteractiveCanvas() {
     ctx.textBaseline = "middle";
     ctx.fillText(handle.varName, handle.x + handle.radius + 6, handle.y);
   });
+
+  // Highlight the first point picked for a two-point construction tool
+  // (Segment/Line/Ray/Circle/Midpoint) while waiting for the second click.
+  if (pendingPoint) {
+    const target = handles.get(pendingPoint) || computedPoints.get(pendingPoint);
+    if (target) {
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, (target.radius || 5) + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = "#e4572e";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
 }
 
 function interactiveCanvasPoint(event) {
@@ -1283,6 +1335,26 @@ function pickInteractiveHandle(point) {
     const radius = handle.radius + 4;
     if (dx * dx + dy * dy <= radius * radius) {
       return handle;
+    }
+  }
+  return null;
+}
+
+// Like pickInteractiveHandle, but also matches read-only computed points —
+// used by the construction tools, which can reference any visible point,
+// not just draggable ones (e.g. Segment(@midpoint, @p3)).
+function pickAnyPoint(point) {
+  const handle = pickInteractiveHandle(point);
+  if (handle) {
+    return { varName: handle.varName, x: handle.x, y: handle.y };
+  }
+  const computed = Array.from(interactiveCanvasState.computedPoints.values()).reverse();
+  for (const p of computed) {
+    const dx = point.x - p.x;
+    const dy = point.y - p.y;
+    const radius = 5 + 4;
+    if (dx * dx + dy * dy <= radius * radius) {
+      return { varName: p.varName, x: p.x, y: p.y };
     }
   }
   return null;
@@ -1489,11 +1561,65 @@ function applyHandleDragValue(handle, point) {
   redefineHandleVariable(varName, fallback);
 }
 
+const CONSTRUCTION_TOOLS = {
+  point: null,
+  segment: { prefix: "s", build: (a, b) => `Segment(${a}, ${b})` },
+  line: { prefix: "l", build: (a, b) => `Line(${a}, ${b})` },
+  ray: { prefix: "r", build: (a, b) => `Ray(${a}, ${b})` },
+  circle: { prefix: "c", build: (a, b) => `Circle(${a}, ${b})` },
+  midpoint: { prefix: "m", build: (a, b) => `Midpoint(${a}, ${b})` }
+};
+
+function nextAvailableVarName(prefix) {
+  let n = 1;
+  while (variableText["@" + prefix + n] !== undefined) {
+    n++;
+  }
+  return "@" + prefix + n;
+}
+
 function onInteractivePointerDown(event) {
   const point = interactiveCanvasPoint(event);
   if (!point) {
     return;
   }
+
+  const tool = interactiveCanvasState.activeTool;
+
+  if (tool === "point") {
+    const varName = nextAvailableVarName("p");
+    createCellFromSource(`${varName} = FreeHandle(${Math.round(point.x)}, ${Math.round(point.y)})`);
+    event.preventDefault();
+    return;
+  }
+
+  if (tool !== "select") {
+    const spec = CONSTRUCTION_TOOLS[tool];
+    const hit = pickAnyPoint(point);
+    if (!hit) {
+      interactiveCanvasState.pendingPoint = null;
+      queueInteractiveRedraw();
+      return;
+    }
+    if (!interactiveCanvasState.pendingPoint) {
+      interactiveCanvasState.pendingPoint = hit.varName;
+      queueInteractiveRedraw();
+      event.preventDefault();
+      return;
+    }
+    if (interactiveCanvasState.pendingPoint === hit.varName) {
+      interactiveCanvasState.pendingPoint = null;
+      queueInteractiveRedraw();
+      return;
+    }
+    const varName = nextAvailableVarName(spec.prefix);
+    const source = spec.build(interactiveCanvasState.pendingPoint, hit.varName);
+    interactiveCanvasState.pendingPoint = null;
+    createCellFromSource(`${varName} = ${source}`);
+    event.preventDefault();
+    return;
+  }
+
   const handle = pickInteractiveHandle(point);
   if (!handle) {
     return;
@@ -1579,6 +1705,48 @@ function resizeInteractiveCanvas() {
   queueInteractiveRedraw();
 }
 
+const GEOMETRY_TOOL_BUTTONS = [
+  { tool: "select", label: "Selecionar" },
+  { tool: "point", label: "Ponto" },
+  { tool: "segment", label: "Segmento" },
+  { tool: "line", label: "Reta" },
+  { tool: "ray", label: "Semirreta" },
+  { tool: "circle", label: "Círculo" },
+  { tool: "midpoint", label: "Ponto médio" }
+];
+
+function setActiveGeometryTool(tool) {
+  interactiveCanvasState.activeTool = tool;
+  interactiveCanvasState.pendingPoint = null;
+  const toolbarEl = interactiveCanvasState.toolbarEl;
+  if (toolbarEl) {
+    toolbarEl.querySelectorAll("button").forEach(button => {
+      button.classList.toggle("active", button.dataset.tool === tool);
+    });
+  }
+  queueInteractiveRedraw();
+}
+
+function createGeometryToolbar() {
+  const toolbar = document.createElement("div");
+  toolbar.className = "geom-toolbar";
+  toolbar.setAttribute("role", "toolbar");
+  toolbar.setAttribute("aria-label", "Ferramentas de construção");
+
+  GEOMETRY_TOOL_BUTTONS.forEach(({ tool, label }) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.dataset.tool = tool;
+    button.className = tool === interactiveCanvasState.activeTool ? "active" : "";
+    button.addEventListener("click", () => setActiveGeometryTool(tool));
+    toolbar.appendChild(button);
+  });
+
+  interactiveCanvasState.toolbarEl = toolbar;
+  return toolbar;
+}
+
 function initInteractiveCanvas() {
   if (interactiveCanvasState.canvas) {
     return;
@@ -1597,6 +1765,7 @@ function initInteractiveCanvas() {
   overlayCanvas.id = "interactive_canvas_overlay";
   host.appendChild(baseCanvas);
   host.appendChild(overlayCanvas);
+  host.appendChild(createGeometryToolbar());
   board.appendChild(host);
 
   interactiveCanvasState.board = board;
@@ -2293,15 +2462,33 @@ function clearCellError() {
   el.textContent = "";
 }
 
+// Shared by the Update button and the canvas construction tools: compiles
+// and applies a cell definition, surfacing a compile error the same way
+// either path triggers it.
+function applyCellSource(text) {
+  try {
+    varFromText(module, text);
+    clearCellError();
+    persistProgram();
+    return true;
+  } catch (error) {
+    showCellError(error.message);
+    return false;
+  }
+}
+
+// Used by the canvas tools (Point/Segment/Line/...): applies the generated
+// cell and loads it into the editor, same as clicking a cell's ··· handle,
+// so the construction is immediately visible and editable as code.
+function createCellFromSource(text) {
+  if (applyCellSource(text) && editor) {
+    editor.session.setValue(text);
+  }
+}
+
 function installUiActions() {
   window.updateVar = function() {
-    try {
-      varFromText(module, editor.getValue());
-      clearCellError();
-      persistProgram();
-    } catch (error) {
-      showCellError(error.message);
-    }
+    applyCellSource(editor.getValue());
   };
 
   window.clearEditor = function() {

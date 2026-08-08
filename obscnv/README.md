@@ -1,6 +1,6 @@
 # obscnv
 
-A GeoGebra-like interactive geometry tool where construction is JavaScript, not clicks on a toolbar. Each cell defines a point, line, circle or construction; every object renders live on a canvas, free points are draggable, and dependent objects (midpoints, intersections, reflections, ...) recompute reactively — the same dependency-graph model [ObservableHQ](https://observablehq.com/) notebooks use, applied to geometric construction instead of general computation. No build step, no backend — open `index.html` and start writing cells.
+A GeoGebra-like interactive geometry tool where every construction is also visible, editable JavaScript. Click a tool and click on the canvas to build, like GeoGebra — but each click just writes a cell (`@m1 = Midpoint(@p1, @p2)`) into the editor, so the construction is never hidden behind the UI. Every object renders live on a canvas, free points are draggable, and dependent objects (midpoints, intersections, reflections, ...) recompute reactively — the same dependency-graph model [ObservableHQ](https://observablehq.com/) notebooks use, applied to geometric construction instead of general computation. No build step, no backend — open `index.html` and start building.
 
 The underlying reactive-cell engine (`@name = expression`, blocks, generators, `Inputs` widgets) is general-purpose plumbing in service of that goal, not a product surface of its own — see [Cell syntax](#cell-syntax) if you need it, but [Geometry](#geometry) is the point of the tool.
 
@@ -37,6 +37,16 @@ Any cell whose value is a point (`{x, y}`) or a tagged shape is drawn automatica
 
 - **Free/constrained points** (`FreeHandle`, `FixedHandle`, `SegmentHandle`, `LineHandle`, `CircleHandle`) are draggable; dragging rewrites the cell's source in place.
 - **Computed points** (anything else that evaluates to `{x, y}` — `Midpoint`, `Intersection`, `Reflect`, `Rotate`, or your own expressions) render the same way but read-only, exactly like GeoGebra's dependent objects: they follow their inputs, you don't drag them directly.
+
+### Construction toolbar
+
+The strip of buttons above the canvas (Selecionar / Ponto / Segmento / Reta / Semirreta / Círculo / Ponto médio) builds cells by clicking instead of typing:
+
+- **Ponto** — click empty canvas to drop a `FreeHandle` there.
+- **Segmento / Reta / Semirreta / Círculo / Ponto médio** — click two existing points (draggable or computed) to construct between them. The first click highlights its point with a dashed ring; click it again to cancel, or click a second point to complete the construction.
+- **Selecionar** is the default tool — drag draggable points around, same as before the toolbar existed.
+
+Every click just calls `varFromText` under the hood and loads the generated line into the editor, so what the toolbar builds is exactly the code from the sections below — nothing is hidden state.
 
 ### Draggable points
 
@@ -104,7 +114,7 @@ The notebook autosaves to `localStorage` after every successful update, so reloa
 
 ## Known limitations
 
-- Construction is entirely text-based — there's no click-to-create UI yet (click a point, click a tool, etc.). Everything above is written by hand in the editor.
+- The construction toolbar only covers Point/Segment/Line/Ray/Circle/Midpoint; there's no way yet to set an object's color/style or a custom label from the UI (edit the generated cell's `options` argument by hand for now).
 - `Intersection` only handles line/segment/ray pairs; circle intersections aren't implemented.
 - `Angle` returns a number; there's no visual angle-arc marker yet.
 - `modules/inputs/style.css` is the package's un-namespaced source file (`__ns__` placeholders are meant to be replaced by a build step) and isn't wired up, so `Inputs` widgets render with browser-default styling rather than Observable's.
