@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <title>obscnv</title>
   <meta charset="utf-8">
@@ -141,7 +141,7 @@
     }
 
     #vars:empty::before {
-      content: "As variáveis renderizadas aparecem aqui.";
+      content: "Rendered variables appear here.";
       display: block;
       padding: 14px 10px;
       border: 1px dashed rgba(111, 138, 188, 0.28);
@@ -627,7 +627,7 @@
 <body>
   <main id="app-shell">
     <div id="all" class="split">
-      <aside id="left" aria-label="Variáveis reativas">
+      <aside id="left" aria-label="Reactive variables">
         <div class="pane-frame">
           <div class="pane-heading">
             <h2>Variables</h2>
@@ -637,9 +637,9 @@
       </aside>
 
       <div id="right" class="split">
-        <section id="board" class="pane-card" aria-label="Área de saída"></section>
+        <section id="board" class="pane-card" aria-label="Output area"></section>
 
-        <section id="editor_panel" class="pane-card" aria-label="Editor de código">
+        <section id="editor_panel" class="pane-card" aria-label="Code editor">
           <div id="toolbar">
             <div class="toolbar-actions">
               <button id="toggle_editor" type="button" onclick="toggleEditorPanel()">Collapse editor</button>
@@ -647,8 +647,8 @@
               <button id="clear" onclick="clearEditor()">Clear</button>
               <button id="save" onclick="save()" title="Ctrl-S">Save</button>
               <button id="load" type="button" onclick="document.getElementById('inputFile').click()" title="Ctrl-F">Open</button>
-              <input type="file" accept=".js" id="inputFile" aria-label="Carregar arquivo JavaScript">
-              <button id="help_button" type="button" onclick="openHelp()" title="F1">Ajuda</button>
+              <input type="file" accept=".js" id="inputFile" aria-label="Load JavaScript file">
+              <button id="help_button" type="button" onclick="openHelp()" title="F1">Help</button>
             </div>
           </div>
           <div id="cell_error" class="cell-error" role="alert" hidden></div>
@@ -660,88 +660,88 @@
 
   <dialog id="help_dialog" class="help-dialog">
     <header class="help-header">
-      <h2>Como funciona o obscnv</h2>
-      <button type="button" class="help-close" onclick="closeHelp()" aria-label="Fechar ajuda">×</button>
+      <h2>How obscnv works</h2>
+      <button type="button" class="help-close" onclick="closeHelp()" aria-label="Close help">×</button>
     </header>
     <div class="help-body">
       <section>
-        <h3>O básico</h3>
-        <p>Cada célula do editor define uma variável reativa: <code>@nome = expressão</code>. Clique em <strong>Update</strong> (ou <kbd>Shift-Enter</kbd>) para aplicar. Referencie outras células com <code>@nome</code> em qualquer lugar da expressão — o grafo de dependências recalcula tudo sozinho.</p>
-        <p>Clique no botão <code>···</code> de uma célula para carregá-la de volta no editor; arraste-o para reordenar a lista. Para apagar uma célula, redefina-a como <code>@nome = undefined</code>.</p>
-        <p>O notebook salva automaticamente no navegador a cada atualização. Para levar o trabalho para outro lugar, use <strong>Save</strong> (<kbd>Ctrl-S</kbd>) para baixar um arquivo e <strong>Open</strong> (<kbd>Ctrl-F</kbd>) para carregar um arquivo salvo.</p>
+        <h3>The basics</h3>
+        <p>Each cell in the editor defines a reactive variable: <code>@name = expression</code>. Click <strong>Update</strong> (or <kbd>Shift-Enter</kbd>) to apply it. Reference other cells with <code>@name</code> anywhere in the expression — the dependency graph recomputes everything on its own.</p>
+        <p>Click a cell's <code>···</code> button to load it back into the editor; drag it to reorder the list. To delete a cell, redefine it as <code>@name = undefined</code>.</p>
+        <p>The notebook autosaves in the browser after every update. To take your work elsewhere, use <strong>Save</strong> (<kbd>Ctrl-S</kbd>) to download a file and <strong>Open</strong> (<kbd>Ctrl-F</kbd>) to load a saved one.</p>
       </section>
 
       <section>
-        <h3>Tipos de célula</h3>
+        <h3>Cell types</h3>
         <table>
           <tbody>
-            <tr><td><code>@nome = expressão</code></td><td>Valor reativo simples, ex. <code>@c = @a + @b</code></td></tr>
-            <tr><td><code>@nome = { ...js... }</code></td><td>Bloco de código; use <code>return</code> para o valor da célula</td></tr>
-            <tr><td><code>@nome = *{ ...js... }</code></td><td>Bloco gerador, para valores que mudam ao longo do tempo</td></tr>
-            <tr><td><code>@nome = valueof Inputs.range(...)</code></td><td>Célula de controle: mostra o widget e expõe seu valor</td></tr>
-            <tr><td><code>@nome = undefined</code></td><td>Apaga a célula</td></tr>
+            <tr><td><code>@name = expression</code></td><td>Plain reactive value, e.g. <code>@c = @a + @b</code></td></tr>
+            <tr><td><code>@name = { ...js... }</code></td><td>Code block; use <code>return</code> for the cell's value</td></tr>
+            <tr><td><code>@name = *{ ...js... }</code></td><td>Generator block, for values that change over time</td></tr>
+            <tr><td><code>@name = valueof Inputs.range(...)</code></td><td>Control cell: shows the widget and exposes its value</td></tr>
+            <tr><td><code>@name = undefined</code></td><td>Deletes the cell</td></tr>
           </tbody>
         </table>
       </section>
 
       <section>
-        <h3>Pontos: arrastáveis × computados</h3>
-        <p>Qualquer célula cujo valor seja um ponto (<code>{x, y}</code>) ou uma forma aparece sozinha no desenho — não é preciso chamar nenhuma função de desenho.</p>
+        <h3>Draggable vs. computed points</h3>
+        <p>Any cell whose value is a point (<code>{x, y}</code>) or a shape appears on the canvas by itself — no drawing function to call.</p>
         <ul>
-          <li><strong>Pontos livres/vinculados</strong> (<code>FreeHandle</code>, <code>FixedHandle</code>, <code>SegmentHandle</code>, <code>LineHandle</code>, <code>CircleHandle</code>) podem ser arrastados; arrastar reescreve o código da célula.</li>
-          <li><strong>Pontos computados</strong> (<code>Midpoint</code>, <code>Intersection</code>, <code>Reflect</code>, <code>Rotate</code>, ou qualquer expressão sua) aparecem do mesmo jeito, mas só de leitura — seguem os pontos dos quais dependem, como os objetos dependentes do GeoGebra.</li>
+          <li><strong>Free/constrained points</strong> (<code>FreeHandle</code>, <code>FixedHandle</code>, <code>SegmentHandle</code>, <code>LineHandle</code>, <code>CircleHandle</code>) can be dragged; dragging rewrites the cell's source.</li>
+          <li><strong>Computed points</strong> (<code>Midpoint</code>, <code>Intersection</code>, <code>Reflect</code>, <code>Rotate</code>, or any expression of your own) render the same way but read-only — they follow the points they depend on, like GeoGebra's dependent objects.</li>
         </ul>
       </section>
 
       <section>
-        <h3>Ferramentas de construção (clique no desenho)</h3>
+        <h3>Construction tools (click on the canvas)</h3>
         <table>
           <tbody>
-            <tr><td><strong>Selecionar</strong></td><td>Ferramenta padrão: arraste pontos livres</td></tr>
-            <tr><td><strong>Ponto</strong></td><td>Clique em espaço vazio para criar um ponto livre</td></tr>
-            <tr><td><strong>Segmento / Reta / Semirreta / Círculo / Ponto médio</strong></td><td>Clique em um ponto existente (fica marcado com um anel tracejado), depois em um segundo ponto para completar a construção</td></tr>
+            <tr><td><strong>Select</strong></td><td>Default tool: drag free points around</td></tr>
+            <tr><td><strong>Point</strong></td><td>Click empty canvas to create a free point</td></tr>
+            <tr><td><strong>Segment / Line / Ray / Circle / Midpoint</strong></td><td>Click an existing point (it gets marked with a dashed ring), then click a second point to complete the construction</td></tr>
           </tbody>
         </table>
-        <p>Cada clique só escreve uma célula normal e a carrega no editor — a construção nunca fica escondida atrás da interface.</p>
+        <p>Every click just writes a normal cell and loads it into the editor — the construction is never hidden behind the UI.</p>
       </section>
 
       <section>
-        <h3>Formas</h3>
+        <h3>Shapes</h3>
         <table>
           <tbody>
-            <tr><td><code>Segment(p1, p2, options)</code></td><td>Segmento entre dois pontos</td></tr>
-            <tr><td><code>Line(p1, p2, options)</code></td><td>Reta pelos dois pontos, estendida até a borda do desenho</td></tr>
-            <tr><td><code>Ray(p1, p2, options)</code></td><td>Semirreta a partir de <code>p1</code>, passando por <code>p2</code></td></tr>
-            <tr><td><code>Circle(center, boundaryOuRaio, options)</code></td><td>Círculo; o segundo argumento é um ponto na borda ou um raio numérico</td></tr>
-            <tr><td><code>Polygon([p1, p2, ...], options)</code></td><td>Polígono fechado pela lista de pontos</td></tr>
+            <tr><td><code>Segment(p1, p2, options)</code></td><td>Segment between two points</td></tr>
+            <tr><td><code>Line(p1, p2, options)</code></td><td>Line through the two points, extended to the canvas edge</td></tr>
+            <tr><td><code>Ray(p1, p2, options)</code></td><td>Ray starting at <code>p1</code>, through <code>p2</code></td></tr>
+            <tr><td><code>Circle(center, boundaryOrRadius, options)</code></td><td>Circle; the second argument is either a boundary point or a numeric radius</td></tr>
+            <tr><td><code>Polygon([p1, p2, ...], options)</code></td><td>Closed polygon through the list of points</td></tr>
           </tbody>
         </table>
-        <p><code>options</code> aceita <code>{color, lineWidth, fill}</code>.</p>
+        <p><code>options</code> accepts <code>{color, lineWidth, fill}</code>.</p>
       </section>
 
       <section>
-        <h3>Construções derivadas</h3>
+        <h3>Derived constructions</h3>
         <table>
           <tbody>
-            <tr><td><code>Midpoint(p1, p2)</code></td><td>Ponto médio</td></tr>
-            <tr><td><code>Distance(p1, p2)</code></td><td>Distância entre dois pontos</td></tr>
-            <tr><td><code>Angle(p1, vértice, p2)</code></td><td>Ângulo em graus, com vértice no meio</td></tr>
-            <tr><td><code>Intersection(linha1, linha2)</code></td><td>Interseção entre retas/segmentos/semirretas (círculos ainda não)</td></tr>
-            <tr><td><code>Reflect(ponto, linha)</code></td><td>Reflexo de um ponto em torno de uma linha</td></tr>
-            <tr><td><code>Rotate(ponto, centro, ânguloGraus)</code></td><td>Rotação de um ponto em torno de um centro</td></tr>
-            <tr><td><code>Perpendicular(ponto, linha)</code> / <code>Parallel(ponto, linha)</code></td><td>Reta perpendicular/paralela passando pelo ponto</td></tr>
+            <tr><td><code>Midpoint(p1, p2)</code></td><td>Midpoint</td></tr>
+            <tr><td><code>Distance(p1, p2)</code></td><td>Distance between two points</td></tr>
+            <tr><td><code>Angle(p1, vertex, p2)</code></td><td>Angle in degrees, vertex in the middle</td></tr>
+            <tr><td><code>Intersection(line1, line2)</code></td><td>Intersection between lines/segments/rays (circles not yet)</td></tr>
+            <tr><td><code>Reflect(point, line)</code></td><td>Reflection of a point across a line</td></tr>
+            <tr><td><code>Rotate(point, center, angleDeg)</code></td><td>Rotation of a point around a center</td></tr>
+            <tr><td><code>Perpendicular(point, line)</code> / <code>Parallel(point, line)</code></td><td>Perpendicular/parallel line through the point</td></tr>
           </tbody>
         </table>
       </section>
 
       <section>
-        <h3>Atalhos</h3>
+        <h3>Shortcuts</h3>
         <table>
           <tbody>
-            <tr><td><kbd>Shift-Enter</kbd></td><td>Aplicar a célula do editor (Update)</td></tr>
-            <tr><td><kbd>Ctrl-S</kbd></td><td>Salvar notebook em arquivo</td></tr>
-            <tr><td><kbd>Ctrl-F</kbd></td><td>Abrir notebook de um arquivo</td></tr>
-            <tr><td><kbd>F1</kbd></td><td>Abrir esta ajuda</td></tr>
+            <tr><td><kbd>Shift-Enter</kbd></td><td>Apply the editor's cell (Update)</td></tr>
+            <tr><td><kbd>Ctrl-S</kbd></td><td>Save the notebook to a file</td></tr>
+            <tr><td><kbd>Ctrl-F</kbd></td><td>Open a notebook from a file</td></tr>
+            <tr><td><kbd>F1</kbd></td><td>Open this help</td></tr>
           </tbody>
         </table>
       </section>
@@ -1321,7 +1321,7 @@ function createCanvas2DApi(state) {
   return {
   setClearMode(mode) {
     if (mode !== "auto" && mode !== "manual") {
-      throw new Error("Canvas2D.setClearMode aceita apenas 'auto' ou 'manual'.");
+      throw new Error("Canvas2D.setClearMode only accepts 'auto' or 'manual'.");
     }
     state.clearMode = mode;
     queueMainCanvasRedraw();
@@ -1331,10 +1331,10 @@ function createCanvas2DApi(state) {
   },
   layer(name, drawFn) {
     if (typeof name !== "string" || !name.trim()) {
-      throw new Error("Canvas2D.layer requer um nome de camada.");
+      throw new Error("Canvas2D.layer requires a layer name.");
     }
     if (typeof drawFn !== "function") {
-      throw new Error("Canvas2D.layer requer uma função de desenho.");
+      throw new Error("Canvas2D.layer requires a draw function.");
     }
     state.drawLayers.set(name, drawFn);
     queueMainCanvasRedraw();
@@ -1920,13 +1920,13 @@ function resizeInteractiveCanvas() {
 }
 
 const GEOMETRY_TOOL_BUTTONS = [
-  { tool: "select", label: "Selecionar" },
-  { tool: "point", label: "Ponto" },
-  { tool: "segment", label: "Segmento" },
-  { tool: "line", label: "Reta" },
-  { tool: "ray", label: "Semirreta" },
-  { tool: "circle", label: "Círculo" },
-  { tool: "midpoint", label: "Ponto médio" }
+  { tool: "select", label: "Select" },
+  { tool: "point", label: "Point" },
+  { tool: "segment", label: "Segment" },
+  { tool: "line", label: "Line" },
+  { tool: "ray", label: "Ray" },
+  { tool: "circle", label: "Circle" },
+  { tool: "midpoint", label: "Midpoint" }
 ];
 
 function setActiveGeometryTool(tool) {
@@ -1945,7 +1945,7 @@ function createGeometryToolbar() {
   const toolbar = document.createElement("div");
   toolbar.className = "geom-toolbar";
   toolbar.setAttribute("role", "toolbar");
-  toolbar.setAttribute("aria-label", "Ferramentas de construção");
+  toolbar.setAttribute("aria-label", "Construction tools");
 
   GEOMETRY_TOOL_BUTTONS.forEach(({ tool, label }) => {
     const button = document.createElement("button");
@@ -2124,7 +2124,7 @@ function stripSourceComments(text) {
 function parseVariableSource(text) {
   const match = VARIABLE_ASSIGNMENT_REGEX.exec(stripSourceComments(text));
   if (!match) {
-    throw new Error("A célula deve estar no formato @nome = expressão.");
+    throw new Error("Cell must be in the form @name = expression.");
   }
 
   const [, varName, source] = match;

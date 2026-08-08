@@ -2,7 +2,7 @@
 
 A GeoGebra-like interactive geometry tool where every construction is also visible, editable JavaScript. Click a tool and click on the canvas to build, like GeoGebra — but each click just writes a cell (`@m1 = Midpoint(@p1, @p2)`) into the editor, so the construction is never hidden behind the UI. Every object renders live on a canvas, free points are draggable, and dependent objects (midpoints, intersections, reflections, ...) recompute reactively — the same dependency-graph model [ObservableHQ](https://observablehq.com/) notebooks use, applied to geometric construction instead of general computation. No build step, no backend — open `index.html` and start building.
 
-The underlying reactive-cell engine (`@name = expression`, blocks, generators, `Inputs` widgets) is general-purpose plumbing in service of that goal, not a product surface of its own — see [Cell syntax](#cell-syntax) if you need it, but [Geometry](#geometry) is the point of the tool. Everything below is also documented in-app: click **Ajuda** in the toolbar (or press `F1`).
+The underlying reactive-cell engine (`@name = expression`, blocks, generators, `Inputs` widgets) is general-purpose plumbing in service of that goal, not a product surface of its own — see [Cell syntax](#cell-syntax) if you need it, but [Geometry](#geometry) is the point of the tool. Everything below is also documented in-app: click **Help** in the toolbar (or press `F1`).
 
 ## Running it
 
@@ -40,11 +40,11 @@ Any cell whose value is a point (`{x, y}`) or a tagged shape is drawn automatica
 
 ### Construction toolbar
 
-The strip of buttons above the canvas (Selecionar / Ponto / Segmento / Reta / Semirreta / Círculo / Ponto médio) builds cells by clicking instead of typing:
+The strip of buttons above the canvas (Select / Point / Segment / Line / Ray / Circle / Midpoint) builds cells by clicking instead of typing:
 
-- **Ponto** — click empty canvas to drop a `FreeHandle` there.
-- **Segmento / Reta / Semirreta / Círculo / Ponto médio** — click two existing points (draggable or computed) to construct between them. The first click highlights its point with a dashed ring; click it again to cancel, or click a second point to complete the construction.
-- **Selecionar** is the default tool — drag draggable points around, same as before the toolbar existed.
+- **Point** — click empty canvas to drop a `FreeHandle` there.
+- **Segment / Line / Ray / Circle / Midpoint** — click two existing points (draggable or computed) to construct between them. The first click highlights its point with a dashed ring; click it again to cancel, or click a second point to complete the construction.
+- **Select** is the default tool — drag draggable points around, same as before the toolbar existed.
 
 Every click just calls `varFromText` under the hood and loads the generated line into the editor, so what the toolbar builds is exactly the code from the sections below — nothing is hidden state.
 
