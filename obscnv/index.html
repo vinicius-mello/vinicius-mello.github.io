@@ -248,6 +248,12 @@
       max-width: calc(100% - 16px);
     }
 
+    .geom-zoom-toolbar {
+      left: auto;
+      right: 8px;
+      justify-content: flex-end;
+    }
+
     .geom-toolbar button {
       border: 1px solid rgba(96, 123, 171, 0.25);
       background: rgba(255, 255, 255, 0.88);
@@ -694,15 +700,22 @@
       </section>
 
       <section>
+        <h3>Coordinate system</h3>
+        <p>Every point value is a real Cartesian world coordinate (y grows upward), not a screen pixel — axes and a grid in round world units are drawn automatically. The mapping between world and screen is itself a reactive cell, <code>@viewport</code> (shaped <code>{center: {x, y}, scaleX, scaleY}</code>) — inspect it, edit it by hand, or drive it from the UI.</p>
+        <p>Panning and zooming only change what's visible; no point's stored <code>{x, y}</code> ever changes because of them. Since <code>scaleX</code> and <code>scaleY</code> can end up different, a world-space <code>Circle</code> can render as an ellipse — that's correct, the same as independent-axis zoom in Desmos.</p>
+      </section>
+
+      <section>
         <h3>Construction tools (click on the canvas)</h3>
         <table>
           <tbody>
             <tr><td><strong>Select</strong></td><td>Default tool: drag free points around</td></tr>
+            <tr><td><strong>Pan</strong></td><td>Drag the canvas to move the view (updates <code>@viewport.center</code>)</td></tr>
             <tr><td><strong>Point</strong></td><td>Click empty canvas to create a free point</td></tr>
             <tr><td><strong>Segment / Line / Ray / Circle / Midpoint</strong></td><td>Click an existing point (it gets marked with a dashed ring), then click a second point to complete the construction</td></tr>
           </tbody>
         </table>
-        <p>Every click just writes a normal cell and loads it into the editor — the construction is never hidden behind the UI.</p>
+        <p>Every click just writes a normal cell and loads it into the editor — the construction is never hidden behind the UI. The <strong>X −/X +</strong> and <strong>Y −/Y +</strong> buttons top-right of the canvas zoom each axis independently; <strong>Reset view</strong> restores the default.</p>
       </section>
 
       <section>
@@ -1131,6 +1144,41 @@ window.Rotate = Rotate;
 window.Perpendicular = Perpendicular;
 window.Parallel = Parallel;
 
+// --- World <-> screen transform -------------------------------------------
+//
+// Every point value produced by a cell (FreeHandle, Midpoint, Segment's
+// endpoints, ...) lives in world (Cartesian, y-up) units. Screen pixels only
+// exist at the boundary: drawing converts world -> screen, and pointer
+// input (drag, construction-tool clicks) converts screen -> world before a
+// number ever reaches a cell's source. The geometry math itself (Segment,
+// Midpoint, Intersection, ...) never touches this transform — it only ever
+// sees world coordinates.
+
+const DEFAULT_VIEWPORT = { center: { x: 0, y: 0 }, scaleX: 40, scaleY: 40 };
+const MIN_VIEWPORT_SCALE = 2;
+const MAX_VIEWPORT_SCALE = 4000;
+const VIEWPORT_ZOOM_FACTOR = 1.25;
+
+function worldToScreen(point) {
+  const { center, scaleX, scaleY } = interactiveCanvasState.viewport;
+  const width = interactiveCanvasState.width;
+  const height = interactiveCanvasState.height;
+  return {
+    x: width / 2 + (point.x - center.x) * scaleX,
+    y: height / 2 - (point.y - center.y) * scaleY
+  };
+}
+
+function screenToWorld(point) {
+  const { center, scaleX, scaleY } = interactiveCanvasState.viewport;
+  const width = interactiveCanvasState.width;
+  const height = interactiveCanvasState.height;
+  return {
+    x: center.x + (point.x - width / 2) / scaleX,
+    y: center.y - (point.y - height / 2) / scaleY
+  };
+}
+
 const interactiveCanvasState = {
   board: null,
   host: null,
@@ -1153,7 +1201,9 @@ const interactiveCanvasState = {
   resizeObserver: null,
   activeTool: "select",
   pendingPoint: null,
-  toolbarEl: null
+  toolbarEl: null,
+  viewport: { center: { ...DEFAULT_VIEWPORT.center }, scaleX: DEFAULT_VIEWPORT.scaleX, scaleY: DEFAULT_VIEWPORT.scaleY },
+  panState: null
 };
 
 function normalizeHandlePoint(value) {
@@ -1199,7 +1249,14 @@ function drawMainCanvasLayers() {
 
   drawLayers.forEach((drawFn, name) => {
     try {
-      drawFn(baseCtx, baseCanvas, { width, height, dpr: interactiveCanvasState.dpr });
+      drawFn(baseCtx, baseCanvas, {
+        width,
+        height,
+        dpr: interactiveCanvasState.dpr,
+        viewport: { ...interactiveCanvasState.viewport, center: { ...interactiveCanvasState.viewport.center } },
+        worldToScreen,
+        screenToWorld
+      });
     } catch (error) {
       console.error(`Canvas2D layer '${name}' failed:`, error);
     }
@@ -1250,18 +1307,22 @@ function clipLineToBounds(p1, p2, width, height, fromOrigin) {
 }
 
 function drawGeometryShapes(ctx, width, height) {
+  const { scaleX, scaleY } = interactiveCanvasState.viewport;
+
   interactiveCanvasState.geomShapes.forEach(shape => {
     const options = shape.options || {};
     ctx.strokeStyle = options.color || "#2f6f8f";
     ctx.lineWidth = Number.isFinite(Number(options.lineWidth)) ? Number(options.lineWidth) : 2;
 
     if (shape.kind === "segment" && shape.p1 && shape.p2) {
+      const a = worldToScreen(shape.p1);
+      const b = worldToScreen(shape.p2);
       ctx.beginPath();
-      ctx.moveTo(shape.p1.x, shape.p1.y);
-      ctx.lineTo(shape.p2.x, shape.p2.y);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
       ctx.stroke();
     } else if (shape.kind === "line" && shape.p1 && shape.p2) {
-      const clipped = clipLineToBounds(shape.p1, shape.p2, width, height, false);
+      const clipped = clipLineToBounds(worldToScreen(shape.p1), worldToScreen(shape.p2), width, height, false);
       if (clipped) {
         ctx.beginPath();
         ctx.moveTo(clipped.a.x, clipped.a.y);
@@ -1269,7 +1330,7 @@ function drawGeometryShapes(ctx, width, height) {
         ctx.stroke();
       }
     } else if (shape.kind === "ray" && shape.p1 && shape.p2) {
-      const clipped = clipLineToBounds(shape.p1, shape.p2, width, height, true);
+      const clipped = clipLineToBounds(worldToScreen(shape.p1), worldToScreen(shape.p2), width, height, true);
       if (clipped) {
         ctx.beginPath();
         ctx.moveTo(clipped.a.x, clipped.a.y);
@@ -1277,8 +1338,14 @@ function drawGeometryShapes(ctx, width, height) {
         ctx.stroke();
       }
     } else if (shape.kind === "circle" && shape.center && Number.isFinite(shape.radius)) {
+      // Independent X/Y zoom means a world-space circle is an ellipse on
+      // screen whenever scaleX != scaleY — this is the correct rendering,
+      // not an approximation (same as Desmos-style independent axis zoom).
+      const c = worldToScreen(shape.center);
+      const rx = Math.max(0, shape.radius * scaleX);
+      const ry = Math.max(0, shape.radius * scaleY);
       ctx.beginPath();
-      ctx.arc(shape.center.x, shape.center.y, Math.max(0, shape.radius), 0, Math.PI * 2);
+      ctx.ellipse(c.x, c.y, rx, ry, 0, 0, Math.PI * 2);
       if (options.fill) {
         ctx.fillStyle = options.fill;
         ctx.fill();
@@ -1287,8 +1354,9 @@ function drawGeometryShapes(ctx, width, height) {
     } else if (shape.kind === "polygon" && Array.isArray(shape.points) && shape.points.length >= 2) {
       const pts = shape.points;
       if (pts.every(p => p)) {
+        const screenPts = pts.map(worldToScreen);
         ctx.beginPath();
-        pts.forEach((p, i) => {
+        screenPts.forEach((p, i) => {
           if (i === 0) {
             ctx.moveTo(p.x, p.y);
           } else {
@@ -1451,6 +1519,103 @@ function installCanvasGlobals() {
   };
 }
 
+// Picks a "nice" world-space grid step (1/2/5 x 10^n) so grid lines land on
+// round numbers while staying close to targetPx apart on screen.
+function niceGridStep(scale, targetPx) {
+  const rawWorldStep = targetPx / scale;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawWorldStep)));
+  const residual = rawWorldStep / magnitude;
+  let niceResidual;
+  if (residual > 5) {
+    niceResidual = 10;
+  } else if (residual > 2) {
+    niceResidual = 5;
+  } else if (residual > 1) {
+    niceResidual = 2;
+  } else {
+    niceResidual = 1;
+  }
+  return niceResidual * magnitude;
+}
+
+function formatGridLabel(value) {
+  return String(Math.round(value * 1e6) / 1e6);
+}
+
+function drawCartesianGrid(ctx, width, height) {
+  const stepX = niceGridStep(interactiveCanvasState.viewport.scaleX, 60);
+  const stepY = niceGridStep(interactiveCanvasState.viewport.scaleY, 60);
+  const topLeftWorld = screenToWorld({ x: 0, y: 0 });
+  const bottomRightWorld = screenToWorld({ x: width, y: height });
+  const minX = Math.min(topLeftWorld.x, bottomRightWorld.x);
+  const maxX = Math.max(topLeftWorld.x, bottomRightWorld.x);
+  const minY = Math.min(topLeftWorld.y, bottomRightWorld.y);
+  const maxY = Math.max(topLeftWorld.y, bottomRightWorld.y);
+
+  ctx.strokeStyle = "rgba(84, 112, 166, 0.18)";
+  ctx.lineWidth = 1;
+  for (let x = Math.ceil(minX / stepX) * stepX; x <= maxX; x += stepX) {
+    const sx = Math.round(worldToScreen({ x, y: 0 }).x) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, height);
+    ctx.stroke();
+  }
+  for (let y = Math.ceil(minY / stepY) * stepY; y <= maxY; y += stepY) {
+    const sy = Math.round(worldToScreen({ x: 0, y }).y) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(width, sy);
+    ctx.stroke();
+  }
+
+  const origin = worldToScreen({ x: 0, y: 0 });
+  const xAxisVisible = origin.y >= 0 && origin.y <= height;
+  const yAxisVisible = origin.x >= 0 && origin.x <= width;
+
+  ctx.strokeStyle = "rgba(31, 75, 117, 0.55)";
+  ctx.lineWidth = 1.5;
+  if (yAxisVisible) {
+    const sx = Math.round(origin.x) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, height);
+    ctx.stroke();
+  }
+  if (xAxisVisible) {
+    const sy = Math.round(origin.y) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(width, sy);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#4a6079";
+  ctx.font = "10px Aptos, Segoe UI, sans-serif";
+  if (xAxisVisible) {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    const labelY = clamp(origin.y + 4, 0, height - 12);
+    for (let x = Math.ceil(minX / stepX) * stepX; x <= maxX; x += stepX) {
+      if (Math.abs(x) < stepX / 1000) {
+        continue;
+      }
+      ctx.fillText(formatGridLabel(x), worldToScreen({ x, y: 0 }).x, labelY);
+    }
+  }
+  if (yAxisVisible) {
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const labelX = clamp(origin.x + 4, 0, width - 24);
+    for (let y = Math.ceil(minY / stepY) * stepY; y <= maxY; y += stepY) {
+      if (Math.abs(y) < stepY / 1000) {
+        continue;
+      }
+      ctx.fillText(formatGridLabel(y), labelX, worldToScreen({ x: 0, y }).y);
+    }
+  }
+}
+
 function drawInteractiveCanvas() {
   const { ctx, width, height, handles, computedPoints, activeHandle, pendingPoint } = interactiveCanvasState;
   if (!ctx || width <= 0 || height <= 0) {
@@ -1458,29 +1623,15 @@ function drawInteractiveCanvas() {
   }
 
   ctx.clearRect(0, 0, width, height);
-
-  ctx.strokeStyle = "rgba(84, 112, 166, 0.18)";
-  ctx.lineWidth = 1;
-  const step = 24;
-  for (let x = step; x < width; x += step) {
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, height);
-    ctx.stroke();
-  }
-  for (let y = step; y < height; y += step) {
-    ctx.beginPath();
-    ctx.moveTo(0, y + 0.5);
-    ctx.lineTo(width, y + 0.5);
-    ctx.stroke();
-  }
+  drawCartesianGrid(ctx, width, height);
 
   // Computed points (Midpoint, Intersection, Reflect, ...) render like
   // handles but smaller and undraggable — they're not free, so they can't
   // be picked up (see pickInteractiveHandle, which only looks at `handles`).
   computedPoints.forEach(point => {
+    const screen = worldToScreen({ x: point.worldX, y: point.worldY });
     ctx.beginPath();
-    ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, 5, 0, Math.PI * 2);
     ctx.fillStyle = "#6b7d99";
     ctx.fill();
     ctx.strokeStyle = "#ffffff";
@@ -1491,19 +1642,20 @@ function drawInteractiveCanvas() {
     ctx.font = "12px Aptos, Segoe UI, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(point.varName, point.x + 5 + 6, point.y);
+    ctx.fillText(point.varName, screen.x + 5 + 6, screen.y);
   });
 
   handles.forEach(handle => {
     const isActive = activeHandle && activeHandle.varName === handle.varName;
+    const screen = worldToScreen({ x: handle.worldX, y: handle.worldY });
 
     ctx.beginPath();
-    ctx.arc(handle.x, handle.y, handle.radius + (isActive ? 3 : 0), 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, handle.radius + (isActive ? 3 : 0), 0, Math.PI * 2);
     ctx.fillStyle = isActive ? "rgba(15, 139, 141, 0.30)" : "rgba(22, 50, 79, 0.14)";
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(handle.x, handle.y, handle.radius, 0, Math.PI * 2);
+    ctx.arc(screen.x, screen.y, handle.radius, 0, Math.PI * 2);
     ctx.fillStyle = isActive ? "#0f8b8d" : "#1f4b75";
     ctx.fill();
 
@@ -1511,7 +1663,7 @@ function drawInteractiveCanvas() {
     ctx.font = "12px Aptos, Segoe UI, sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(handle.varName, handle.x + handle.radius + 6, handle.y);
+    ctx.fillText(handle.varName, screen.x + handle.radius + 6, screen.y);
   });
 
   // Highlight the first point picked for a two-point construction tool
@@ -1519,8 +1671,9 @@ function drawInteractiveCanvas() {
   if (pendingPoint) {
     const target = handles.get(pendingPoint) || computedPoints.get(pendingPoint);
     if (target) {
+      const screen = worldToScreen({ x: target.worldX, y: target.worldY });
       ctx.beginPath();
-      ctx.arc(target.x, target.y, (target.radius || 5) + 5, 0, Math.PI * 2);
+      ctx.arc(screen.x, screen.y, (target.radius || 5) + 5, 0, Math.PI * 2);
       ctx.strokeStyle = "#e4572e";
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 3]);
@@ -1541,14 +1694,18 @@ function interactiveCanvasPoint(event) {
   return { x, y };
 }
 
-function pickInteractiveHandle(point) {
+// Hit-testing happens in screen space (a fixed pixel radius should feel the
+// same regardless of zoom), even though handles/computed points are stored
+// in world units — each candidate is converted to screen space on the fly.
+function pickInteractiveHandle(screenPoint) {
   const handles = Array.from(interactiveCanvasState.handles.values()).reverse();
   for (const handle of handles) {
-    const dx = point.x - handle.x;
-    const dy = point.y - handle.y;
+    const screen = worldToScreen({ x: handle.worldX, y: handle.worldY });
+    const dx = screenPoint.x - screen.x;
+    const dy = screenPoint.y - screen.y;
     const radius = handle.radius + 4;
     if (dx * dx + dy * dy <= radius * radius) {
-      return handle;
+      return { ...handle, screenX: screen.x, screenY: screen.y };
     }
   }
   return null;
@@ -1557,18 +1714,19 @@ function pickInteractiveHandle(point) {
 // Like pickInteractiveHandle, but also matches read-only computed points —
 // used by the construction tools, which can reference any visible point,
 // not just draggable ones (e.g. Segment(@midpoint, @p3)).
-function pickAnyPoint(point) {
-  const handle = pickInteractiveHandle(point);
+function pickAnyPoint(screenPoint) {
+  const handle = pickInteractiveHandle(screenPoint);
   if (handle) {
-    return { varName: handle.varName, x: handle.x, y: handle.y };
+    return { varName: handle.varName, x: handle.screenX, y: handle.screenY };
   }
   const computed = Array.from(interactiveCanvasState.computedPoints.values()).reverse();
   for (const p of computed) {
-    const dx = point.x - p.x;
-    const dy = point.y - p.y;
+    const screen = worldToScreen({ x: p.worldX, y: p.worldY });
+    const dx = screenPoint.x - screen.x;
+    const dy = screenPoint.y - screen.y;
     const radius = 5 + 4;
     if (dx * dx + dy * dy <= radius * radius) {
-      return { varName: p.varName, x: p.x, y: p.y };
+      return { varName: p.varName, x: screen.x, y: screen.y };
     }
   }
   return null;
@@ -1581,26 +1739,22 @@ function syncHandleFromValue(varName, value) {
     return;
   }
 
-  const width = Math.max(1, interactiveCanvasState.width);
-  const height = Math.max(1, interactiveCanvasState.height);
-  const x = clamp(Math.round(point.x), 0, width);
-  const y = clamp(Math.round(point.y), 0, height);
   const meta = point.meta || { kind: "free" };
   const kind = meta.kind || "free";
   const draggable = kind !== "fixed";
   const existing = interactiveCanvasState.handles.get(varName);
 
   if (existing) {
-    existing.x = x;
-    existing.y = y;
+    existing.worldX = point.x;
+    existing.worldY = point.y;
     existing.kind = kind;
     existing.draggable = draggable;
     existing.meta = meta;
   } else {
     interactiveCanvasState.handles.set(varName, {
       varName,
-      x,
-      y,
+      worldX: point.x,
+      worldY: point.y,
       radius: 8,
       kind,
       draggable,
@@ -1620,7 +1774,7 @@ function unregisterHandle(varName) {
 }
 
 function registerComputedPoint(varName, point) {
-  interactiveCanvasState.computedPoints.set(varName, { varName, x: point.x, y: point.y });
+  interactiveCanvasState.computedPoints.set(varName, { varName, worldX: point.x, worldY: point.y });
   queueInteractiveRedraw();
 }
 
@@ -1653,7 +1807,32 @@ function clearGeometryForVariable(varName) {
 // Handles keep their existing drag-rewrite behavior (syncHandleFromValue);
 // everything else that looks like a point or a tagged shape is drawn
 // read-only, the same way GeoGebra draws dependent objects.
+// @viewport is a reserved cell name (see ensureViewportCell): its value
+// controls pan/zoom instead of being rendered as geometry, so hand-editing
+// it in the editor works exactly like dragging the Pan tool or clicking a
+// zoom button.
+function syncViewportFromValue(value) {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  const center = toFinitePointLike(value.center) || interactiveCanvasState.viewport.center;
+  const scaleX = Number.isFinite(Number(value.scaleX)) && Number(value.scaleX) > 0
+    ? clamp(Number(value.scaleX), MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE)
+    : interactiveCanvasState.viewport.scaleX;
+  const scaleY = Number.isFinite(Number(value.scaleY)) && Number(value.scaleY) > 0
+    ? clamp(Number(value.scaleY), MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE)
+    : interactiveCanvasState.viewport.scaleY;
+  interactiveCanvasState.viewport = { center, scaleX, scaleY };
+  queueMainCanvasRedraw();
+  queueInteractiveRedraw();
+}
+
 function syncGeometryFromValue(varName, value) {
+  if (varName === "@viewport") {
+    syncViewportFromValue(value);
+    return;
+  }
+
   if (interactiveCanvasState.handleSpecs.has(varName)) {
     syncHandleFromValue(varName, value);
     return;
@@ -1695,8 +1874,7 @@ function formatHandleNumber(value) {
   if (!Number.isFinite(value)) {
     return "0";
   }
-  const rounded = Number(value.toFixed(6));
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  return String(Number(value.toFixed(4)));
 }
 
 function projectTOnLine(point, h1, h2) {
@@ -1728,6 +1906,54 @@ function redefineHandleVariable(varName, source) {
   if (variable[varName] !== undefined) {
     variable[varName].define(varName, deps, fn);
   }
+}
+
+// Same "rewrite the cell's own source" pattern as redefineHandleVariable,
+// applied to the single reserved @viewport cell so panning/zooming stays
+// genuinely reactive (and autosaves/exports) instead of being invisible
+// app-only state.
+function redefineViewportCell(center, scaleX, scaleY) {
+  const clampedScaleX = clamp(scaleX, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE);
+  const clampedScaleY = clamp(scaleY, MIN_VIEWPORT_SCALE, MAX_VIEWPORT_SCALE);
+  const nextViewport = {
+    center: { x: formatWorldNumber(center.x), y: formatWorldNumber(center.y) },
+    scaleX: Math.round(clampedScaleX * 100) / 100,
+    scaleY: Math.round(clampedScaleY * 100) / 100
+  };
+  interactiveCanvasState.viewport = nextViewport;
+
+  // Parenthesized: a bare leading "{" would make the parser treat this as
+  // a block cell (@name = { ...js... }) instead of an object expression —
+  // the same reason object-literal arrow function bodies need () => ({...}).
+  const source = `(${JSON.stringify(nextViewport)})`;
+  variableText["@viewport"] = `@viewport = ${source}`;
+  variableDeps["@viewport"] = [];
+  if (variable["@viewport"] !== undefined) {
+    variable["@viewport"].define("@viewport", [], () => nextViewport);
+  }
+  queueMainCanvasRedraw();
+  queueInteractiveRedraw();
+}
+
+function ensureViewportCell() {
+  if (variableText["@viewport"] !== undefined) {
+    return;
+  }
+  const { center, scaleX, scaleY } = interactiveCanvasState.viewport;
+  varFromText(module, `@viewport = (${JSON.stringify({ center, scaleX, scaleY })})`);
+}
+
+function zoomViewport(axis, factor) {
+  const vp = interactiveCanvasState.viewport;
+  const scaleX = axis === "x" ? vp.scaleX * factor : vp.scaleX;
+  const scaleY = axis === "y" ? vp.scaleY * factor : vp.scaleY;
+  redefineViewportCell(vp.center, scaleX, scaleY);
+  persistProgram();
+}
+
+function resetViewport() {
+  redefineViewportCell({ ...DEFAULT_VIEWPORT.center }, DEFAULT_VIEWPORT.scaleX, DEFAULT_VIEWPORT.scaleY);
+  persistProgram();
 }
 
 function applyHandleDragValue(handle, point) {
@@ -1792,6 +2018,14 @@ function nextAvailableVarName(prefix) {
   return "@" + prefix + n;
 }
 
+// Rounds a world coordinate for display in generated cell source. World
+// units are typically small (a handful of units across the visible canvas
+// at the default zoom), so a few decimals is plenty — unlike pixel coords,
+// which used Math.round to whole numbers.
+function formatWorldNumber(value) {
+  return Math.round(value * 1e4) / 1e4;
+}
+
 function onInteractivePointerDown(event) {
   const point = interactiveCanvasPoint(event);
   if (!point) {
@@ -1800,9 +2034,22 @@ function onInteractivePointerDown(event) {
 
   const tool = interactiveCanvasState.activeTool;
 
+  if (tool === "pan") {
+    interactiveCanvasState.panState = {
+      startScreen: point,
+      startCenter: { ...interactiveCanvasState.viewport.center }
+    };
+    if (interactiveCanvasState.canvas && typeof interactiveCanvasState.canvas.setPointerCapture === "function") {
+      interactiveCanvasState.canvas.setPointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+    return;
+  }
+
   if (tool === "point") {
+    const worldPoint = screenToWorld(point);
     const varName = nextAvailableVarName("p");
-    createCellFromSource(`${varName} = FreeHandle(${Math.round(point.x)}, ${Math.round(point.y)})`);
+    createCellFromSource(`${varName} = FreeHandle(${formatWorldNumber(worldPoint.x)}, ${formatWorldNumber(worldPoint.y)})`);
     event.preventDefault();
     return;
   }
@@ -1842,7 +2089,7 @@ function onInteractivePointerDown(event) {
     return;
   }
 
-  interactiveCanvasState.activeHandle = handle;
+  interactiveCanvasState.activeHandle = { ...handle, lastScreenX: point.x, lastScreenY: point.y };
   if (interactiveCanvasState.canvas && typeof interactiveCanvasState.canvas.setPointerCapture === "function") {
     interactiveCanvasState.canvas.setPointerCapture(event.pointerId);
   }
@@ -1851,6 +2098,22 @@ function onInteractivePointerDown(event) {
 }
 
 function onInteractivePointerMove(event) {
+  if (interactiveCanvasState.panState) {
+    const point = interactiveCanvasPoint(event);
+    if (!point) {
+      return;
+    }
+    const { startScreen, startCenter } = interactiveCanvasState.panState;
+    const { scaleX, scaleY } = interactiveCanvasState.viewport;
+    const newCenter = {
+      x: startCenter.x - (point.x - startScreen.x) / scaleX,
+      y: startCenter.y + (point.y - startScreen.y) / scaleY
+    };
+    redefineViewportCell(newCenter, scaleX, scaleY);
+    event.preventDefault();
+    return;
+  }
+
   const activeHandle = interactiveCanvasState.activeHandle;
   if (!activeHandle) {
     return;
@@ -1863,20 +2126,28 @@ function onInteractivePointerMove(event) {
 
   const nextX = Math.round(point.x);
   const nextY = Math.round(point.y);
-  if (nextX === activeHandle.x && nextY === activeHandle.y) {
+  if (nextX === activeHandle.lastScreenX && nextY === activeHandle.lastScreenY) {
     return;
   }
+  activeHandle.lastScreenX = nextX;
+  activeHandle.lastScreenY = nextY;
 
-  applyHandleDragValue(activeHandle, { x: nextX, y: nextY });
+  applyHandleDragValue(activeHandle, screenToWorld({ x: nextX, y: nextY }));
   queueInteractiveRedraw();
   event.preventDefault();
 }
 
 function onInteractivePointerUp() {
+  if (interactiveCanvasState.panState) {
+    interactiveCanvasState.panState = null;
+    persistProgram();
+    return;
+  }
   if (!interactiveCanvasState.activeHandle) {
     return;
   }
   interactiveCanvasState.activeHandle = null;
+  persistProgram();
   queueInteractiveRedraw();
 }
 
@@ -1910,17 +2181,17 @@ function resizeInteractiveCanvas() {
   canvas.style.height = `${height}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  interactiveCanvasState.handles.forEach(handle => {
-    handle.x = clamp(handle.x, 0, width);
-    handle.y = clamp(handle.y, 0, height);
-  });
-
+  // Handles are stored in world units, which are resolution-independent —
+  // resizing the canvas only changes how much of the world is visible, it
+  // never needs to move a point (unlike the old pixel-space storage, where
+  // resizing silently clamped points into the new bounds).
   queueMainCanvasRedraw();
   queueInteractiveRedraw();
 }
 
 const GEOMETRY_TOOL_BUTTONS = [
   { tool: "select", label: "Select" },
+  { tool: "pan", label: "Pan" },
   { tool: "point", label: "Point" },
   { tool: "segment", label: "Segment" },
   { tool: "line", label: "Line" },
@@ -1961,6 +2232,31 @@ function createGeometryToolbar() {
   return toolbar;
 }
 
+const ZOOM_BUTTONS = [
+  { label: "X −", onClick: () => zoomViewport("x", 1 / VIEWPORT_ZOOM_FACTOR) },
+  { label: "X +", onClick: () => zoomViewport("x", VIEWPORT_ZOOM_FACTOR) },
+  { label: "Y −", onClick: () => zoomViewport("y", 1 / VIEWPORT_ZOOM_FACTOR) },
+  { label: "Y +", onClick: () => zoomViewport("y", VIEWPORT_ZOOM_FACTOR) },
+  { label: "Reset view", onClick: () => resetViewport() }
+];
+
+function createZoomToolbar() {
+  const toolbar = document.createElement("div");
+  toolbar.className = "geom-toolbar geom-zoom-toolbar";
+  toolbar.setAttribute("role", "toolbar");
+  toolbar.setAttribute("aria-label", "Zoom controls");
+
+  ZOOM_BUTTONS.forEach(({ label, onClick }) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", onClick);
+    toolbar.appendChild(button);
+  });
+
+  return toolbar;
+}
+
 function initInteractiveCanvas() {
   if (interactiveCanvasState.canvas) {
     return;
@@ -1980,6 +2276,7 @@ function initInteractiveCanvas() {
   host.appendChild(baseCanvas);
   host.appendChild(overlayCanvas);
   host.appendChild(createGeometryToolbar());
+  host.appendChild(createZoomToolbar());
   board.appendChild(host);
 
   interactiveCanvasState.board = board;
@@ -2429,6 +2726,8 @@ function resetReactiveState() {
   interactiveCanvasState.computedPoints.clear();
   interactiveCanvasState.handleSpecs.clear();
   interactiveCanvasState.activeHandle = null;
+  interactiveCanvasState.panState = null;
+  interactiveCanvasState.viewport = { center: { ...DEFAULT_VIEWPORT.center }, scaleX: DEFAULT_VIEWPORT.scaleX, scaleY: DEFAULT_VIEWPORT.scaleY };
   queueInteractiveRedraw();
   $("#vars").empty();
 }
@@ -2478,6 +2777,7 @@ function loadProgram(programCells) {
 function loadProgramFromSerializedText(serializedText) {
   createRuntimeModule();
   resetReactiveState();
+  ensureViewportCell();
   loadProgram(eval("(" + serializedText + ")"));
   persistProgram();
 }
@@ -2766,6 +3066,7 @@ function initializeApp() {
   });
 
   initInteractiveCanvas();
+  ensureViewportCell();
   if (!loadAutosavedProgram()) {
     loadProgram(["@a = 100", "@b = valueof Inputs.range([0,100],{step:1})"]);
   }

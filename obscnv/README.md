@@ -38,13 +38,25 @@ Any cell whose value is a point (`{x, y}`) or a tagged shape is drawn automatica
 - **Free/constrained points** (`FreeHandle`, `FixedHandle`, `SegmentHandle`, `LineHandle`, `CircleHandle`) are draggable; dragging rewrites the cell's source in place.
 - **Computed points** (anything else that evaluates to `{x, y}` — `Midpoint`, `Intersection`, `Reflect`, `Rotate`, or your own expressions) render the same way but read-only, exactly like GeoGebra's dependent objects: they follow their inputs, you don't drag them directly.
 
+### Coordinate system
+
+Every point value is a **world coordinate** in a real Cartesian plane (y grows upward), not a screen pixel. Screen pixels only exist at the boundary — drawing and pointer input convert through the transform, cell values never do. Axes and a grid (in round world units, not fixed pixels) are drawn automatically.
+
+The mapping between world and screen is itself a reactive cell, `@viewport`, shaped `{center: {x, y}, scaleX, scaleY}` (`scaleX`/`scaleY` are pixels per world unit). It behaves like any other cell — inspect it, edit it by hand, or drive it from the UI:
+
+- **Pan** tool — drag the canvas to move `@viewport.center`.
+- **Zoom controls** (top-right of the canvas) — `X −`/`X +` and `Y −`/`Y +` scale `scaleX`/`scaleY` independently, `Reset view` restores the default. Because the two axes can end up at different scales, a world-space `Circle` can render as a visual ellipse — that's correct, not a bug, the same as independent-axis zoom in Desmos.
+
+Panning and zooming never change any point's stored `{x, y}` — only what's currently visible. Resizing the browser window behaves the same way (world coordinates are resolution-independent).
+
 ### Construction toolbar
 
-The strip of buttons above the canvas (Select / Point / Segment / Line / Ray / Circle / Midpoint) builds cells by clicking instead of typing:
+The strip of buttons above the canvas (Select / Pan / Point / Segment / Line / Ray / Circle / Midpoint) builds cells by clicking instead of typing:
 
-- **Point** — click empty canvas to drop a `FreeHandle` there.
+- **Point** — click empty canvas to drop a `FreeHandle` there, in world coordinates.
 - **Segment / Line / Ray / Circle / Midpoint** — click two existing points (draggable or computed) to construct between them. The first click highlights its point with a dashed ring; click it again to cancel, or click a second point to complete the construction.
 - **Select** is the default tool — drag draggable points around, same as before the toolbar existed.
+- **Pan** moves the viewport — see [Coordinate system](#coordinate-system).
 
 Every click just calls `varFromText` under the hood and loads the generated line into the editor, so what the toolbar builds is exactly the code from the sections below — nothing is hidden state.
 
@@ -57,8 +69,8 @@ Every click just calls `varFromText` under the hood and loads the generated line
 - `CircleHandle(center, boundary, angle)` — constrained to the circle defined by a center and a boundary point
 
 ```js
-@p1 = FreeHandle(100, 100)
-@p2 = FreeHandle(300, 200)
+@p1 = FreeHandle(-2, 1)
+@p2 = FreeHandle(3, 2)
 @mid = SegmentHandle(@p1, @p2, 0.5)
 ```
 
@@ -88,18 +100,18 @@ Derived from existing points/shapes; points among these (`Midpoint`, `Reflect`, 
 
 ```js
 @a = FreeHandle(0, 0)
-@b = FreeHandle(200, 0)
+@b = FreeHandle(5, 0)
 @mid = Midpoint(@a, @b)
 @perp = Perpendicular(@mid, Line(@a, @b))
 ```
 
 For anything else, use the global `Canvas2D` API from any cell:
 
-- `Canvas2D.layer(name, (ctx, canvas, {width, height, dpr}) => {...})` — register a draw layer
+- `Canvas2D.layer(name, (ctx, canvas, {width, height, dpr, viewport, worldToScreen, screenToWorld}) => {...})` — register a draw layer. `ctx` is raw pixel space; use `worldToScreen`/`screenToWorld` if you want your custom drawing to follow pan/zoom like the built-in shapes do.
 - `Canvas2D.removeLayer(name)` / `Canvas2D.clearLayers()`
 - `Canvas2D.setClearMode('auto' | 'manual')`, `Canvas2D.clear()`, `Canvas2D.render()`
 
-`Canvas2DPresets` provides ready-made layers (`grid`, `segment`, `point`, `label`). The raw canvas and context are also available as `canvas` / `ctx`.
+`Canvas2DPresets` provides ready-made layers (`grid`, `segment`, `point`, `label`) in raw pixel space, independent of the world coordinate system above. The raw canvas and context are also available as `canvas` / `ctx`.
 
 ## Saving your work
 
@@ -117,5 +129,7 @@ The notebook autosaves to `localStorage` after every successful update, so reloa
 - The construction toolbar only covers Point/Segment/Line/Ray/Circle/Midpoint; there's no way yet to set an object's color/style or a custom label from the UI (edit the generated cell's `options` argument by hand for now).
 - `Intersection` only handles line/segment/ray pairs; circle intersections aren't implemented.
 - `Angle` returns a number; there's no visual angle-arc marker yet.
+- Zoom always zooms toward the current view center, not toward the cursor.
+- `@viewport` is a normal cell and shows up in the Variables list like any other; there's no dedicated, collapsed-by-default UI for it yet.
 - `modules/inputs/style.css` is the package's un-namespaced source file (`__ns__` placeholders are meant to be replaced by a build step) and isn't wired up, so `Inputs` widgets render with browser-default styling rather than Observable's.
 - No automated tests.
