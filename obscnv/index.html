@@ -694,6 +694,195 @@ window.SegmentHandle = SegmentHandle;
 window.LineHandle = LineHandle;
 window.CircleHandle = CircleHandle;
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+// --- Geometric shapes and constructions -----------------------------------
+//
+// Shapes (Segment/Line/Ray/Circle/Polygon) are plain objects tagged with a
+// non-enumerable __geomKind so the canvas can recognize and auto-draw them.
+// Constructions (Midpoint, Distance, Angle, Intersection, Reflect, Rotate,
+// Perpendicular, Parallel) return either a number or a plain {x,y} point —
+// points need no tagging, since any {x,y}-shaped cell value is auto-drawn
+// (see syncGeometryFromValue). Unlike Handles, none of this is draggable:
+// it mirrors GeoGebra, where only free points and points-on-object move.
+
+function attachGeomKind(obj, kind) {
+  Object.defineProperty(obj, "__geomKind", {
+    value: kind,
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+  return obj;
+}
+
+function geometryShapeKind(value) {
+  return value && typeof value === "object" ? value.__geomKind || null : null;
+}
+
+function Segment(p1, p2, options = {}) {
+  return attachGeomKind({ p1: toFinitePointLike(p1), p2: toFinitePointLike(p2), options }, "segment");
+}
+
+function Line(p1, p2, options = {}) {
+  return attachGeomKind({ p1: toFinitePointLike(p1), p2: toFinitePointLike(p2), options }, "line");
+}
+
+function Ray(p1, p2, options = {}) {
+  return attachGeomKind({ p1: toFinitePointLike(p1), p2: toFinitePointLike(p2), options }, "ray");
+}
+
+function Circle(center, boundaryOrRadius, options = {}) {
+  const c = toFinitePointLike(center);
+  let radius = NaN;
+  if (typeof boundaryOrRadius === "number") {
+    radius = boundaryOrRadius;
+  } else {
+    const boundary = toFinitePointLike(boundaryOrRadius);
+    if (c && boundary) {
+      radius = Math.hypot(boundary.x - c.x, boundary.y - c.y);
+    }
+  }
+  return attachGeomKind({ center: c, radius, options }, "circle");
+}
+
+function Polygon(points, options = {}) {
+  const pts = Array.isArray(points) ? points.map(toFinitePointLike) : [];
+  return attachGeomKind({ points: pts, options }, "polygon");
+}
+
+function Midpoint(p1, p2) {
+  const a = toFinitePointLike(p1);
+  const b = toFinitePointLike(p2);
+  if (!a || !b) {
+    return { x: NaN, y: NaN };
+  }
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function Distance(p1, p2) {
+  const a = toFinitePointLike(p1);
+  const b = toFinitePointLike(p2);
+  if (!a || !b) {
+    return NaN;
+  }
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function Angle(p1, vertex, p2) {
+  const a = toFinitePointLike(p1);
+  const v = toFinitePointLike(vertex);
+  const b = toFinitePointLike(p2);
+  if (!a || !v || !b) {
+    return NaN;
+  }
+  const v1 = { x: a.x - v.x, y: a.y - v.y };
+  const v2 = { x: b.x - v.x, y: b.y - v.y };
+  const mag = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y);
+  if (mag === 0) {
+    return NaN;
+  }
+  const dot = v1.x * v2.x + v1.y * v2.y;
+  return Math.acos(clamp(dot / mag, -1, 1)) * 180 / Math.PI;
+}
+
+function lineLikeEndpoints(obj) {
+  const p1 = obj && toFinitePointLike(obj.p1);
+  const p2 = obj && toFinitePointLike(obj.p2);
+  return p1 && p2 ? { p1, p2 } : null;
+}
+
+// v1 only handles line/segment/ray vs. line/segment/ray intersections.
+// Circle intersections are a natural follow-up, deliberately left out here.
+function Intersection(obj1, obj2) {
+  const a = lineLikeEndpoints(obj1);
+  const b = lineLikeEndpoints(obj2);
+  if (!a || !b) {
+    return { x: NaN, y: NaN };
+  }
+  const d1x = a.p2.x - a.p1.x;
+  const d1y = a.p2.y - a.p1.y;
+  const d2x = b.p2.x - b.p1.x;
+  const d2y = b.p2.y - b.p1.y;
+  const denom = d1x * d2y - d1y * d2x;
+  if (Math.abs(denom) < 1e-9) {
+    return { x: NaN, y: NaN };
+  }
+  const t = ((b.p1.x - a.p1.x) * d2y - (b.p1.y - a.p1.y) * d2x) / denom;
+  return { x: a.p1.x + t * d1x, y: a.p1.y + t * d1y };
+}
+
+function Reflect(point, line) {
+  const p = toFinitePointLike(point);
+  const ends = lineLikeEndpoints(line);
+  if (!p || !ends) {
+    return { x: NaN, y: NaN };
+  }
+  const dx = ends.p2.x - ends.p1.x;
+  const dy = ends.p2.y - ends.p1.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) {
+    return { x: NaN, y: NaN };
+  }
+  const t = ((p.x - ends.p1.x) * dx + (p.y - ends.p1.y) * dy) / lenSq;
+  const projX = ends.p1.x + t * dx;
+  const projY = ends.p1.y + t * dy;
+  return { x: 2 * projX - p.x, y: 2 * projY - p.y };
+}
+
+function Rotate(point, center, angleDeg) {
+  const p = toFinitePointLike(point);
+  const c = toFinitePointLike(center);
+  const theta = Number(angleDeg) * Math.PI / 180;
+  if (!p || !c || !Number.isFinite(theta)) {
+    return { x: NaN, y: NaN };
+  }
+  const dx = p.x - c.x;
+  const dy = p.y - c.y;
+  return {
+    x: c.x + dx * Math.cos(theta) - dy * Math.sin(theta),
+    y: c.y + dx * Math.sin(theta) + dy * Math.cos(theta)
+  };
+}
+
+function Perpendicular(point, line) {
+  const p = toFinitePointLike(point);
+  const ends = lineLikeEndpoints(line);
+  if (!p || !ends) {
+    return Line({ x: NaN, y: NaN }, { x: NaN, y: NaN });
+  }
+  const dx = ends.p2.x - ends.p1.x;
+  const dy = ends.p2.y - ends.p1.y;
+  return Line(p, { x: p.x - dy, y: p.y + dx });
+}
+
+function Parallel(point, line) {
+  const p = toFinitePointLike(point);
+  const ends = lineLikeEndpoints(line);
+  if (!p || !ends) {
+    return Line({ x: NaN, y: NaN }, { x: NaN, y: NaN });
+  }
+  const dx = ends.p2.x - ends.p1.x;
+  const dy = ends.p2.y - ends.p1.y;
+  return Line(p, { x: p.x + dx, y: p.y + dy });
+}
+
+window.Segment = Segment;
+window.Line = Line;
+window.Ray = Ray;
+window.Circle = Circle;
+window.Polygon = Polygon;
+window.Midpoint = Midpoint;
+window.Distance = Distance;
+window.Angle = Angle;
+window.Intersection = Intersection;
+window.Reflect = Reflect;
+window.Rotate = Rotate;
+window.Perpendicular = Perpendicular;
+window.Parallel = Parallel;
+
 const interactiveCanvasState = {
   board: null,
   host: null,
@@ -709,14 +898,12 @@ const interactiveCanvasState = {
   baseRedrawQueued: false,
   handles: new Map(),
   handleSpecs: new Map(),
+  computedPoints: new Map(),
+  geomShapes: new Map(),
   activeHandle: null,
   redrawQueued: false,
   resizeObserver: null
 };
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
 
 function normalizeHandlePoint(value) {
   const point = toFinitePointLike(value);
@@ -764,6 +951,106 @@ function drawMainCanvasLayers() {
       drawFn(baseCtx, baseCanvas, { width, height, dpr: interactiveCanvasState.dpr });
     } catch (error) {
       console.error(`Canvas2D layer '${name}' failed:`, error);
+    }
+  });
+
+  drawGeometryShapes(baseCtx, width, height);
+}
+
+// Clips the infinite line through p1/p2 to the [0,width]x[0,height] box.
+// fromOrigin restricts the result to a ray starting at p1 (t >= 0).
+function clipLineToBounds(p1, p2, width, height, fromOrigin) {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  if (dx === 0 && dy === 0) {
+    return null;
+  }
+  let tMin = fromOrigin ? 0 : -Infinity;
+  let tMax = Infinity;
+
+  function clipAxis(origin, delta, lo, hi) {
+    if (delta === 0) {
+      if (origin < lo || origin > hi) {
+        tMin = 1;
+        tMax = 0;
+      }
+      return;
+    }
+    let t1 = (lo - origin) / delta;
+    let t2 = (hi - origin) / delta;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    tMin = Math.max(tMin, t1);
+    tMax = Math.min(tMax, t2);
+  }
+
+  clipAxis(p1.x, dx, 0, width);
+  clipAxis(p1.y, dy, 0, height);
+  if (tMin > tMax) {
+    return null;
+  }
+  return {
+    a: { x: p1.x + tMin * dx, y: p1.y + tMin * dy },
+    b: { x: p1.x + tMax * dx, y: p1.y + tMax * dy }
+  };
+}
+
+function drawGeometryShapes(ctx, width, height) {
+  interactiveCanvasState.geomShapes.forEach(shape => {
+    const options = shape.options || {};
+    ctx.strokeStyle = options.color || "#2f6f8f";
+    ctx.lineWidth = Number.isFinite(Number(options.lineWidth)) ? Number(options.lineWidth) : 2;
+
+    if (shape.kind === "segment" && shape.p1 && shape.p2) {
+      ctx.beginPath();
+      ctx.moveTo(shape.p1.x, shape.p1.y);
+      ctx.lineTo(shape.p2.x, shape.p2.y);
+      ctx.stroke();
+    } else if (shape.kind === "line" && shape.p1 && shape.p2) {
+      const clipped = clipLineToBounds(shape.p1, shape.p2, width, height, false);
+      if (clipped) {
+        ctx.beginPath();
+        ctx.moveTo(clipped.a.x, clipped.a.y);
+        ctx.lineTo(clipped.b.x, clipped.b.y);
+        ctx.stroke();
+      }
+    } else if (shape.kind === "ray" && shape.p1 && shape.p2) {
+      const clipped = clipLineToBounds(shape.p1, shape.p2, width, height, true);
+      if (clipped) {
+        ctx.beginPath();
+        ctx.moveTo(clipped.a.x, clipped.a.y);
+        ctx.lineTo(clipped.b.x, clipped.b.y);
+        ctx.stroke();
+      }
+    } else if (shape.kind === "circle" && shape.center && Number.isFinite(shape.radius)) {
+      ctx.beginPath();
+      ctx.arc(shape.center.x, shape.center.y, Math.max(0, shape.radius), 0, Math.PI * 2);
+      if (options.fill) {
+        ctx.fillStyle = options.fill;
+        ctx.fill();
+      }
+      ctx.stroke();
+    } else if (shape.kind === "polygon" && Array.isArray(shape.points) && shape.points.length >= 2) {
+      const pts = shape.points;
+      if (pts.every(p => p)) {
+        ctx.beginPath();
+        pts.forEach((p, i) => {
+          if (i === 0) {
+            ctx.moveTo(p.x, p.y);
+          } else {
+            ctx.lineTo(p.x, p.y);
+          }
+        });
+        ctx.closePath();
+        if (options.fill) {
+          ctx.fillStyle = options.fill;
+          ctx.fill();
+        }
+        ctx.stroke();
+      }
     }
   });
 }
@@ -914,7 +1201,7 @@ function installCanvasGlobals() {
 }
 
 function drawInteractiveCanvas() {
-  const { ctx, width, height, handles, activeHandle } = interactiveCanvasState;
+  const { ctx, width, height, handles, computedPoints, activeHandle } = interactiveCanvasState;
   if (!ctx || width <= 0 || height <= 0) {
     return;
   }
@@ -936,6 +1223,25 @@ function drawInteractiveCanvas() {
     ctx.lineTo(width, y + 0.5);
     ctx.stroke();
   }
+
+  // Computed points (Midpoint, Intersection, Reflect, ...) render like
+  // handles but smaller and undraggable — they're not free, so they can't
+  // be picked up (see pickInteractiveHandle, which only looks at `handles`).
+  computedPoints.forEach(point => {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#6b7d99";
+    ctx.fill();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "#123250";
+    ctx.font = "12px Aptos, Segoe UI, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(point.varName, point.x + 5 + 6, point.y);
+  });
 
   handles.forEach(handle => {
     const isActive = activeHandle && activeHandle.varName === handle.varName;
@@ -1025,6 +1331,78 @@ function unregisterHandle(varName) {
   if (interactiveCanvasState.handles.delete(varName)) {
     queueInteractiveRedraw();
   }
+}
+
+function registerComputedPoint(varName, point) {
+  interactiveCanvasState.computedPoints.set(varName, { varName, x: point.x, y: point.y });
+  queueInteractiveRedraw();
+}
+
+function unregisterComputedPoint(varName) {
+  if (interactiveCanvasState.computedPoints.delete(varName)) {
+    queueInteractiveRedraw();
+  }
+}
+
+function registerGeometryShape(varName, kind, value) {
+  interactiveCanvasState.geomShapes.set(varName, { varName, kind, ...value });
+  queueMainCanvasRedraw();
+}
+
+function unregisterGeometryShape(varName) {
+  if (interactiveCanvasState.geomShapes.delete(varName)) {
+    queueMainCanvasRedraw();
+  }
+}
+
+// Clears any auto-rendered geometry for a cell without touching handles —
+// used both when a cell's value stops being geometry and when a cell is
+// about to become a draggable Handle (see upsertReactiveVariable).
+function clearGeometryForVariable(varName) {
+  unregisterComputedPoint(varName);
+  unregisterGeometryShape(varName);
+}
+
+// Routes a cell's resolved value to the right auto-rendering path: draggable
+// Handles keep their existing drag-rewrite behavior (syncHandleFromValue);
+// everything else that looks like a point or a tagged shape is drawn
+// read-only, the same way GeoGebra draws dependent objects.
+function syncGeometryFromValue(varName, value) {
+  if (interactiveCanvasState.handleSpecs.has(varName)) {
+    syncHandleFromValue(varName, value);
+    return;
+  }
+
+  const point = toFinitePointLike(value);
+  if (point) {
+    unregisterGeometryShape(varName);
+    registerComputedPoint(varName, point);
+    return;
+  }
+
+  const kind = geometryShapeKind(value);
+  if (kind) {
+    unregisterComputedPoint(varName);
+    registerGeometryShape(varName, kind, value);
+    return;
+  }
+
+  clearGeometryForVariable(varName);
+}
+
+function geometryObserverOptions(varName) {
+  return {
+    onFulfilled(value) {
+      syncGeometryFromValue(varName, value);
+    },
+    onRejected() {
+      if (interactiveCanvasState.handleSpecs.has(varName)) {
+        unregisterHandle(varName);
+      } else {
+        clearGeometryForVariable(varName);
+      }
+    }
+  };
 }
 
 function formatHandleNumber(value) {
@@ -1464,14 +1842,7 @@ function compileHandleVariable(varName, handleSpec) {
     dependencies,
     handleSpec,
     commit(module) {
-      const prepared = prepareDefinition(module, varName, {
-        onFulfilled(value) {
-          syncHandleFromValue(varName, value);
-        },
-        onRejected() {
-          unregisterHandle(varName);
-        }
-      });
+      const prepared = prepareDefinition(module, varName, geometryObserverOptions(varName));
       prepared.variable.define(varName, dependencies, definition);
       return prepared.variable;
     }
@@ -1487,7 +1858,7 @@ function compileBlockVariable(varName, source) {
   return {
     dependencies,
     commit(module) {
-      const prepared = prepareDefinition(module, varName);
+      const prepared = prepareDefinition(module, varName, geometryObserverOptions(varName));
       prepared.variable.define(varName, dependencies, definition);
       return prepared.variable;
     }
@@ -1523,7 +1894,7 @@ function compileExpressionVariable(varName, source) {
   return {
     dependencies,
     commit(module) {
-      const prepared = prepareDefinition(module, varName);
+      const prepared = prepareDefinition(module, varName, geometryObserverOptions(varName));
       prepared.variable.define(varName, dependencies, definition);
       return prepared.variable;
     }
@@ -1555,6 +1926,7 @@ function deleteReactiveVariable(varName) {
   clearVariableDom(varName);
   unregisterHandle(varName);
   interactiveCanvasState.handleSpecs.delete(varName);
+  clearGeometryForVariable(varName);
 
   if (variable[varName] !== undefined) {
     variable[varName].delete();
@@ -1580,6 +1952,7 @@ function upsertReactiveVariable(module, varName, source) {
   variableText[varName] = `${varName} = ${source}`;
   if (compiled.handleSpec) {
     interactiveCanvasState.handleSpecs.set(varName, compiled.handleSpec);
+    clearGeometryForVariable(varName);
   } else {
     unregisterHandle(varName);
     interactiveCanvasState.handleSpecs.delete(varName);
@@ -1667,8 +2040,10 @@ function resetReactiveState() {
   variable = {};
   variableDeps = {};
   interactiveCanvasState.drawLayers.clear();
+  interactiveCanvasState.geomShapes.clear();
   queueMainCanvasRedraw();
   interactiveCanvasState.handles.clear();
+  interactiveCanvasState.computedPoints.clear();
   interactiveCanvasState.handleSpecs.clear();
   interactiveCanvasState.activeHandle = null;
   queueInteractiveRedraw();
@@ -1808,7 +2183,9 @@ function createJavaScriptCompleter() {
     "Array", "Boolean", "Date", "Error", "JSON", "Map", "Math", "Number", "Object", "Promise",
     "RegExp", "Set", "String", "Symbol", "WeakMap", "WeakSet", "console", "document", "window",
     "Inputs", "Promises", "Generators", "Handle", "FreeHandle", "FixedHandle", "SegmentHandle", "LineHandle", "CircleHandle", "Inspector", "html", "require",
-    "Canvas2D", "canvas", "ctx", "clearCanvas", "drawOnCanvas"
+    "Canvas2D", "canvas", "ctx", "clearCanvas", "drawOnCanvas",
+    "Segment", "Line", "Ray", "Circle", "Polygon",
+    "Midpoint", "Distance", "Angle", "Intersection", "Reflect", "Rotate", "Perpendicular", "Parallel"
   ];
 
   return {
