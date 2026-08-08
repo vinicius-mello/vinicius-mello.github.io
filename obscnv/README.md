@@ -2,7 +2,7 @@
 
 A GeoGebra-like interactive geometry tool where every construction is also visible, editable JavaScript. Click a tool and click on the canvas to build, like GeoGebra — but each click just writes a cell (`@m1 = Midpoint(@p1, @p2)`) into the editor, so the construction is never hidden behind the UI. Every object renders live on a canvas, free points are draggable, and dependent objects (midpoints, intersections, reflections, ...) recompute reactively — the same dependency-graph model [ObservableHQ](https://observablehq.com/) notebooks use, applied to geometric construction instead of general computation. No build step, no backend — open `index.html` and start building.
 
-The underlying reactive-cell engine (`@name = expression`, blocks, generators, `Inputs` widgets) is general-purpose plumbing in service of that goal, not a product surface of its own — see [Cell syntax](#cell-syntax) if you need it, but [Geometry](#geometry) is the point of the tool.
+The underlying reactive-cell engine (`@name = expression`, blocks, generators, `Inputs` widgets) is general-purpose plumbing in service of that goal, not a product surface of its own — see [Cell syntax](#cell-syntax) if you need it, but [Geometry](#geometry) is the point of the tool. Everything below is also documented in-app: click **Ajuda** in the toolbar (or press `F1`).
 
 ## Running it
 

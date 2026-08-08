@@ -414,6 +414,129 @@
       display: none;
     }
 
+    .help-dialog {
+      width: min(640px, calc(100vw - 32px));
+      max-height: calc(100vh - 64px);
+      margin: auto;
+      padding: 0;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface-strong);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+
+    .help-dialog::backdrop {
+      background: rgba(22, 32, 51, 0.45);
+      backdrop-filter: blur(2px);
+    }
+
+    .help-header {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(115, 138, 182, 0.14);
+      background: linear-gradient(180deg, rgba(244, 248, 255, 0.98), rgba(255, 255, 255, 0.9));
+    }
+
+    .help-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+    }
+
+    .help-close {
+      border: 1px solid rgba(96, 123, 171, 0.18);
+      background: #fff;
+      color: var(--text-soft);
+      width: 28px;
+      height: 28px;
+      line-height: 1;
+      font-size: 1rem;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .help-close:hover {
+      color: var(--text);
+      border-color: rgba(66, 109, 178, 0.3);
+    }
+
+    .help-body {
+      padding: 4px 16px 16px;
+      overflow-y: auto;
+      max-height: calc(100vh - 64px - 52px);
+      font-size: 0.86rem;
+      line-height: 1.5;
+    }
+
+    .help-body section {
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(115, 138, 182, 0.14);
+    }
+
+    .help-body section:last-child {
+      border-bottom: none;
+    }
+
+    .help-body h3 {
+      margin: 0 0 6px;
+      font-size: 0.92rem;
+      color: var(--accent);
+    }
+
+    .help-body p {
+      margin: 6px 0;
+    }
+
+    .help-body ul {
+      margin: 6px 0;
+      padding-left: 20px;
+    }
+
+    .help-body li + li {
+      margin-top: 6px;
+    }
+
+    .help-body table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .help-body td {
+      padding: 5px 8px 5px 0;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(115, 138, 182, 0.1);
+    }
+
+    .help-body td:first-child {
+      white-space: nowrap;
+      font-family: var(--font-mono);
+      color: #0b6f8a;
+    }
+
+    .help-body code {
+      font-family: var(--font-mono);
+      background: rgba(15, 139, 141, 0.08);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .help-body kbd {
+      font-family: var(--font-mono);
+      background: var(--surface-muted);
+      border: 1px solid rgba(96, 123, 171, 0.25);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 0.78rem;
+    }
+
     .ace_editor,
     .ace_gutter {
       font-family: var(--font-mono) !important;
@@ -525,6 +648,7 @@
               <button id="save" onclick="save()" title="Ctrl-S">Save</button>
               <button id="load" type="button" onclick="document.getElementById('inputFile').click()" title="Ctrl-F">Open</button>
               <input type="file" accept=".js" id="inputFile" aria-label="Carregar arquivo JavaScript">
+              <button id="help_button" type="button" onclick="openHelp()" title="F1">Ajuda</button>
             </div>
           </div>
           <div id="cell_error" class="cell-error" role="alert" hidden></div>
@@ -533,6 +657,96 @@
       </div>
     </div>
   </main>
+
+  <dialog id="help_dialog" class="help-dialog">
+    <header class="help-header">
+      <h2>Como funciona o obscnv</h2>
+      <button type="button" class="help-close" onclick="closeHelp()" aria-label="Fechar ajuda">×</button>
+    </header>
+    <div class="help-body">
+      <section>
+        <h3>O básico</h3>
+        <p>Cada célula do editor define uma variável reativa: <code>@nome = expressão</code>. Clique em <strong>Update</strong> (ou <kbd>Shift-Enter</kbd>) para aplicar. Referencie outras células com <code>@nome</code> em qualquer lugar da expressão — o grafo de dependências recalcula tudo sozinho.</p>
+        <p>Clique no botão <code>···</code> de uma célula para carregá-la de volta no editor; arraste-o para reordenar a lista. Para apagar uma célula, redefina-a como <code>@nome = undefined</code>.</p>
+        <p>O notebook salva automaticamente no navegador a cada atualização. Para levar o trabalho para outro lugar, use <strong>Save</strong> (<kbd>Ctrl-S</kbd>) para baixar um arquivo e <strong>Open</strong> (<kbd>Ctrl-F</kbd>) para carregar um arquivo salvo.</p>
+      </section>
+
+      <section>
+        <h3>Tipos de célula</h3>
+        <table>
+          <tbody>
+            <tr><td><code>@nome = expressão</code></td><td>Valor reativo simples, ex. <code>@c = @a + @b</code></td></tr>
+            <tr><td><code>@nome = { ...js... }</code></td><td>Bloco de código; use <code>return</code> para o valor da célula</td></tr>
+            <tr><td><code>@nome = *{ ...js... }</code></td><td>Bloco gerador, para valores que mudam ao longo do tempo</td></tr>
+            <tr><td><code>@nome = valueof Inputs.range(...)</code></td><td>Célula de controle: mostra o widget e expõe seu valor</td></tr>
+            <tr><td><code>@nome = undefined</code></td><td>Apaga a célula</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h3>Pontos: arrastáveis × computados</h3>
+        <p>Qualquer célula cujo valor seja um ponto (<code>{x, y}</code>) ou uma forma aparece sozinha no desenho — não é preciso chamar nenhuma função de desenho.</p>
+        <ul>
+          <li><strong>Pontos livres/vinculados</strong> (<code>FreeHandle</code>, <code>FixedHandle</code>, <code>SegmentHandle</code>, <code>LineHandle</code>, <code>CircleHandle</code>) podem ser arrastados; arrastar reescreve o código da célula.</li>
+          <li><strong>Pontos computados</strong> (<code>Midpoint</code>, <code>Intersection</code>, <code>Reflect</code>, <code>Rotate</code>, ou qualquer expressão sua) aparecem do mesmo jeito, mas só de leitura — seguem os pontos dos quais dependem, como os objetos dependentes do GeoGebra.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h3>Ferramentas de construção (clique no desenho)</h3>
+        <table>
+          <tbody>
+            <tr><td><strong>Selecionar</strong></td><td>Ferramenta padrão: arraste pontos livres</td></tr>
+            <tr><td><strong>Ponto</strong></td><td>Clique em espaço vazio para criar um ponto livre</td></tr>
+            <tr><td><strong>Segmento / Reta / Semirreta / Círculo / Ponto médio</strong></td><td>Clique em um ponto existente (fica marcado com um anel tracejado), depois em um segundo ponto para completar a construção</td></tr>
+          </tbody>
+        </table>
+        <p>Cada clique só escreve uma célula normal e a carrega no editor — a construção nunca fica escondida atrás da interface.</p>
+      </section>
+
+      <section>
+        <h3>Formas</h3>
+        <table>
+          <tbody>
+            <tr><td><code>Segment(p1, p2, options)</code></td><td>Segmento entre dois pontos</td></tr>
+            <tr><td><code>Line(p1, p2, options)</code></td><td>Reta pelos dois pontos, estendida até a borda do desenho</td></tr>
+            <tr><td><code>Ray(p1, p2, options)</code></td><td>Semirreta a partir de <code>p1</code>, passando por <code>p2</code></td></tr>
+            <tr><td><code>Circle(center, boundaryOuRaio, options)</code></td><td>Círculo; o segundo argumento é um ponto na borda ou um raio numérico</td></tr>
+            <tr><td><code>Polygon([p1, p2, ...], options)</code></td><td>Polígono fechado pela lista de pontos</td></tr>
+          </tbody>
+        </table>
+        <p><code>options</code> aceita <code>{color, lineWidth, fill}</code>.</p>
+      </section>
+
+      <section>
+        <h3>Construções derivadas</h3>
+        <table>
+          <tbody>
+            <tr><td><code>Midpoint(p1, p2)</code></td><td>Ponto médio</td></tr>
+            <tr><td><code>Distance(p1, p2)</code></td><td>Distância entre dois pontos</td></tr>
+            <tr><td><code>Angle(p1, vértice, p2)</code></td><td>Ângulo em graus, com vértice no meio</td></tr>
+            <tr><td><code>Intersection(linha1, linha2)</code></td><td>Interseção entre retas/segmentos/semirretas (círculos ainda não)</td></tr>
+            <tr><td><code>Reflect(ponto, linha)</code></td><td>Reflexo de um ponto em torno de uma linha</td></tr>
+            <tr><td><code>Rotate(ponto, centro, ânguloGraus)</code></td><td>Rotação de um ponto em torno de um centro</td></tr>
+            <tr><td><code>Perpendicular(ponto, linha)</code> / <code>Parallel(ponto, linha)</code></td><td>Reta perpendicular/paralela passando pelo ponto</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h3>Atalhos</h3>
+        <table>
+          <tbody>
+            <tr><td><kbd>Shift-Enter</kbd></td><td>Aplicar a célula do editor (Update)</td></tr>
+            <tr><td><kbd>Ctrl-S</kbd></td><td>Salvar notebook em arquivo</td></tr>
+            <tr><td><kbd>Ctrl-F</kbd></td><td>Abrir notebook de um arquivo</td></tr>
+            <tr><td><kbd>F1</kbd></td><td>Abrir esta ajuda</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </dialog>
 </body>
 <script type="importmap">
   {
@@ -2501,6 +2715,38 @@ function installUiActions() {
   };
 }
 
+function installHelpDialog() {
+  const dialog = document.getElementById("help_dialog");
+  if (!dialog) {
+    return;
+  }
+
+  window.openHelp = function() {
+    dialog.showModal();
+  };
+
+  window.closeHelp = function() {
+    dialog.close();
+  };
+
+  dialog.addEventListener("click", event => {
+    if (event.target === dialog) {
+      dialog.close();
+    }
+  });
+
+  window.addEventListener("keydown", event => {
+    if (event.key === "F1") {
+      event.preventDefault();
+      if (dialog.open) {
+        dialog.close();
+      } else {
+        dialog.showModal();
+      }
+    }
+  });
+}
+
 function initializeApp() {
   installLayout();
   createRuntimeModule();
@@ -2513,6 +2759,7 @@ function initializeApp() {
   installUiActions();
   installEditorCommands(editor);
   installFileLoader();
+  installHelpDialog();
 
   Sortable.create($("#vars")[0], {
     handle: ".handle"
