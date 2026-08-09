@@ -180,8 +180,31 @@ const _w_ = global_category['⍵'].name;
 const _aa_ = global_category['⍺⍺'].name;
 const _ww_ = global_category['⍵⍵'].name;
 
+// A "boxed" value is a rank-0 container produced by monadic enclose (⊂w):
+// a one-element JS array carrying an explicit .shape=[] tag (see shapeRec
+// below), distinguishing it from an ordinary length-1 vector. Pervasive
+// scalar functions must see through the box to reach its content, then
+// rewrap the result so the enclosure survives the operation - e.g.
+// 2×⊂1 2 3 stays enclosed (⊂3 4 6), matching real APL pervasion.
+const isBoxed = (x) => Array.isArray(x) && Array.isArray(x.shape) && x.shape.length === 0;
+const isScalarLike = (x) => typeof x === 'number' || typeof x === 'string' || isBoxed(x);
+const boxOf = (x) => {
+  const b = [x];
+  b.shape = [];
+  return b;
+};
+
+// Catenate (,) splices a plain array's own elements in but must treat a
+// boxed value as one atomic term - otherwise `1,(⊂2 3),4` would spill the
+// box's content into the result instead of keeping it as a single enclosed
+// element, same idea as mdfunc/drel's box see-through-and-rewrap rule.
+const asCatenationTerms = (x) => (Array.isArray(x) && !isBoxed(x)) ? x : [x];
+
 const mdfunc = (m,d,w,a) => {
   if(a === undefined) {
+    if (isBoxed(w)) {
+      return boxOf(mdfunc(m,d,w[0]));
+    }
     if (typeof w === 'number') {
       return m(w);
     } else if (Array.isArray(w)) {
@@ -190,9 +213,19 @@ const mdfunc = (m,d,w,a) => {
       throw new Error('Unsupported type for negation');
     }
   }
+  if (isBoxed(w) || isBoxed(a)) {
+    // Result stays enclosed only if both sides were scalar-like (a plain
+    // number/string or itself boxed) - if either side is a genuine array,
+    // the box's content scalar-extends across it and the array's shape wins.
+    const bothScalarLike = isScalarLike(w) && isScalarLike(a);
+    const wInner = isBoxed(w) ? w[0] : w;
+    const aInner = isBoxed(a) ? a[0] : a;
+    const result = mdfunc(m, d, wInner, aInner);
+    return bothScalarLike ? boxOf(result) : result;
+  }
   if (typeof w === 'number' && typeof a === 'number') {
     return d(w, a);
-  } 
+  }
   if (Array.isArray(w) && typeof a === 'number') {
     return w.map(x => mdfunc(m,d,x,a));
   }
@@ -295,6 +328,16 @@ const decode = (w, a) => {
 };
 
 const drel = (f, w, a) => {
+  // Relational functions (< ≤ = ≥ > ≠) are pervasive too - same box
+  // see-through-and-rewrap rule as mdfunc (apl.js:197). E.g. (⊂3)<⊂5
+  // stays enclosed (⊂1), matching real APL pervasion.
+  if (isBoxed(w) || isBoxed(a)) {
+    const bothScalarLike = isScalarLike(w) && isScalarLike(a);
+    const wInner = isBoxed(w) ? w[0] : w;
+    const aInner = isBoxed(a) ? a[0] : a;
+    const result = drel(f, wInner, aInner);
+    return bothScalarLike ? boxOf(result) : result;
+  }
   if (typeof w === 'number' && typeof a === 'number') {
     return f(w, a) ? 1 : 0;
   }
@@ -336,6 +379,9 @@ const shapeRec = (arr) => {
   }
   if(!Array.isArray(arr)) {
     return [];
+  }
+  if (Array.isArray(arr.shape)) {
+    return arr.shape.slice();
   }
   const shape = shapeRec(arr[0]);
   for(let i=1; i<arr.length; i++) {
@@ -672,7 +718,11 @@ const roundValue = (value, digits) => {
     return roundSignificant(value, digits);
   }
   if (Array.isArray(value)) {
-    return value.map((v) => roundValue(v, digits));
+    const mapped = value.map((v) => roundValue(v, digits));
+    if (Array.isArray(value.shape)) {
+      mapped.shape = value.shape;
+    }
+    return mapped;
   }
   return value;
 };
@@ -908,7 +958,16 @@ const G = {
       a = [a];
     }
     const m = w.length;
-    return fillShapeRec(a, (prefix, index) => w[index % m]);
+    const result = fillShapeRec(a, (prefix, index) => w[index % m]);
+    if (a.includes(0)) {
+      // Any zero dimension collapses everything nested inside it to a
+      // bare [] - e.g. 0 3⍴w has nothing left to structurally reveal the
+      // "3" (fillShapeRec never recurses into a 0-length level), so the
+      // requested shape has to be stamped explicitly for shapeRec to
+      // recover it instead of guessing [0].
+      result.shape = a.slice();
+    }
+    return result;
   },
   match: (w, a) => {
     return matchRec(w, a);  
@@ -1416,21 +1475,15 @@ const G = {
   },
   comma: (w, a) => {
     if (a === undefined) {
-      if (Array.isArray(w)) {
-        return w.flat();
-      } else {
+      if (isBoxed(w)) {
         return [w];
       }
+      if (Array.isArray(w)) {
+        return w.flatMap(asCatenationTerms);
+      }
+      return [w];
     }
-    if (Array.isArray(a) && Array.isArray(w)) {
-      return a.concat(w);
-    } else if (Array.isArray(a)) {
-      return a.concat([w]);
-    } else if (Array.isArray(w)) {
-      return [a].concat(w);
-    } else {
-      return [a, w];
-    }
+    return [...asCatenationTerms(a), ...asCatenationTerms(w)];
   },
   transpose: (w, a) => {
     if (a === undefined) {
@@ -1529,7 +1582,7 @@ const G = {
   },
   enclose: (w, a) => {
     if (a === undefined) {
-      return [w];
+      return boxOf(w);
     }
     return partitionEnclose(a, w);
   },

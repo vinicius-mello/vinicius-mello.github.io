@@ -641,6 +641,59 @@
       font-family: "Fira Code", "IBM Plex Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace;
     }
 
+    .boxed-value {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 8px;
+      width: max-content;
+      max-width: 100%;
+      margin: 4px 0;
+      padding: 8px 10px;
+      border: 1px dashed var(--accent);
+      border-radius: 8px;
+      background: var(--matrix-bg);
+    }
+
+    .boxed-value .boxed-value {
+      /* Nested boxes (⊂⊂x) stay legible without compounding padding/border weight. */
+      margin: 0;
+      padding: 4px 6px;
+    }
+
+    .boxed-badge {
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      border-radius: 5px;
+      background: var(--accent);
+      color: var(--matrix-bg);
+      font-family: "Fira Code", "IBM Plex Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .boxed-content {
+      min-width: 0;
+    }
+
+    .matrix td.boxed-cell {
+      text-align: left;
+      background: color-mix(in oklab, var(--accent) 12%, var(--matrix-bg));
+    }
+
+    .matrix td.boxed-cell .boxed-badge {
+      margin-right: 6px;
+    }
+
+    .matrix td.boxed-cell .boxed-cell-content {
+      font-family: inherit;
+    }
+
     .svg-wrap {
       background: var(--svg-bg);
       border-radius: 10px;
@@ -765,6 +818,16 @@
       margin: 0 0 8px;
       font-size: 0.85rem;
       color: var(--muted);
+    }
+
+    .help-body a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .help-body a:hover,
+    .help-body a:focus-visible {
+      text-decoration: underline;
     }
 
     .help-grid {
@@ -928,6 +991,8 @@
         <button class="help-tab" data-tab="primitives" type="button">Primitives</button>
         <button class="help-tab" data-tab="graphics" type="button">SVG Graphics</button>
         <button class="help-tab" data-tab="ffi" type="button">FFI Examples</button>
+        <button class="help-tab" data-tab="implementation" type="button">Implementation</button>
+        <button class="help-tab" data-tab="about" type="button">About</button>
       </div>
       <div class="help-body">
         <section id="helpTabEscapes" class="help-tab-panel active">
@@ -951,6 +1016,28 @@
         <section id="helpTabFFI" class="help-tab-panel">
           <p>Worked examples of the FFI trio: <span class="help-code">⍠</span> builds/reads plain objects - reading a function back binds it to its receiver, so it stays correctly callable even if stored away first; <span class="help-code">⍔</span> relabels a value as an applicable function, e.g. <span class="help-code">(obj⍠'method')⍔⊢args</span> to call a JS method; <span class="help-code">⍞</span> is its inverse, turning an APL function into a plain value. <span class="help-code">#word</span> is shorthand for <span class="help-code">'word'</span>.</p>
           <div id="helpFFIList"></div>
+        </section>
+        <section id="helpTabAbout" class="help-tab-panel">
+          <p>APL.js is a small APL-to-JavaScript transpiler with a graphics-capable browser REPL, built as an educational project exploring how APL's array notation compiles to plain JS.</p>
+          <p>It's made of three pieces: the transpiler core (tokenizer, parser, primitive library), this multi-cell REPL with SVG/d3/Observable Plot output and a JS/JS-object FFI, and a simpler translator-only demo page.</p>
+          <p>Version <span class="help-code">0.1</span> · <a href="https://github.com/vinicius-mello/apljs" target="_blank" rel="noopener noreferrer">github.com/vinicius-mello/apljs</a></p>
+        </section>
+        <section id="helpTabImplementation" class="help-tab-panel">
+          <div class="help-graphics-item">
+            <h3>The parser: a right-to-left shift-reduce loop</h3>
+            <p>Tokens are consumed right-to-left onto a single stack of <span class="help-code">{category, node}</span> pairs (categories: value, function, monadic/dyadic operator, boundary markers...). After every shift, <span class="help-code">reduceStack</span> pattern-matches a small window - the top 2 to 4 stack slots - against a fixed list of grammar rules (parentheses, strand formation, monadic/dyadic application, trains, operator binding...), collapsing a match into one node, and keeps retrying until nothing matches before the next token shifts on.</p>
+            <p>There's no bracket-indexing production - <span class="help-code">A[I]</span> never enters the grammar. Indexing is just an ordinary function application of <span class="help-code">⌷</span> (squad) like any other primitive, so the parser stays small and uniform: everything is function application/composition, nothing gets a special-cased sub-grammar.</p>
+          </div>
+          <div class="help-graphics-item">
+            <h3>The array model: nested JS arrays, shape as an escape hatch</h3>
+            <p>There's no dedicated array class - an APL array is a plain (possibly nested) JS array, and a scalar is a bare JS number/string. Shape is normally <em>inferred</em> structurally: <span class="help-code">shapeRec</span> walks <span class="help-code">Array.isArray</span>/<span class="help-code">.length</span> recursively rather than reading it off stored metadata.</p>
+            <p>That inference has two blind spots a handful of primitives patch by stamping an explicit <span class="help-code">.shape</span> field on their result, which <span class="help-code">shapeRec</span> checks before falling back to structural inference. Monadic enclose (<span class="help-code">⊂</span>) tags its rank-0 result <span class="help-code">.shape = []</span>, since a plain length-1 array is otherwise indistinguishable from a real 1-vector; pervasive functions (arithmetic, relational, catenate) know to see through that tag and rebuild it on their own result so the enclosure survives the operation. Reshape (<span class="help-code">⍴</span>) tags its result whenever the target shape has a zero dimension, since a zero collapses everything nested inside it to a bare <span class="help-code">[]</span> with nothing left to structurally reveal the dimensions that followed it.</p>
+          </div>
+          <div class="help-graphics-item">
+            <h3>The FFI trio: ⍠ ⍔ ⍞</h3>
+            <p><span class="help-code">⍠</span> (buildObject) does the actual work: monadically it turns a command list into a plain JS object; dyadically, a chained command list threads each step's result into the next call on a receiver, and reading a method back out (a bare key, no call) rebinds it to its receiver so it stays correctly callable even after being stored or passed around - binding at the call site alone wouldn't survive that.</p>
+            <p><span class="help-code">⍔</span> (asFunction) is a genuine monadic operator: it relabels a value from V to F so it can sit in function position and be applied. <span class="help-code">⍞</span> is its inverse, but it's not a runtime function at all - it's a parse-time-only marker that relabels the F/M/D token to its right as a plain V, so it compiles to a bare reference to the underlying JS function instead of applying it.</p>
+          </div>
         </section>
       </div>
     </div>
@@ -1255,7 +1342,9 @@
       escapes: document.getElementById("helpTabEscapes"),
       primitives: document.getElementById("helpTabPrimitives"),
       graphics: document.getElementById("helpTabGraphics"),
-      ffi: document.getElementById("helpTabFFI")
+      ffi: document.getElementById("helpTabFFI"),
+      implementation: document.getElementById("helpTabImplementation"),
+      about: document.getElementById("helpTabAbout")
     };
     const helpGrid = document.getElementById("helpGrid");
     const helpPrimitivesBody = document.getElementById("helpPrimitivesBody");
@@ -1271,6 +1360,8 @@
 
     const THEME_STORAGE_KEY = "apljs-theme";
     const THEMES = new Set(["phosphor", "amber", "teal-crt", "sunset-terminal", "blue-monitor", "greenbar", "win31"]);
+
+    const SESSION_STORAGE_KEY = "apljs-session";
 
     const applyTheme = (themeName) => {
       const name = THEMES.has(themeName) ? themeName : "phosphor";
@@ -1397,7 +1488,16 @@
 
     const isPrimitive = (v) => v === null || ["string", "number", "boolean"].includes(typeof v);
 
-    const isVector = (arr) => Array.isArray(arr) && arr.every(isPrimitive);
+    // A value produced by monadic enclose (⊂w) - a one-element array
+    // tagged .shape=[] by apl.js's mdfunc/enclose to mark it as a real
+    // rank-0 container, distinct from an ordinary length-1 vector.
+    const isBoxed = (v) => Array.isArray(v) && Array.isArray(v.shape) && v.shape.length === 0;
+
+    // A boxed value counts as a leaf for table display purposes - it's
+    // still one "cell", just rendered with a badge instead of raw text.
+    const isDisplayLeaf = (v) => isPrimitive(v) || isBoxed(v);
+
+    const isVector = (arr) => Array.isArray(arr) && arr.every(isDisplayLeaf);
 
     const isMatrix = (arr) => {
       if (!Array.isArray(arr) || arr.length === 0) {
@@ -1407,7 +1507,24 @@
         return false;
       }
       const width = arr[0].length;
-      return arr.every((row) => row.length === width && row.every(isPrimitive));
+      return arr.every((row) => row.length === width && row.every(isDisplayLeaf));
+    };
+
+    const renderLeafCell = (td, cell) => {
+      if (isBoxed(cell)) {
+        td.classList.add("boxed-cell");
+        const badge = document.createElement("span");
+        badge.className = "boxed-badge";
+        badge.textContent = "⊂";
+        badge.title = "Enclosed value (rank 0)";
+        const content = document.createElement("span");
+        content.className = "boxed-cell-content";
+        content.textContent = formatValue(cell[0]);
+        td.appendChild(badge);
+        td.appendChild(content);
+      } else {
+        td.textContent = String(cell);
+      }
     };
 
     const renderTable = (host, arr) => {
@@ -1420,7 +1537,7 @@
 
         row.forEach((cell) => {
           const td = document.createElement("td");
-          td.textContent = String(cell);
+          renderLeafCell(td, cell);
           tr.appendChild(td);
         });
         table.appendChild(tr);
@@ -1502,7 +1619,7 @@
           const td = document.createElement("td");
 
           if (rank === 2) {
-            td.textContent = formatValue(value[i][j]);
+            renderLeafCell(td, value[i][j]);
           } else if (rank === 3) {
             td.className = "tensor-cell";
             renderVectorInline(td, value[i][j]);
@@ -1581,6 +1698,45 @@
       return renderSvgStringMaybe(host, value);
     };
 
+    // The dispatch buildOutputCell used to do inline, pulled out so a
+    // boxed value (⊂w) can recursively render its content the same way
+    // the top-level result would, inside a labeled .boxed-value wrapper.
+    const renderResultBody = (host, value) => {
+      if (isBoxed(value)) {
+        const box = document.createElement("div");
+        box.className = "boxed-value";
+
+        const badge = document.createElement("span");
+        badge.className = "boxed-badge";
+        badge.textContent = "⊂";
+        badge.title = "Enclosed value (rank 0)";
+        box.appendChild(badge);
+
+        const inner = document.createElement("div");
+        inner.className = "boxed-content";
+        renderResultBody(inner, value[0]);
+        box.appendChild(inner);
+
+        host.appendChild(box);
+        return;
+      }
+
+      if (Array.isArray(value) && value.length === 0) {
+        const pre = document.createElement("pre");
+        pre.className = "result-pre";
+        pre.textContent = "⍬";
+        host.appendChild(pre);
+      } else if (Array.isArray(value) && (isVector(value) || isMatrix(value))) {
+        renderTable(host, value);
+      } else if (Array.isArray(value) && renderTensor(host, value)) {
+      } else if (!renderSvgMaybe(host, value)) {
+        const pre = document.createElement("pre");
+        pre.className = "result-pre";
+        pre.textContent = formatValue(value);
+        host.appendChild(pre);
+      }
+    };
+
     const buildOutputCell = (kind, value) => {
       const cell = document.createElement("article");
       const className = kind === "error" ? "cell cell-output cell-error" : "cell cell-output";
@@ -1593,21 +1749,7 @@
 
       const body = document.createElement("div");
       body.className = "cell-body";
-
-      if (Array.isArray(value) && value.length === 0) {
-        const pre = document.createElement("pre");
-        pre.className = "result-pre";
-        pre.textContent = "⍬";
-        body.appendChild(pre);
-      } else if (Array.isArray(value) && (isVector(value) || isMatrix(value))) {
-        renderTable(body, value);
-      } else if (Array.isArray(value) && renderTensor(body, value)) {
-      } else if (!renderSvgMaybe(body, value)) {
-        const pre = document.createElement("pre");
-        pre.className = "result-pre";
-        pre.textContent = formatValue(value);
-        body.appendChild(pre);
-      }
+      renderResultBody(body, value);
 
       cell.appendChild(head);
       cell.appendChild(body);
@@ -1724,6 +1866,7 @@
         focusedRecord = draftRecord;
       }
       setStatus(`Deleted input #${label}. (Runtime state from it, if any, is unaffected - use Restart Session for a clean slate.)`);
+      saveSession();
     };
 
     const expandEscapeAtCursor = (view) => {
@@ -1839,6 +1982,7 @@
 
       const scrollTarget = newOutputs.length ? newOutputs[newOutputs.length - 1] : record.cellEl;
       scrollTarget.scrollIntoView({ behavior: "smooth", block: "end" });
+      saveSession();
       return true;
     };
 
@@ -1985,6 +2129,7 @@
             EditorView.updateListener.of((update) => {
               if (update.docChanged) {
                 expandEscapeAtCursor(update.view);
+                scheduleSessionSave();
               }
             })
           ]
@@ -2033,6 +2178,7 @@
 
       createInputCell();
       setStatus("History cells cleared. Session state preserved.");
+      saveSession();
     };
 
     const restartSession = () => {
@@ -2051,6 +2197,72 @@
 
       createInputCell();
       setStatus("Session restarted. Runtime and history reset.");
+      saveSession();
+    };
+
+    // Persists cell sources (not runtime values, which aren't serializable)
+    // so a page reload can rebuild the session by re-running each cell in
+    // order. The last entry is always the trailing draft (never run).
+    let saveSessionTimer = null;
+
+    const saveSession = () => {
+      try {
+        const data = cells.map((record) => ({
+          source: record.editor.state.doc.toString(),
+          executed: !record.isDraft
+        }));
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
+      } catch {
+        // Storage unavailable (quota, private browsing) - session just won't persist.
+      }
+    };
+
+    const scheduleSessionSave = () => {
+      if (saveSessionTimer) {
+        clearTimeout(saveSessionTimer);
+      }
+      saveSessionTimer = setTimeout(saveSession, 400);
+    };
+
+    const loadSession = () => {
+      try {
+        const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (!raw) {
+          return null;
+        }
+        const data = JSON.parse(raw);
+        return Array.isArray(data) && data.length ? data : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const restoreSession = () => {
+      const data = loadSession();
+      if (!data) {
+        createInputCell();
+        return;
+      }
+
+      const executedEntries = data.filter((entry) => entry && entry.executed && entry.source);
+      const lastEntry = data[data.length - 1];
+      const draftSource = lastEntry && !lastEntry.executed ? lastEntry.source : undefined;
+
+      if (executedEntries.length === 0) {
+        createInputCell(draftSource);
+        return;
+      }
+
+      executedEntries.forEach((entry) => {
+        createInputCell(entry.source);
+        runCell(draftRecord);
+      });
+
+      if (draftSource !== undefined && draftRecord && draftRecord.editor) {
+        draftRecord.editor.dispatch({
+          changes: { from: 0, to: draftRecord.editor.state.doc.length, insert: draftSource }
+        });
+      }
     };
 
     const buildHelp = () => {
@@ -2222,7 +2434,7 @@
     buildPrimitivesTable();
     buildGraphicsDocs();
     buildFFIExamples();
-    createInputCell();
+    restoreSession();
   </script>
 </body>
 </html>
