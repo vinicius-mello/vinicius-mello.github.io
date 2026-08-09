@@ -1135,26 +1135,50 @@ const G = {
     const wIsScalar = isScalarLike(w);
     const aCells = aIsScalar ? [a] : a;
     const wCells = wIsScalar ? [w] : w;
+    // Verified against real Dyalog (TryAPL): each cell fed to f is
+    // disclosed first - (⊂1 2)∘.,3 computes ,3 on 1 2 (disclosed), not on
+    // the box - and f's result is re-enclosed only when it isn't already
+    // scalar/boxed, so the outer product's cells stay uniformly "simple".
+    // That's why (⊂1 2)∘.,3 is ⊂1 2 3 (disclose, catenate flat, re-box)
+    // while plain (⊂1 2),3 (no outer product at all) stays (⊂1 2) 3 - the
+    // box is never disclosed for an ordinary function call.
+    const applyCell = (wCell, aCell) => {
+      const wArg = isBoxed(wCell) ? wCell[0] : wCell;
+      const aArg = isBoxed(aCell) ? aCell[0] : aCell;
+      const cellResult = f(wArg, aArg);
+      return isScalarLike(cellResult) ? cellResult : boxOf(cellResult);
+    };
     const result = [];
     for (let i = 0; i < aCells.length; i++) {
       const row = [];
       for (let j = 0; j < wCells.length; j++) {
-        row.push(f(wCells[j], aCells[i]));
+        row.push(applyCell(wCells[j], aCells[i]));
       }
       result.push(row);
     }
     // The result's shape is (⍴a),(⍴w) - a scalar/boxed side contributes
     // nothing, so its dimension is squeezed back out instead of leaving a
-    // spurious length-1 axis.
+    // spurious length-1 axis. outer already knows this shape for certain -
+    // shapeRec can't be trusted to rediscover it structurally, because if
+    // f's own output is itself an array (e.g. f is , or another outer
+    // product), a cell that happens to look uniform reads as one more real
+    // dimension instead of an opaque nested value (true regardless of
+    // boxing - 1 2∘.,3 4 5 has the same issue). So the shape outer built
+    // is stamped explicitly rather than left for shapeRec to guess.
     if (aIsScalar && wIsScalar) {
       return result[0][0];
     }
     if (aIsScalar) {
-      return result[0];
+      const squeezed = result[0];
+      squeezed.shape = [wCells.length];
+      return squeezed;
     }
     if (wIsScalar) {
-      return result.map((row) => row[0]);
+      const squeezed = result.map((row) => row[0]);
+      squeezed.shape = [aCells.length];
+      return squeezed;
     }
+    result.shape = [aCells.length, wCells.length];
     return result;
   },
   dot: (aa,ww) => (w, a) => {
