@@ -1125,13 +1125,35 @@ const G = {
     if (typeof f !== 'function') {
       throw new Error('Outer requires a function');
     }
+    // A plain scalar or boxed value (⊂x) has shape ⍬ - it contributes one
+    // atomic cell to the outer product, not a dimension of its own, same
+    // "scalar-like" rule pervasive functions use (isScalarLike, above).
+    // A bare array-index like a.length would otherwise be undefined for a
+    // plain scalar (silently emptying the loop) or would decompose a box
+    // by reading its wrapped content instead of the box itself.
+    const aIsScalar = isScalarLike(a);
+    const wIsScalar = isScalarLike(w);
+    const aCells = aIsScalar ? [a] : a;
+    const wCells = wIsScalar ? [w] : w;
     const result = [];
-    for (let i = 0; i < a.length; i++) {
+    for (let i = 0; i < aCells.length; i++) {
       const row = [];
-      for (let j = 0; j < w.length; j++) {
-        row.push(f(w[j], a[i]));
+      for (let j = 0; j < wCells.length; j++) {
+        row.push(f(wCells[j], aCells[i]));
       }
       result.push(row);
+    }
+    // The result's shape is (⍴a),(⍴w) - a scalar/boxed side contributes
+    // nothing, so its dimension is squeezed back out instead of leaving a
+    // spurious length-1 axis.
+    if (aIsScalar && wIsScalar) {
+      return result[0][0];
+    }
+    if (aIsScalar) {
+      return result[0];
+    }
+    if (wIsScalar) {
+      return result.map((row) => row[0]);
     }
     return result;
   },
