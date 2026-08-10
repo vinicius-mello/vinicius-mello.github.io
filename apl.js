@@ -200,6 +200,34 @@ const boxOf = (x) => {
 // element, same idea as mdfunc/drel's box see-through-and-rewrap rule.
 const asCatenationTerms = (x) => (Array.isArray(x) && !isBoxed(x)) ? x : [x];
 
+// Shared by mdfunc/drel: one (or both) of w/a is boxed. If the OTHER side
+// is a genuine (non-boxed) array, the box's disclosed content broadcasts
+// as a whole across every element of that array - it is not zipped
+// index-for-index against it, even when the lengths happen to coincide.
+// Verified against real Dyalog: 3 4=⊂1 2 3 4 compares 3, then 4, each
+// against the *entire* disclosed 1 2 3 4, giving a 2-element result of
+// individually re-enclosed 4-element sub-results - not a length-mismatch
+// error from trying to zip a 2-vector with a 4-vector. When neither side
+// is a genuine array (both scalar-like/boxed), recurse directly on the
+// disclosed content instead - a shape mismatch there is a real LENGTH
+// ERROR in APL too (confirmed: (⊂1 2 3 4)=⊂1 2 also errors in Dyalog).
+const pervadeBoxed = (recurse, w, a) => {
+  const box = (x) => (isScalarLike(x) ? x : boxOf(x));
+  const wIsArray = Array.isArray(w) && !isBoxed(w);
+  const aIsArray = Array.isArray(a) && !isBoxed(a);
+  if (wIsArray && !aIsArray) {
+    const aInner = isBoxed(a) ? a[0] : a;
+    return w.map((x) => box(recurse(x, aInner)));
+  }
+  if (aIsArray && !wIsArray) {
+    const wInner = isBoxed(w) ? w[0] : w;
+    return a.map((x) => box(recurse(wInner, x)));
+  }
+  const wInner = isBoxed(w) ? w[0] : w;
+  const aInner = isBoxed(a) ? a[0] : a;
+  return box(recurse(wInner, aInner));
+};
+
 const mdfunc = (m,d,w,a) => {
   if(a === undefined) {
     if (isBoxed(w)) {
@@ -214,14 +242,7 @@ const mdfunc = (m,d,w,a) => {
     }
   }
   if (isBoxed(w) || isBoxed(a)) {
-    // Result stays enclosed only if both sides were scalar-like (a plain
-    // number/string or itself boxed) - if either side is a genuine array,
-    // the box's content scalar-extends across it and the array's shape wins.
-    const bothScalarLike = isScalarLike(w) && isScalarLike(a);
-    const wInner = isBoxed(w) ? w[0] : w;
-    const aInner = isBoxed(a) ? a[0] : a;
-    const result = mdfunc(m, d, wInner, aInner);
-    return bothScalarLike ? boxOf(result) : result;
+    return pervadeBoxed((w2, a2) => mdfunc(m, d, w2, a2), w, a);
   }
   if (typeof w === 'number' && typeof a === 'number') {
     return d(w, a);
@@ -329,14 +350,13 @@ const decode = (w, a) => {
 
 const drel = (f, w, a) => {
   // Relational functions (< ≤ = ≥ > ≠) are pervasive too - same box
-  // see-through-and-rewrap rule as mdfunc (apl.js:197). E.g. (⊂3)<⊂5
-  // stays enclosed (⊂1), matching real APL pervasion.
+  // see-through/broadcast/rewrap rule as mdfunc (apl.js:203, pervadeBoxed
+  // above). E.g. (⊂1 2)<⊂1 3 stays enclosed (⊂0 1), and 3 4=⊂1 2 3 4
+  // broadcasts the disclosed 1 2 3 4 across 3 and 4 rather than erroring
+  // on length (note: ⊂ on an already-simple scalar is a no-op - see
+  // enclose below - so a plain (⊂3)<⊂5 never even reaches this branch).
   if (isBoxed(w) || isBoxed(a)) {
-    const bothScalarLike = isScalarLike(w) && isScalarLike(a);
-    const wInner = isBoxed(w) ? w[0] : w;
-    const aInner = isBoxed(a) ? a[0] : a;
-    const result = drel(f, wInner, aInner);
-    return bothScalarLike ? boxOf(result) : result;
+    return pervadeBoxed((w2, a2) => drel(f, w2, a2), w, a);
   }
   if (typeof w === 'number' && typeof a === 'number') {
     return f(w, a) ? 1 : 0;
@@ -1628,7 +1648,12 @@ const G = {
   },
   enclose: (w, a) => {
     if (a === undefined) {
-      return boxOf(w);
+      // Enclosing an already-simple scalar (not itself an array, whether a
+      // plain number or an existing box) is a no-op in real APL - verified
+      // against Dyalog: (⊂5)≡5 is 1, and ≡⊂⊂5 stays 0 (repeated enclose of
+      // a simple scalar never adds depth). Only a genuine array (a plain
+      // vector, or a value that's already boxed) gets wrapped/re-wrapped.
+      return Array.isArray(w) ? boxOf(w) : w;
     }
     return partitionEnclose(a, w);
   },
