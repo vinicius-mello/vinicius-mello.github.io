@@ -882,6 +882,23 @@ const G = {
   // whatever it was (buildObject's dyadic form above is what actually
   // binds an extracted function to its receiver).
   asFunction: (f) => f,
+  // Codegen-only helper, not a real APL primitive - juxtaposed-value strand
+  // literals like (1 2)(3 4) compile to G.strand([...]) (see emitJs's
+  // Strand case) so the resulting array is tagged with its true top-level
+  // shape. Without it, shapeRec has no stored shape to trust and falls
+  // back to inferring one structurally, which misreads a strand of
+  // uniformly-shaped elements as one more real dimension - e.g. (1 2)(3 4)
+  // would read as a 2x2 matrix instead of a 2-element vector of 2-vectors.
+  // Verified against real Dyalog: ⍴(1 2)(3 4) is 2, not 2 2 - it tracks
+  // shape as stored metadata per array rather than inferring it, so a
+  // vector of same-length sub-vectors is never confused with a matrix.
+  // Elements themselves are left exactly as they are - Dyalog does not
+  // enclose them either (⍴¨(1 2)(3 4) is 2 2, not ⍬ ⍬ - if it enclosed
+  // them, each would report ⍴⍬).
+  strand: (arr) => {
+    arr.shape = [arr.length];
+    return arr;
+  },
   Math,
   Date,
   JSON,
@@ -1968,14 +1985,22 @@ const emitStatements = (statements) => {
 // one and only backend today: a JS source string, executed via `new
 // Function('G', code)`. A second emitter (e.g. toMermaid/toDot) can walk the
 // same node shapes to draw a train/fork as a graph instead.
-const emitJs = (node) => {
+// asTarget: true only while rendering an assignment target (e.g. `a b c`
+// in `a b c←⍵`) - there a Strand must stay a bare `[a, b, c]` destructuring
+// pattern, since it's spliced directly to the left of `=` in the generated
+// JS (see the Assign-forming reduction below); wrapping it in a function
+// call there would be a syntax error. Every other Strand is a value being
+// built, so it goes through G.strand instead (see G.strand for why).
+const emitJs = (node, asTarget = false) => {
   switch (node.type) {
     case 'Raw':
       return node.text;
     case 'Identifier':
       return (node.global ? 'G.' : '') + node.name;
-    case 'Strand':
-      return `[${node.elements.map(emitJs).join(', ')}]`;
+    case 'Strand': {
+      const items = node.elements.map((el) => emitJs(el, asTarget)).join(', ');
+      return asTarget ? `[${items}]` : `G.strand([${items}])`;
+    }
     case 'Apply':
       return `${emitJs(node.fn)}(${emitJs(node.arg)})`;
     case 'DyadicApply':
@@ -2311,7 +2336,7 @@ const parseExpression = (expression, scope) => {
         // pattern) rather than a plain Identifier, so it's rendered here via
         // emitJs the same way the old text-based version always had it
         // pre-rendered. See find_category for what "global" means here.
-        const Btext = emitJs(B.node);
+        const Btext = emitJs(B.node, true);
         const [categoryEntry, global] = find_category(Btext, scope);
         const strippedBtext = global ? Btext.slice(2) : Btext;
         const firstAlphaAssign = strippedBtext === '_a_' && categoryEntry && categoryEntry.name === ''; // First assignment of ⍺ in a DFN
