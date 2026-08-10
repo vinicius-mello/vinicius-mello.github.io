@@ -1155,16 +1155,21 @@ const G = {
     const wIsScalar = isScalarLike(w);
     const aCells = aIsScalar ? [a] : a;
     const wCells = wIsScalar ? [w] : w;
-    // Verified against real Dyalog (TryAPL): each cell fed to f is
-    // disclosed first - (⊂1 2)∘.,3 computes ,3 on 1 2 (disclosed), not on
-    // the box - and f's result is re-enclosed only when it isn't already
+    // Verified against real Dyalog (TryAPL, using ≡ match rather than ⊃ to
+    // inspect - ⊃ always discloses, which had contaminated an earlier
+    // reading here): disclosure only happens to a side that was itself a
+    // bare scalar/box being squeezed into one cell, never to an element
+    // pulled out of a genuine array by ordinary iteration. (⊂1 2)∘.,3
+    // discloses ⊂1 2 (the whole left argument was that box) and computes
+    // ,3 on 1 2, giving flat ⊂1 2 3. But (⊂1 2)(⊂3 4)∘.,5 does NOT
+    // disclose the array elements - each cell's ⊂1 2/⊂3 4 stays boxed,
+    // so the result is (⊂1 2) 5 and (⊂3 4) 5 (confirmed: (1⊃R)[1] ≡ ⊂1 2
+    // is 1) - matching plain (⊂1 2),5 with no outer product involved at
+    // all. f's result is re-enclosed only when it isn't itself
     // scalar/boxed, so the outer product's cells stay uniformly "simple".
-    // That's why (⊂1 2)∘.,3 is ⊂1 2 3 (disclose, catenate flat, re-box)
-    // while plain (⊂1 2),3 (no outer product at all) stays (⊂1 2) 3 - the
-    // box is never disclosed for an ordinary function call.
     const applyCell = (wCell, aCell) => {
-      const wArg = isBoxed(wCell) ? wCell[0] : wCell;
-      const aArg = isBoxed(aCell) ? aCell[0] : aCell;
+      const wArg = wIsScalar && isBoxed(wCell) ? wCell[0] : wCell;
+      const aArg = aIsScalar && isBoxed(aCell) ? aCell[0] : aCell;
       const cellResult = f(wArg, aArg);
       return isScalarLike(cellResult) ? cellResult : boxOf(cellResult);
     };
