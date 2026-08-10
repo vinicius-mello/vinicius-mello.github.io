@@ -632,15 +632,6 @@
       font-family: "Fira Code", "IBM Plex Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace;
     }
 
-    .tensor-inline {
-      margin: 0;
-      color: #dfffe6;
-      line-height: 1.35;
-      font-size: 0.82rem;
-      white-space: pre-wrap;
-      font-family: "Fira Code", "IBM Plex Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace;
-    }
-
     .boxed-value {
       display: inline-flex;
       align-items: flex-start;
@@ -1493,154 +1484,117 @@
     // rank-0 container, distinct from an ordinary length-1 vector.
     const isBoxed = (v) => Array.isArray(v) && Array.isArray(v.shape) && v.shape.length === 0;
 
-    // A boxed value counts as a leaf for table display purposes - it's
-    // still one "cell", just rendered with a badge instead of raw text.
-    const isDisplayLeaf = (v) => isPrimitive(v) || isBoxed(v);
-
-    const isVector = (arr) => Array.isArray(arr) && arr.every(isDisplayLeaf);
-
-    const isMatrix = (arr) => {
-      if (!Array.isArray(arr) || arr.length === 0) {
-        return false;
+    // Mirrors apl.js's shapeRec (apl.js:~360): trust a stored .shape tag
+    // before falling back to structural inference. Needed because apl.js
+    // now stamps .shape on results a purely structural walk would misread
+    // - not just boxed rank-0 scalars, but strand literals like (1 2)(3 4)
+    // too, whose two uniformly-shaped elements would otherwise look like
+    // one more real dimension (a 2x2 matrix) instead of two independent
+    // nested vectors (confirmed against real Dyalog: ⍴(1 2)(3 4) is 2).
+    const getDisplayShape = (value) => {
+      if (Array.isArray(value) && Array.isArray(value.shape)) {
+        return value.shape.slice();
       }
-      if (!arr.every((row) => Array.isArray(row))) {
-        return false;
+      if (!Array.isArray(value)) {
+        return [];
       }
-      const width = arr[0].length;
-      return arr.every((row) => row.length === width && row.every(isDisplayLeaf));
+      if (value.length === 0) {
+        return [0];
+      }
+      const shape = getDisplayShape(value[0]);
+      for (let i = 1; i < value.length; i++) {
+        const other = getDisplayShape(value[i]);
+        if (other.length !== shape.length || other.some((d, j) => d !== shape[j])) {
+          return [value.length];
+        }
+      }
+      return [value.length, ...shape];
     };
 
-    const renderLeafCell = (td, cell) => {
-      if (isBoxed(cell)) {
-        td.classList.add("boxed-cell");
+    // A leaf renders inline in its cell (text, or a badge for a box) -
+    // anything else is a genuine sub-array and recurses through
+    // renderResultBody instead of being flattened to raw JSON, so nesting
+    // of any kind (mixed vectors, arrays of boxes, vectors of matrices,
+    // strands of vectors...) stays structured at every depth.
+    const isLeafValue = (v) => isPrimitive(v) || isBoxed(v);
+
+    const renderLeafCell = (host, value) => {
+      if (isBoxed(value)) {
+        host.classList.add("boxed-cell");
         const badge = document.createElement("span");
         badge.className = "boxed-badge";
         badge.textContent = "⊂";
         badge.title = "Enclosed value (rank 0)";
         const content = document.createElement("span");
         content.className = "boxed-cell-content";
-        content.textContent = formatValue(cell[0]);
-        td.appendChild(badge);
-        td.appendChild(content);
+        content.textContent = formatValue(value[0]);
+        host.appendChild(badge);
+        host.appendChild(content);
       } else {
-        td.textContent = String(cell);
+        host.textContent = formatValue(value);
       }
     };
 
-    const renderTable = (host, arr) => {
-      const table = document.createElement("table");
-      table.className = "matrix";
-      const data = isVector(arr) ? [arr] : arr;
-
-      data.forEach((row) => {
-        const tr = document.createElement("tr");
-
-        row.forEach((cell) => {
-          const td = document.createElement("td");
-          renderLeafCell(td, cell);
-          tr.appendChild(td);
-        });
-        table.appendChild(tr);
-      });
-
-      host.appendChild(table);
+    // Renders one grid cell: a leaf goes straight into the <td>, anything
+    // else recurses (and gets the .tensor-cell layout, since it'll hold a
+    // nested table/box rather than a single line of text).
+    const renderCell = (td, value, depth) => {
+      if (isLeafValue(value)) {
+        renderLeafCell(td, value);
+      } else {
+        td.className = "tensor-cell";
+        renderResultBody(td, value, depth);
+      }
     };
 
-    const isRectangularArray = (value) => {
-      if (!Array.isArray(value)) {
-        return isPrimitive(value);
-      }
-      if (value.length === 0) {
-        return true;
-      }
-
-      const firstIsArray = Array.isArray(value[0]);
-      const firstLength = firstIsArray ? value[0].length : 0;
-
-      for (const item of value) {
-        if (Array.isArray(item) !== firstIsArray) {
-          return false;
-        }
-        if (firstIsArray && item.length !== firstLength) {
-          return false;
-        }
-        if (!isRectangularArray(item)) {
-          return false;
-        }
-      }
-      return true;
-    };
-
-    const getShape = (value) => {
-      const shape = [];
-      let current = value;
-      while (Array.isArray(current)) {
-        shape.push(current.length);
-        current = current[0];
-      }
-      return shape;
-    };
-
-    const renderVectorInline = (host, arr) => {
-      renderTable(host, arr);
-    };
-
-    const renderTensor = (host, value, depth = 0) => {
-      if (!Array.isArray(value) || !isRectangularArray(value) || depth > 8) {
-        return false;
-      }
-
-      const shape = getShape(value);
+    // Builds the table/grid for a value of known rank (shape.length >= 1,
+    // no zero dimension - renderResultBody screens those out first).
+    const renderByShape = (host, value, shape, depth) => {
       const rank = shape.length;
+
+      if (rank === 1) {
+        const table = document.createElement("table");
+        table.className = "matrix";
+        const tr = document.createElement("tr");
+        for (let i = 0; i < shape[0]; i++) {
+          const td = document.createElement("td");
+          renderCell(td, value[i], depth + 1);
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+        host.appendChild(table);
+        return;
+      }
 
       const block = document.createElement("div");
       block.className = "tensor-block";
-
-      const meta = document.createElement("p");
-      meta.className = "tensor-meta";
-      meta.textContent = `shape: ${shape.join(" ")}`;
-      block.appendChild(meta);
-
-      if (rank === 1) {
-        renderVectorInline(block, value);
-        host.appendChild(block);
-        return true;
+      if (rank > 2) {
+        const meta = document.createElement("p");
+        meta.className = "tensor-meta";
+        meta.textContent = `shape: ${shape.join(" ")}`;
+        block.appendChild(meta);
       }
 
-      const rows = value.length;
-      const cols = value[0].length;
       const table = document.createElement("table");
       table.className = "matrix";
-
-      for (let i = 0; i < rows; i++) {
+      for (let i = 0; i < shape[0]; i++) {
         const tr = document.createElement("tr");
-
-        for (let j = 0; j < cols; j++) {
+        for (let j = 0; j < shape[1]; j++) {
           const td = document.createElement("td");
-
           if (rank === 2) {
-            renderLeafCell(td, value[i][j]);
-          } else if (rank === 3) {
-            td.className = "tensor-cell";
-            renderVectorInline(td, value[i][j]);
+            renderCell(td, value[i][j], depth + 1);
           } else {
+            // rank >= 3: each [i][j] cell still has trailing dimensions of
+            // its own, so it always recurses rather than leaf-testing.
             td.className = "tensor-cell";
-            if (!renderTensor(td, value[i][j], depth + 1)) {
-              const pre = document.createElement("pre");
-              pre.className = "tensor-inline";
-              pre.textContent = formatValue(value[i][j]);
-              td.appendChild(pre);
-            }
+            renderResultBody(td, value[i][j], depth + 1);
           }
-
           tr.appendChild(td);
         }
         table.appendChild(tr);
       }
-
       block.appendChild(table);
       host.appendChild(block);
-      return true;
     };
 
     const appendSvgNode = (host, svgNode) => {
@@ -1698,10 +1652,13 @@
       return renderSvgStringMaybe(host, value);
     };
 
-    // The dispatch buildOutputCell used to do inline, pulled out so a
-    // boxed value (⊂w) can recursively render its content the same way
-    // the top-level result would, inside a labeled .boxed-value wrapper.
-    const renderResultBody = (host, value) => {
+    // The single recursive entry point for displaying any APL value -
+    // scalar, boxed, or an array of any rank/nesting. Pulled out of
+    // buildOutputCell so a boxed value (⊂w) - or any nested cell inside a
+    // grid, via renderCell/renderByShape above - can render its content
+    // the same way a top-level result would. depth guards against
+    // runaway/self-referential structures.
+    const renderResultBody = (host, value, depth = 0) => {
       if (isBoxed(value)) {
         const box = document.createElement("div");
         box.className = "boxed-value";
@@ -1714,27 +1671,34 @@
 
         const inner = document.createElement("div");
         inner.className = "boxed-content";
-        renderResultBody(inner, value[0]);
+        renderResultBody(inner, value[0], depth + 1);
         box.appendChild(inner);
 
         host.appendChild(box);
         return;
       }
 
-      if (Array.isArray(value) && value.length === 0) {
-        const pre = document.createElement("pre");
-        pre.className = "result-pre";
-        pre.textContent = "⍬";
-        host.appendChild(pre);
-      } else if (Array.isArray(value) && (isVector(value) || isMatrix(value))) {
-        renderTable(host, value);
-      } else if (Array.isArray(value) && renderTensor(host, value)) {
-      } else if (!renderSvgMaybe(host, value)) {
-        const pre = document.createElement("pre");
-        pre.className = "result-pre";
-        pre.textContent = formatValue(value);
-        host.appendChild(pre);
+      if (!Array.isArray(value)) {
+        if (!renderSvgMaybe(host, value)) {
+          const pre = document.createElement("pre");
+          pre.className = "result-pre";
+          pre.textContent = formatValue(value);
+          host.appendChild(pre);
+        }
+        return;
       }
+
+      const shape = getDisplayShape(value);
+
+      if (shape.some((d) => d === 0) || depth > 8) {
+        const pre = document.createElement("pre");
+        pre.className = "result-pre";
+        pre.textContent = depth > 8 ? formatValue(value) : "⍬";
+        host.appendChild(pre);
+        return;
+      }
+
+      renderByShape(host, value, shape, depth);
     };
 
     const buildOutputCell = (kind, value) => {

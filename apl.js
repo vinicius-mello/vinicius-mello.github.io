@@ -640,6 +640,13 @@ const reverseAxis = (w, firstAxis) => {
     return w;
   }
   const shape = shapeRec(w);
+  // A rank-0 array (a box, .shape=[]) has no axis to reverse along -
+  // verified against real Dyalog, 1⊖⊂1 2 3 is a no-op. Without this guard
+  // axis fell back to -1/undefined and at(w, [NaN]) silently returned
+  // undefined instead of w.
+  if (shape.length === 0) {
+    return w;
+  }
   const axis = firstAxis ? 0 : shape.length - 1;
   const n = shape[axis];
   return fillShapeRec(shape, (prefix) => {
@@ -657,6 +664,11 @@ const rotateAxis = (w, a, firstAxis) => {
     return w;
   }
   const shape = shapeRec(w);
+  // Same rank-0 no-op as reverseAxis above - 1⊖⊂1 2 3 leaves the box
+  // untouched in real Dyalog rather than erroring or rotating nothing.
+  if (shape.length === 0) {
+    return w;
+  }
   const axis = firstAxis ? 0 : shape.length - 1;
   const n = shape[axis];
   return fillShapeRec(shape, (prefix) => {
