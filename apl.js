@@ -1,3 +1,111 @@
+// =============================================================================
+// APL.js - an APL-to-JavaScript transpiler and runtime.
+//
+// PIPELINE
+//   tokenizer          text -> flat token list
+//   parseExpression     tokens -> AST, via a right-to-left shift-reduce loop
+//                        (reduceStack) driven by global_category's glyph ->
+//                        {category, name} grammar
+//   emitJs               AST -> a JS source string
+//   evaluateApl/AplJS    new Function('G', jsCode) executes that string with
+//                        the primitive table below (G) as its only argument
+//
+// Read parseToAst/aplToJavaScript/evaluateApl/AplJS at the bottom of this
+// file first if you want the 30-second tour before diving into how any of
+// the stages above actually work.
+//
+// THE GRAMMAR: categories
+//   Every glyph in global_category (below) is tagged with a single-letter
+//   category that reduceStack's grammar rules pattern-match on:
+//     V  value               (a literal, a variable, ⍺/⍵, the result of
+//                             applying a function)
+//     F  function             (+ - × ⌷ ⊂ ... - monadic and/or dyadic)
+//     M  monadic operator     (¨ ⌿ ⍨ ... - takes one function/value operand)
+//     D  dyadic operator      (∘ . ⍣ ... - takes two operands)
+//     Q  quote marker          (⍞ - see its own comment below; a parse-time-
+//                             only relabelling, never a real runtime value)
+//   User-defined names (variables, dfns, dfn operands ⍺⍺/⍵⍵) get looked up
+//   in a per-scope table built as parsing goes (see find_category) and are
+//   assigned the same category letters.
+//
+// THE ARRAY MODEL
+//   There's no dedicated array class. An APL scalar is a bare JS number or
+//   string; an APL array is a plain (possibly nested) JS array. Shape is
+//   normally *inferred* structurally: shapeRec walks Array.isArray/.length
+//   recursively rather than reading it off stored metadata - so a real
+//   Dyalog-style "nested array" (which tracks shape as metadata per array,
+//   completely independent of what's inside) is only approximated here.
+//
+//   That structural inference has one fundamental blind spot: a plain JS
+//   array can't distinguish "a boxed rank-0 scalar" from "an ordinary
+//   length-1 vector", and can't always tell "these two sibling elements
+//   just happen to have the same shape" from "this is actually one more
+//   real dimension". Both are patched the same way - by stamping an
+//   explicit `.shape` array property on specific results, which shapeRec
+//   always checks before falling back to structural inference:
+//     isBoxed(x)            true iff x is an array tagged .shape = []  -
+//                            i.e. a genuine rank-0 "box", the result of
+//                            monadic enclose (⊂), never a plain array
+//     boxOf(x)               wraps x as a fresh box: [x] tagged .shape=[]
+//     encloseIfNeeded(x)     monadic ⊂'s own rule, reusable elsewhere:
+//                            box x if it's an array, leave it untouched
+//                            otherwise (idempotent on simple scalars - so
+//                            ⊂5 ≡ 5, but ⊂1 2 3 is a real box, confirmed
+//                            against real Dyalog; see G.enclose)
+//     G.strand                a juxtaposed-value literal like (1 2)(3 4)
+//                            (see emitJs's 'Strand' case) applies
+//                            encloseIfNeeded to *every* item, unconditionally
+//                            - confirmed against Dyalog that this is what
+//                            real stranding does, not just a display nicety
+//   Primitives that are pervasive (dig through boxes to their content,
+//   operate, then re-enclose the result so the enclosure survives) share
+//   one helper, pervadeBoxed, used by both arithmetic (mdfunc) and
+//   relational (drel) dispatch. G.outer (outer product) has the same
+//   see-through-and-reenclose rule built directly into its cell loop,
+//   applied unconditionally to every cell regardless of which side of the
+//   product it came from - chasing down exactly when Dyalog does and
+//   doesn't disclose a cell (it does, always, including array elements -
+//   not just squeezed scalar arguments) is the whole story behind the
+//   apljs-array-model / outer-product commits in git log, worth reading if
+//   this rule ever looks wrong again.
+//
+//   A second, narrower failure mode: several structural (non-pervasive)
+//   functions - reverseAxis/rotateAxis (⊖/⌽), transposeRec/permute (⍉),
+//   used by dot below too - used to guard their recursion with a raw
+//   `Array.isArray(x[0])`check. A box is *always* a one-element array, so
+//   that check can't tell "a real sub-row to recurse into" from "an opaque
+//   rank-0 cell to leave alone" - it would silently dig into a box's
+//   content and corrupt the result. All of them now check
+//   `shapeRec(x).length` (the *true*, tag-aware rank) instead.
+//
+//   Bottom line when adding a new primitive: if it's pervasive, route it
+//   through mdfunc/drel/pervadeBoxed rather than hand-rolling Array.isArray
+//   checks. If it's structural and needs to know an argument's rank or
+//   walk its axes, use shapeRec (not raw Array.isArray/.length) and build
+//   the result with fillShapeRec/at so a boxed argument is never mistaken
+//   for "one more dimension of real structure".
+//
+// FILE MAP (top to bottom)
+//   tokenizer, global_category           lexer + grammar vocabulary
+//   isBoxed .. shapeRec/fillShapeRec/at   array model + shape helpers (above)
+//   transposeRec/permute, matMul/matInverse, encode/decode, set/format
+//   helpers                              more runtime support, used by G
+//   G = { ... }                          every APL primitive's JS
+//                                         implementation - one property per
+//                                         glyph name from global_category
+//   find_category, breakExpressions, CAT_* lists
+//                                         parser support (scoping, grammar
+//                                         boundary sets used by reduceStack)
+//   emitStatements, emitJs, isTrain/trainGlyph/trainEntry, emitGraph
+//                                         AST -> JS source string (emitJs),
+//                                         plus a second, parallel AST walk
+//                                         (emitGraph) that draws trains/
+//                                         forks as a graph for the REPL's
+//                                         "Train" output instead
+//   parseExpression                      the shift-reduce parser itself
+//   parseToAst, parser, aplToJavaScript, evaluateApl, AplJS
+//                                         public API - start here
+// =============================================================================
 
 const tokenizer = (text) => {
   const tokens = [];
@@ -52,6 +160,7 @@ const tokenizer = (text) => {
   return tokens;
 };
 
+// --- Grammar vocabulary: glyph -> {category, name} (see preamble above) ---
 const global_category = {
   '+': { category:'F', name: 'plus' },
   '-': { category:'F', name: 'minus' },
@@ -870,6 +979,9 @@ const totalCompare = (a, b) => {
 // non-negative k clamps at n, negative k counts back from n and clamps at 0.
 const cellRankFor = (k, n) => (k >= 0 ? Math.min(k, n) : Math.max(n + k, 0));
 
+// --- Runtime: one property per primitive glyph's `name` in global_category
+// above. Generated JS (see emitJs) calls into these directly, e.g. `2×3`
+// compiles to `G.times(3, 2)`. Monadic-only call sites simply omit `a`. ---
 const G = {
   buildObject: (w, a) => {
     if (a === undefined) {
@@ -1930,6 +2042,8 @@ const G = {
   }
 };
 
+// --- Parser support: per-scope name lookup and the boundary/category sets
+// reduceStack's grammar rules (below) pattern-match against. ---
 const find_category = (name, scope) => {
   for (let i = scope.length - 1; i >= 0; i--) {
     if (scope[i].hasOwnProperty(name)) {
@@ -2011,6 +2125,9 @@ const CAT_V_CLOSEPAREN = ['V', ')'];
 // Block, which additionally hoists `let` declarations) and the top-level
 // Program: every statement but the last is followed by `; `, the last is
 // wrapped in `return ... ;` - a dfn's/program's value is its last expression.
+// --- Code generation: AST -> JS source string. emitGraph (further below)
+// is a second, parallel walker over these same node shapes that builds a
+// {label, entries} tree for drawing a train/fork as a graph instead. ---
 const emitStatements = (statements) => {
   let result = '';
   statements.forEach((node, i) => {
@@ -2197,6 +2314,15 @@ const emitGraph = (node) => {
   return lines.join('\n');
 };
 
+// --- The parser itself: a right-to-left shift-reduce loop. Tokens are
+// consumed right-to-left onto a single stack of {category, node} pairs;
+// after every shift, reduceStack pattern-matches a small window (the top 2
+// to 4 stack slots) against a fixed list of grammar rules (parentheses,
+// strand formation, monadic/dyadic application, trains, operator binding
+// ...), collapsing a match into one node, and keeps retrying until nothing
+// matches before the next token shifts on. No bracket-indexing production
+// exists - A[I] never enters the grammar; indexing is just an ordinary
+// application of ⌷ (squad) like any other primitive. ---
 const parseExpression = (expression, scope) => {
   const stack = [];
 
@@ -2466,6 +2592,7 @@ const parseExpression = (expression, scope) => {
   return stack[0].node;
 }
 
+// --- Public API ---
 const parseToAst = (text, categories = { ...global_category }) => {
   const tokens = tokenizer(text);
   const [expressions, _] = breakExpressions(tokens, 0);

@@ -1044,6 +1044,70 @@
   <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
 
   <script type="module">
+    // ===========================================================================
+    // APL.js REPL - the graphics-capable, multi-cell browser UI for the
+    // transpiler/runtime in apl.js (imported below). Read apl.js's own
+    // preamble first for the language/array-model side of things; this file
+    // is purely presentation - editor, session/cell management, result
+    // display, theming, and the in-app Help docs.
+    //
+    // ROUGHLY TOP TO BOTTOM
+    //   CodeMirror wiring            APL syntax highlighting mode, matching
+    //                                 bracket/quote closing, theme -> syntax
+    //                                 color mapping
+    //   SAMPLE, GRAPHICS_SAMPLE,
+    //   APL_ESCAPES, PRIMITIVE_DOCS,
+    //   GRAPHICS_DOCS, FFI_EXAMPLES   static content for the "Insert Sample"
+    //                                 buttons and the Help overlay's tabs
+    //   DOM element lookups, THEME_*,
+    //   SESSION_STORAGE_KEY           element refs + localStorage keys
+    //   createRuntimeContext          one Object.create(G) per session/
+    //                                 restart, so ⎕null/DFN state etc. don't
+    //                                 leak across a Restart Session
+    //   formatValue .. renderResultBody
+    //                                 RESULT DISPLAY. getDisplayShape mirrors
+    //                                 apl.js's shapeRec (trusts a .shape tag
+    //                                 before inferring structurally) and
+    //                                 isBoxed is the same check duplicated
+    //                                 across the module boundary - see
+    //                                 apl.js's preamble for why a plain
+    //                                 Array.isArray walk isn't enough. A
+    //                                 value that isn't a leaf (primitive or
+    //                                 boxed) always recurses through
+    //                                 renderResultBody rather than being
+    //                                 flattened to raw JSON, so nesting of
+    //                                 any kind - mixed vectors, arrays of
+    //                                 boxes, vectors of matrices, strands of
+    //                                 vectors - stays structured at every
+    //                                 depth.
+    //   buildOutputCell, removeOutputsFor, insertOutputsAfter, renderCellHead
+    //                                 wrap a computed value into the DOM
+    //                                 nodes for one Result/Output(quad)/
+    //                                 Error/Train cell
+    //   deleteCell, expandEscapeAtCursor, runCell, runCurrentCell,
+    //   navigateHistory, createInputCell, clearHistory, restartSession
+    //                                 CELL LIFECYCLE. Cells share one
+    //                                 replRuntime/replCategories (created by
+    //                                 createRuntimeContext) until
+    //                                 Restart Session makes a fresh pair -
+    //                                 that's what lets a later cell see an
+    //                                 earlier cell's variables/dfns.
+    //   saveSession, scheduleSessionSave, loadSession, restoreSession
+    //                                 SESSION PERSISTENCE. Every cell's
+    //                                 source (+ whether it ran) is saved to
+    //                                 localStorage on change/run/delete;
+    //                                 on load, restoreSession replays each
+    //                                 previously-run cell through
+    //                                 createInputCell+runCell in order to
+    //                                 rebuild both the visible history and
+    //                                 replRuntime's variable state.
+    //   buildHelp, buildPrimitivesTable, buildGraphicsDocs, buildFFIExamples,
+    //   setHelpTab, openHelp, closeHelp
+    //                                 Help overlay, populated from the
+    //                                 static docs data above
+    //   (bottom of the script)       event listener wiring + the actual
+    //                                 startup call (restoreSession())
+    // ===========================================================================
     import { EditorState, Prec } from "https://esm.sh/@codemirror/state@6";
     import { EditorView, keymap, lineNumbers } from "https://esm.sh/@codemirror/view@6";
     import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6";
