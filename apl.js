@@ -359,7 +359,7 @@ const mdfunc = (m,d,w,a) => {
     } else if (Array.isArray(w)) {
       return w.map(x => mdfunc(m,d,x));
     } else {
-      throw new Error('Unsupported type for negation');
+      throw new Error('Unsupported type for monadic function');
     }
   }
   if (isBoxed(w) || isBoxed(a)) {
@@ -376,11 +376,11 @@ const mdfunc = (m,d,w,a) => {
   }
   if (Array.isArray(w) && Array.isArray(a)) {
     if (w.length !== a.length) {
-      throw new Error('Arrays must be of the same length for element-wise subtraction.');
+      throw new Error('Arrays must be of the same length for element-wise operation.');
     }
     return a.map((x, i) => mdfunc(m,d,w[i],x));
   } else {
-    throw new Error('Unsupported types for subtraction');
+    throw new Error('Unsupported types for dyadic function');
   }
 }
 
@@ -855,6 +855,12 @@ const flattenDeep = (w) => {
 
 const isMember = (item, list) => list.some(x => matchRec(item, x) === 1);
 
+// Provisional implementation: O(n²) (a matchRec-based .some() scan of the
+// result-so-far per item), fine for the REPL's typical small arrays but
+// not something to rely on for large inputs. Used by G.unique (∪) and
+// G.intersect (∩). A real fix would need a hashable key per item (cheap
+// for simple scalars, harder for nested/boxed items, which still need
+// matchRec's structural comparison) to get this down to roughly O(n).
 const uniqueItems = (items) => {
   const result = [];
   for (const item of items) {
@@ -1080,14 +1086,28 @@ const G = {
     if (typeof f !== 'function') {
       throw new Error('Each requires a function');
     }
-    if (Array.isArray(w)&&Array.isArray(a)) {
-      return w.map((x,i) => f(x, a[i]));
-    } else if(Array.isArray(w)) {
-      return w.map(x => f(x, a));
-    } else if(Array.isArray(a)) {
-      return a.map(x => f(w, x));
+    // A box is one rank-0 cell for each too, not an array to iterate -
+    // same disclose/apply/re-enclose rule as pervadeBoxed/G.outer.
+    // Verified against real Dyalog: ⊢¨⊂1 2 3 discloses to 1 2 3, applies
+    // ⊢ (identity), and re-encloses - it displays as a single box, and ⍴
+    // of it is ⍬ (rank 0), not [1,3] (which is what a raw
+    // Array.isArray(w)-driven .map over the box's own single JS slot
+    // used to produce).
+    const applyCell = (wCell, aCell) => {
+      const wArg = isBoxed(wCell) ? wCell[0] : wCell;
+      const aArg = isBoxed(aCell) ? aCell[0] : aCell;
+      return encloseIfNeeded(f(wArg, aArg));
+    };
+    const wIsArray = Array.isArray(w) && !isBoxed(w);
+    const aIsArray = Array.isArray(a) && !isBoxed(a);
+    if (wIsArray && aIsArray) {
+      return w.map((x,i) => applyCell(x, a[i]));
+    } else if (wIsArray) {
+      return w.map(x => applyCell(x, a));
+    } else if (aIsArray) {
+      return a.map(x => applyCell(w, x));
     } else {
-      return f(w, a);
+      return applyCell(w, a);
     }
   },
   power: (f, g)=>(w, a) => {
@@ -1174,26 +1194,39 @@ const G = {
     }
   }, 
   compress: (w, a) => {
-    if (typeof w === 'string' && Array.isArray(a)) {
-      w = w.split('');
-      let result = '';
-      for (let i = 0; i < w.length; i++) {
-        for(let j = 0; j < a[i]; j++) {
-          result = result + w[i];
-        }
-      }
-      return result;
-    }
-    if(!Array.isArray(w) || !Array.isArray(a)) {
+    // Either side broadcasts if it's scalar-like (a plain number/string,
+    // or - the box-safety fix - a boxed value) to match the other side's
+    // length. Verified against real Dyalog: 3/1 2 3 repeats the count 3
+    // for every element (previously unsupported here - a bare a.length
+    // check required a to already be an array), and 1 0 1/⊂1 2 3
+    // broadcasts the boxed scalar to 3 positions before dropping the
+    // middle one. Compress never discloses a boxed item on the w side -
+    // it's structural, not pervasive, so a kept/dropped/repeated item
+    // passes through exactly as it was, box or not.
+    const wasString = typeof w === 'string';
+    const witems = wasString ? w.split('') : w;
+    const wIsScalar = isScalarLike(witems);
+    const aIsScalar = isScalarLike(a);
+    if (!wIsScalar && !Array.isArray(witems)) {
       throw new Error('Unsupported types for compress');
     }
+    if (!aIsScalar && !Array.isArray(a)) {
+      throw new Error('Unsupported types for compress');
+    }
+    if (!wIsScalar && !aIsScalar && witems.length !== a.length) {
+      throw new Error('Length mismatch for compress');
+    }
+    const length = wIsScalar ? (aIsScalar ? 1 : a.length) : witems.length;
     const result = [];
-    for (let i = 0; i < w.length; i++) {
-      for(let j = 0; j < a[i]; j++) {
-        result.push(w[i]);
+    for (let i = 0; i < length; i++) {
+      const item = wIsScalar ? witems : witems[i];
+      const countCell = aIsScalar ? a : a[i];
+      const count = isBoxed(countCell) ? countCell[0] : countCell;
+      for (let j = 0; j < count; j++) {
+        result.push(item);
       }
     }
-    return result;
+    return (wasString && !wIsScalar) ? result.join('') : result;
   },
   deal: (w, a) => {
     if(a===undefined) {
@@ -1398,21 +1431,37 @@ const G = {
     });
   },
   // Domino (⌹): monadic ⌹⍵ is the matrix inverse (or least-squares
-  // pseudo-inverse for a non-square ⍵); dyadic ⍺⌹⍵ solves ⍵·X≡⍺ for X, i.e.
-  // (⌹⍵)+.×⍺ - ⍺ may be a plain vector (a single right-hand side) or a
-  // matrix (one right-hand side per column), and the result matches ⍺'s
-  // shape (vector in, vector out).
+  // pseudo-inverse for a non-square ⍵); dyadic ⍺⌹⍵ generalizes division -
+  // the matrix on the RIGHT (⍵) is always the one that gets pseudo-inverted,
+  // and ⍺ is matrix-multiplied on the LEFT of that inverse: ⍺⌹⍵ ≡ ⍺+.×⌹⍵.
+  // Verified against real Dyalog with the matrix on either side:
+  // (2 2⍴1 0 0 2)⌹1 2 is 0.2 0.8 (matches ⍺+.×⌹⍵: (2 2⍴1 0 0 2)+.×(⌹1 2)),
+  // and 1 2⌹2 2⍴1 0 0 2 is 1 1 (matches (1 2)+.×⌹(2 2⍴1 0 0 2)). Either ⍺
+  // or ⍵ may be a plain vector instead of a matrix - a vector is treated as
+  // a single row for pseudo-inversion purposes (also verified monadically:
+  // ⌹1 2 3 is (1 2 3)÷14, the pseudo-inverse of a 1×3 row).
   domino: (w, a) => {
-    if (!Array.isArray(w) || !Array.isArray(w[0])) {
-      throw new Error('Domino requires a matrix');
+    // A box is rank 0, never valid input here - w[0] being an array (the
+    // box's disclosed content, if that content happens to itself be
+    // array-shaped) used to slip past a bare !Array.isArray(w[0]) check
+    // and get treated as a real (garbage) matrix. Verified against real
+    // Dyalog: ⌹⊂2 2⍴1 2 3 4 is a DOMAIN ERROR, not a disclose-and-proceed.
+    if (!Array.isArray(w) || isBoxed(w)) {
+      throw new Error('Domino requires a matrix or vector');
     }
+    const wIsVector = !Array.isArray(w[0]);
+    const wMat = wIsVector ? [w] : w;
     if (a === undefined) {
-      return matPseudoInverse(w);
+      const inv = matPseudoInverse(wMat);
+      return wIsVector ? inv.map((row) => row[0]) : inv;
     }
     const aIsVector = !Array.isArray(a[0]);
-    const aMat = aIsVector ? a.map((x) => [x]) : a;
-    const result = matMul(matPseudoInverse(w), aMat);
-    return aIsVector ? result.map((row) => row[0]) : result;
+    const aMat = aIsVector ? [a] : a;
+    const result = matMul(aMat, matPseudoInverse(wMat));
+    if (aIsVector && wIsVector) return result[0][0];
+    if (aIsVector) return result[0];
+    if (wIsVector) return result.map((row) => row[0]);
+    return result;
   },
   rank: (f, g) => (w, a) => {
     if (typeof f !== 'function') {
@@ -1640,17 +1689,30 @@ const G = {
     return f(g(w),a);      
   },
   reduce: ((f) => (a) => {
-    if (!Array.isArray(a)) {
-      throw new Error('Reduce requires an array');
+    // Rank 0 (a plain scalar, or a box - a box is a 1-element JS array,
+    // which would otherwise slip through as "an array to reduce" and get
+    // silently disclosed by reduceRight's own single-element shortcut).
+    // Verified against real Dyalog: +/5 is 5, and (+/⊂1 2 3)≡⊂1 2 3 - a
+    // rank-0 argument has no axis to reduce along, so reduce is identity.
+    if (!Array.isArray(a) || isBoxed(a)) {
+      return a;
     }
     if (a.length === 0) {
+      // Ad hoc identity elements, for now: a proper fix needs every
+      // primitive to expose its own identity element (+/⍬ is 0, ×/⍬ is 1,
+      // ∧/⍬ is 1, etc. in real Dyalog), which nothing here currently does.
+      // Only the two most common cases are covered.
+      if (f === G.plus) return 0;
+      if (f === G.times) return 1;
       throw new Error('Reduce cannot be applied to an empty array');
     }
     return a.reduceRight(f);
   }),
   scan: ((f) => (a) => {
-    if (!Array.isArray(a)) {
-      throw new Error('Scan requires an array');
+    // Same rank-0 identity rule as reduce, above - verified against real
+    // Dyalog: +\5 is 5 (not ,5), and (+\⊂1 2 3)≡⊂1 2 3.
+    if (!Array.isArray(a) || isBoxed(a)) {
+      return a;
     }
     if (a.length === 0) {
       throw new Error('Scan cannot be applied to an empty array');
