@@ -574,6 +574,7 @@ const at = (arr, idx) => {
 const assignRec = (arr, idx, value) => {
   if(typeof idx === 'number') {
     arr[idx] = value;
+    return;
   }
   let result = arr;
   for (let i = 0; i < idx.length - 1; i++) {
@@ -629,6 +630,25 @@ const getRec = (arr, idx) => {
     result.push(getRec(arr[t[i]], rest));
   }
   return result;
+};
+
+// Pick's (⊃) path-walking engine: unlike squad, which indexes across an
+// array's own axes, pick walks successive levels of *enclosure* - each
+// step must disclose a box before it can be indexed into. Verified
+// against real Dyalog: 1 1⊃(1 2)(3(4 5)) is 4 5 (step into item 1, which
+// is a box; disclose it; step into ITS item 1, another box; disclose
+// that too), not two independent picks.
+const pickPath = (w, path) => {
+  let current = w;
+  for (const idx of path) {
+    if (isBoxed(current)) current = current[0];
+    if (!Array.isArray(current) || typeof idx !== 'number' || idx < 0 || idx >= current.length) {
+      throw new Error('Index error: pick path out of bounds');
+    }
+    current = current[idx];
+  }
+  if (isBoxed(current)) current = current[0];
+  return current;
 };
 
 // All four functions below used to guard entry with a raw
@@ -1706,13 +1726,21 @@ const G = {
     return result;
   },            
   jot: (f, g) => (w, a) => {
+    // f is a bound value, g a function: (f∘g)⍵ ≡ f g ⍵ - f is g's LEFT
+    // argument (⍺), the jot's own ⍵ is g's right. Every primitive here
+    // takes (w,a) positionally, so that's g(w, f), not g(f, w) - the
+    // latter swaps ⍺ and ⍵, which non-commutative functions expose.
+    // Verified against real Dyalog: (2∘|)5 is 1 (2|5), not 2.
     if(typeof f !== 'function') {
-      return g(f, w);
+      return g(w, f);
     }
+    // g is a bound value, f a function: (f∘g)⍵ ≡ ⍵ f g - the jot's own
+    // ⍵ is f's LEFT argument, g is f's right. Same swap for the same
+    // reason. Verified against real Dyalog: (|∘2)5 is 2 (5|2), not 1.
     if(typeof g !== 'function') {
-      return f(w, g);
+      return f(g, w);
     }
-    return f(g(w),a);      
+    return f(g(w),a);
   },
   reduce: ((f) => (a) => {
     // Rank 0 (a plain scalar, or a box - a box is a 1-element JS array,
@@ -1860,6 +1888,12 @@ const G = {
       });
       return result;
     }
+    // A bare index (0@2⊢1 2 3 4 5, replacing a single position) is just
+    // the 1-element-list case - verified against real Dyalog: 0@2⊢1 2 3 4
+    // 5 is 1 2 0 4 5.
+    if (typeof g === 'number') {
+      g = [g];
+    }
     if(Array.isArray(g)) {
       if(Array.isArray(f)) {
         if(f.length !== g.length)
@@ -1912,19 +1946,30 @@ const G = {
   },
   pick: (w, a) => {
     if (a===undefined) {
-      if (Array.isArray(w))
-        return w.length===0? 0 : w[0];
-      if (typeof w==='string') 
+      // Monadic ⊃ is "First": the first item (ravel order), disclosed if
+      // it's a box, the prototype element for an empty w, or w itself for
+      // a true scalar. Verified against real Dyalog:
+      // (⊃(⊂1 2),⊂3 4)≡1 2 is 1 - the first item comes out disclosed, not
+      // still boxed.
+      if (Array.isArray(w)) {
+        if (w.length === 0) return 0;
+        return isBoxed(w[0]) ? w[0][0] : w[0];
+      }
+      if (typeof w==='string')
         return w.length===0? ' ' : w[0];
       return w;
     }
+    // A simple (flat, unboxed-numbers-only) ⍺ is ONE path through w's
+    // nesting levels - see pickPath. Verified against real Dyalog:
+    // 1⊃(⊂1 2),⊂3 4 is 3 4 (disclosed), matching pickPath's final
+    // disclose step.
     if (typeof a === 'number') {
-      return w[a];
+      return pickPath(w, [a]);
     }
-    if (Array.isArray(a)) {
-      return a.map(x => at(w, typeof x === 'number' ? [x] : x));
+    if (Array.isArray(a) && a.every((x) => typeof x === 'number')) {
+      return pickPath(w, a);
     }
-    throw new Error('Unsupported type for pick');
+    throw new Error('Unsupported type for pick: ⍺ must be a simple (unboxed) numeric path');
   },
   take: (w, a) => {
     if (!Array.isArray(w)) {
