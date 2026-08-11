@@ -496,8 +496,18 @@ const getRec = (arr, idx) => {
   return result;
 };
 
+// All four functions below used to guard entry with a raw
+// `!Array.isArray(a[0])` check - which misreads a boxed cell (⊂x, always
+// a 1-element array `[x]`) as "a row of width 1" and recurses INTO it
+// instead of treating it as an opaque rank-0 value, corrupting the result
+// (this is what broke dot product/inner product - apl.js:1258 - on a
+// strand like `1 (2 2⍴...)`, whose non-scalar item is now a real box per
+// G.strand). shapeRec(a).length checks the array's *true* rank (trusting
+// a .shape tag before falling back to structural inference) rather than
+// just peeking at a[0]'s literal JS shape, so a boxed element correctly
+// reads as contributing no further axis to recurse into.
 const transposeRec = (a) => {
-  if (!Array.isArray(a) || !Array.isArray(a[0])) {  
+  if (!Array.isArray(a) || shapeRec(a).length <= 1) {
     return a;
   }
   const result = [];
@@ -509,7 +519,7 @@ const transposeRec = (a) => {
 };
 
 const itransposeRec = (a) => {
-  if (!Array.isArray(a) || !Array.isArray(a[0])) {  
+  if (!Array.isArray(a) || shapeRec(a).length <= 1) {
     return a;
   }
   a = a.map(row => itransposeRec(row));
@@ -522,11 +532,11 @@ const itransposeRec = (a) => {
 };
 
 const transpose = (a) => {
-  if (!Array.isArray(a) || !Array.isArray(a[0])) {  
+  if (!Array.isArray(a) || shapeRec(a).length <= 1) {
     return a;
   }
   const shape = shapeRec(a).reverse();
-  return fillShapeRec(shape, 
+  return fillShapeRec(shape,
     (prefix) => at(a, prefix.reverse()));
 }
 
@@ -539,7 +549,7 @@ const invertPermutation = (perm) => {
 }
 
 const permute = (a, p) => {
-  if (!Array.isArray(a) || !Array.isArray(a[0])) {  
+  if (!Array.isArray(a) || shapeRec(a).length <= 1) {
     return a;
   }
   if (!Array.isArray(p)) {
