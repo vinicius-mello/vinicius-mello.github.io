@@ -582,24 +582,50 @@ const assignRec = (arr, idx, value) => {
   result[idx[idx.length - 1]] = value;
 };
 
+// Squad's (⌷) indexing engine. idx is consumed one axis per recursion
+// level - a bare number is normalized to a 1-element axis list so both
+// entry points (a plain scalar index, or a real per-axis index array) go
+// through the same rank/bounds checks below.
 const getRec = (arr, idx) => {
   if (typeof idx === 'number') {
-    return arr[idx];
+    idx = [idx];
   }
   if (!Array.isArray(idx)) {
-    console.log(arr, idx);
-    throw new Error('Unsupported index type');
+    throw new Error('Unsupported index type for squad');
   }
   if (idx.length === 0) {
     return arr;
   }
-  const t = idx[0];
+  // Still an axis left to consume, but arr has no axis to offer: a plain
+  // scalar or a box (rank 0, always a 1-element JS array) used to let
+  // arr[i] silently return JS undefined here instead of erroring.
+  // Verified against real Dyalog: 2⌷⊂1 2 3 4 5 is a LENGTH ERROR.
+  if (!Array.isArray(arr) || isBoxed(arr)) {
+    throw new Error('Length error: too many indices for squad');
+  }
+  // A per-axis selector is a box when it's meant to select several indices
+  // along this axis (e.g. (0 1)(2)⌷M picks rows 0 and 1, column 2) - it
+  // arrives boxed because G.strand encloses every non-simple strand item,
+  // so (0 1) in that strand is really ⊂0 1, not a raw [0,1]. Verified
+  // against real Dyalog (⎕IO←0): (0 1)(2)⌷2 3⍴⍳6 is 2 5.
+  const t0 = idx[0];
+  const t = isBoxed(t0) ? t0[0] : t0;
   const rest = idx.slice(1);
+  const checkBounds = (i) => {
+    if (typeof i !== 'number' || i < 0 || i >= arr.length) {
+      throw new Error('Index error: index out of bounds for squad');
+    }
+  };
   if (typeof t === 'number') {
+    checkBounds(t);
     return getRec(arr[t], rest);
+  }
+  if (!Array.isArray(t)) {
+    throw new Error('Unsupported index type for squad');
   }
   const result = [];
   for (let i = 0; i < t.length; i++) {
+    checkBounds(t[i]);
     result.push(getRec(arr[t[i]], rest));
   }
   return result;
@@ -1796,30 +1822,13 @@ const G = {
     return permute(w, a);
   },
   squad: (w, a) => {
+    // Monadic ⌷ is identity in real Dyalog ("materialise") - verified:
+    // (⌷⊂1 2 3)≡⊂1 2 3 is 1.
+    if (a === undefined) {
+      return w;
+    }
     if(typeof w === 'string')
       w = w.split('');
-    // if(Array.isArray(a) && 
-    //   a.length === 1 && 
-    //   Array.isArray(a[0])) {
-    //   a = a[0];
-    //   const sw = shapeRec(w);
-    //   const sa = shapeRec(a);
-    //   const rw = sw.length;
-    //   if(rw===1) {
-    //     return fillShapeRec(sa, (prefix, index) => {
-    //       const v = at(a, prefix);
-    //       return w[v];
-    //     });
-    //   }
-    //   if(rw===sa[sa.length-1]) {
-    //     const resultShape = sa.slice(0, -1);
-    //     return fillShapeRec(resultShape, (prefix, index) => {
-    //       const v = at(a, prefix);
-    //       return at(w, v);
-    //     });
-    //   }
-    //   throw new Error('Unsupported shapes for squad');
-    // }
     return getRec(w, a);
   },
   at: (f,g) => (w, a) => {
