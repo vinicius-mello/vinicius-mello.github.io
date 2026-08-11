@@ -190,9 +190,21 @@ const isBoxed = (x) => Array.isArray(x) && Array.isArray(x.shape) && x.shape.len
 const isScalarLike = (x) => typeof x === 'number' || typeof x === 'string' || isBoxed(x);
 const boxOf = (x) => {
   const b = [x];
-  b.shape = [];
+  b.shape = []; 
   return b;
 };
+
+// Monadic enclose's own rule (see G.enclose below), reusable outside of it:
+// arrays get boxed, an already-simple (non-array) value is untouched -
+// idempotent for simple scalars, but adds a real layer to anything else,
+// including an already-boxed value. Two other places apply this same rule
+// unconditionally, confirmed against real Dyalog: a strand literal like
+// (1 2)(3 4) encloses each item (≡((1 2)(3 4))[1] is 2, not the 1 a bare
+// 1 2 would have - and (⊂¯1⌽c)(⊂0⌽c)(⊂1⌽c)'s items each pick up one MORE
+// layer this way, since they were already boxed going in); and outer
+// product re-encloses every cell's result the same way, unconditionally
+// (see G.outer's applyCell).
+const encloseIfNeeded = (x) => (Array.isArray(x) ? boxOf(x) : x);
 
 // Catenate (,) splices a plain array's own elements in but must treat a
 // boxed value as one atomic term - otherwise `1,(⊂2 3),4` would spill the
@@ -619,6 +631,10 @@ const matPseudoInverse = (A) => {
 // ('x' 5)). Both cases are disambiguated here: a command list's first
 // element is only ever an array once there is more than one command, so a
 // leading string means "this whole thing is one command".
+// Each command is disclosed if boxed - a multi-command strand like
+// (#create #svg)(#attr #width 500) now really encloses each inner
+// (#create #svg)-style pair (a strand item that isn't a simple scalar -
+// see G.strand), the same as any other non-trivial strand item would be.
 const normalizeCommandList = (w) => {
   if (!Array.isArray(w)) {
     return [[w]];
@@ -629,7 +645,10 @@ const normalizeCommandList = (w) => {
   if (typeof w[0] === 'string') {
     return [w];
   }
-  return w.map(cmd => Array.isArray(cmd) ? cmd : [cmd]);
+  return w.map(cmd => {
+    const item = isBoxed(cmd) ? cmd[0] : cmd;
+    return Array.isArray(item) ? item : [item];
+  });
 };
 
 const reverseAxis = (w, firstAxis) => {
@@ -896,21 +915,20 @@ const G = {
   asFunction: (f) => f,
   // Codegen-only helper, not a real APL primitive - juxtaposed-value strand
   // literals like (1 2)(3 4) compile to G.strand([...]) (see emitJs's
-  // Strand case) so the resulting array is tagged with its true top-level
-  // shape. Without it, shapeRec has no stored shape to trust and falls
-  // back to inferring one structurally, which misreads a strand of
-  // uniformly-shaped elements as one more real dimension - e.g. (1 2)(3 4)
-  // would read as a 2x2 matrix instead of a 2-element vector of 2-vectors.
-  // Verified against real Dyalog: ⍴(1 2)(3 4) is 2, not 2 2 - it tracks
-  // shape as stored metadata per array rather than inferring it, so a
-  // vector of same-length sub-vectors is never confused with a matrix.
-  // Elements themselves are left exactly as they are - Dyalog does not
-  // enclose them either (⍴¨(1 2)(3 4) is 2 2, not ⍬ ⍬ - if it enclosed
-  // them, each would report ⍴⍬).
-  strand: (arr) => {
-    arr.shape = [arr.length];
-    return arr;
-  },
+  // Strand case), which encloses each item exactly like monadic ⊂ would
+  // (encloseIfNeeded above) - a no-op for a simple scalar, but a real box
+  // around anything else. This isn't just a display nicety: verified
+  // against real Dyalog with bracket indexing (which - unlike ¨ - does NOT
+  // auto-disclose), ⍴((1 2)(3 4))[1] is ⍬ and ≡((1 2)(3 4))[1] is 2 - the
+  // element really is boxed, one more level than a bare 1 2 (depth 1)
+  // would be. (An earlier version of this comment claimed elements were
+  // left untouched, based on probing with ⍴¨ - but ¨ itself discloses each
+  // item before applying ⍴, which was silently hiding the box.) Once every
+  // element is properly boxed, the array's own top-level shape - [length]
+  // - falls out of ordinary structural inference (shapeRec stops at each
+  // element's .shape=[] tag), so nothing needs to be stamped explicitly
+  // here the way G.outer stamps its result's shape.
+  strand: (arr) => arr.map(encloseIfNeeded),
   Math,
   Date,
   JSON,
@@ -1184,23 +1202,25 @@ const G = {
     const wIsScalar = isScalarLike(w);
     const aCells = aIsScalar ? [a] : a;
     const wCells = wIsScalar ? [w] : w;
-    // Verified against real Dyalog (TryAPL, using ≡ match rather than ⊃ to
-    // inspect - ⊃ always discloses, which had contaminated an earlier
-    // reading here): disclosure only happens to a side that was itself a
-    // bare scalar/box being squeezed into one cell, never to an element
-    // pulled out of a genuine array by ordinary iteration. (⊂1 2)∘.,3
-    // discloses ⊂1 2 (the whole left argument was that box) and computes
-    // ,3 on 1 2, giving flat ⊂1 2 3. But (⊂1 2)(⊂3 4)∘.,5 does NOT
-    // disclose the array elements - each cell's ⊂1 2/⊂3 4 stays boxed,
-    // so the result is (⊂1 2) 5 and (⊂3 4) 5 (confirmed: (1⊃R)[1] ≡ ⊂1 2
-    // is 1) - matching plain (⊂1 2),5 with no outer product involved at
-    // all. f's result is re-enclosed only when it isn't itself
-    // scalar/boxed, so the outer product's cells stay uniformly "simple".
+    // Verified against real Dyalog (TryAPL, comparing a strand-of-boxes
+    // against the actual result of a prior outer product via ≡ and ⍴ on
+    // bracket-indexed - never ⊃-disclosed, which would have masked this -
+    // elements): EVERY cell is disclosed before f runs, and f's result is
+    // ALWAYS re-enclosed afterwards via plain ⊂ (encloseIfNeeded above,
+    // idempotent for a simple scalar) - unconditionally, regardless of
+    // whether the cell came from squeezing a bare scalar/box argument or
+    // from iterating a genuine array's elements, and regardless of whether
+    // the result was already boxed. This resolved an apparent contradiction:
+    // ¯1 0 1∘.⊖(¯1 0 1∘.⌽⊂c) visibly rotates c's rows (each cell of the
+    // inner result is disclosed down to the real matrix, ⊖ actually runs
+    // on it, then re-enclosed), while ¯1 0 1∘.⊖(⊂c)(⊂c)(⊂c) does not
+    // (a strand's items are enclosed one MORE time than a fresh ⊂ would -
+    // see G.strand - so disclosing once still leaves a box, and ⊖ on a
+    // rank-0 box is a no-op per reverseAxis/rotateAxis's guard).
     const applyCell = (wCell, aCell) => {
-      const wArg = wIsScalar && isBoxed(wCell) ? wCell[0] : wCell;
-      const aArg = aIsScalar && isBoxed(aCell) ? aCell[0] : aCell;
-      const cellResult = f(wArg, aArg);
-      return isScalarLike(cellResult) ? cellResult : boxOf(cellResult);
+      const wArg = isBoxed(wCell) ? wCell[0] : wCell;
+      const aArg = isBoxed(aCell) ? aCell[0] : aCell;
+      return encloseIfNeeded(f(wArg, aArg));
     };
     const result = [];
     for (let i = 0; i < aCells.length; i++) {

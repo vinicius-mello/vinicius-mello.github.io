@@ -674,15 +674,20 @@
 
     .matrix td.boxed-cell {
       text-align: left;
+      vertical-align: top;
       background: color-mix(in oklab, var(--accent) 12%, var(--matrix-bg));
     }
 
     .matrix td.boxed-cell .boxed-badge {
-      margin-right: 6px;
+      margin-bottom: 4px;
     }
 
     .matrix td.boxed-cell .boxed-cell-content {
       font-family: inherit;
+    }
+
+    .matrix td.boxed-cell .boxed-cell-content .matrix {
+      margin: 0;
     }
 
     .svg-wrap {
@@ -1518,16 +1523,19 @@
     // strands of vectors...) stays structured at every depth.
     const isLeafValue = (v) => isPrimitive(v) || isBoxed(v);
 
-    const renderLeafCell = (host, value) => {
+    const renderLeafCell = (host, value, depth) => {
       if (isBoxed(value)) {
         host.classList.add("boxed-cell");
         const badge = document.createElement("span");
         badge.className = "boxed-badge";
         badge.textContent = "⊂";
         badge.title = "Enclosed value (rank 0)";
-        const content = document.createElement("span");
+        const content = document.createElement("div");
         content.className = "boxed-cell-content";
-        content.textContent = formatValue(value[0]);
+        // Recurse (not formatValue) - a boxed 3x3 matrix inside a vector
+        // cell needs the same table rendering a top-level box gets, not a
+        // flattened JSON dump of its rows.
+        renderResultBody(content, value[0], depth + 1);
         host.appendChild(badge);
         host.appendChild(content);
       } else {
@@ -1540,7 +1548,7 @@
     // nested table/box rather than a single line of text).
     const renderCell = (td, value, depth) => {
       if (isLeafValue(value)) {
-        renderLeafCell(td, value);
+        renderLeafCell(td, value, depth);
       } else {
         td.className = "tensor-cell";
         renderResultBody(td, value, depth);
