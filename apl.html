@@ -1672,7 +1672,16 @@
     const appendSvgNode = (host, svgNode) => {
       const wrap = document.createElement("div");
       wrap.className = "svg-wrap";
-      wrap.appendChild(svgNode.cloneNode(true));
+      // The real node, not a clone: d3.timer/transition callbacks captured
+      // in a cell (e.g. via ⍞update passed to d3⍠(#timer ...)) keep
+      // mutating whatever node they were bound to after this render. A
+      // clone would freeze the display at this instant and silently break
+      // every animation - the mutations would keep happening on a node
+      // nothing on screen points to. A later cell that reuses/mutates the
+      // same source node will retroactively update this display too, but
+      // that's the same live object the cell already returned, not a
+      // surprise this rendering step introduces.
+      wrap.appendChild(svgNode);
       host.appendChild(wrap);
       return true;
     };
