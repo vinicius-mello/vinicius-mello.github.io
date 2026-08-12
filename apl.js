@@ -800,6 +800,18 @@ const matPseudoInverse = (A) => {
 // (#create #svg)(#attr #width 500) now really encloses each inner
 // (#create #svg)-style pair (a strand item that isn't a simple scalar -
 // see G.strand), the same as any other non-trivial strand item would be.
+//
+// A command's own ARGUMENTS get the same treatment for the same reason:
+// (#data pts) is itself a strand, so a real-array pts (e.g. an n×2 point
+// matrix) arrives boxed too - G.strand encloses every item, not just
+// whole commands. d3/Plot are plain JS with no notion of an APL box, so
+// handing them the box (a 1-element array wrapping pts) instead of pts
+// itself silently binds ONE datum (the whole matrix) rather than n rows.
+// Verified against the live bug: (#data pts) was reaching d3's .data()
+// as [pts], not pts, producing one garbled <circle> instead of n real
+// ones. Only argument slots are disclosed here, never the command name.
+const discloseCommandArgs = (cmd) => [cmd[0], ...cmd.slice(1).map((x) => (isBoxed(x) ? x[0] : x))];
+
 const normalizeCommandList = (w) => {
   if (!Array.isArray(w)) {
     return [[w]];
@@ -808,11 +820,11 @@ const normalizeCommandList = (w) => {
     return [];
   }
   if (typeof w[0] === 'string') {
-    return [w];
+    return [discloseCommandArgs(w)];
   }
   return w.map(cmd => {
     const item = isBoxed(cmd) ? cmd[0] : cmd;
-    return Array.isArray(item) ? item : [item];
+    return discloseCommandArgs(Array.isArray(item) ? item : [item]);
   });
 };
 
