@@ -176,9 +176,23 @@ const global_category = {
   '≥': { category:'F', name: 'greater_than_or_equal' },
   '|': { category:'F', name: 'residue' },
   '⍴': { category:'F', name: 'rho' },
-  '/': { category:'F', name: 'compress' },
+  // / and \ are genuinely dual-purpose in real APL - ⍺/⍵ compress and f/
+  // reduce-last-axis are as different in arity (dyadic vs monadic) as
+  // compress and reduce ever were, but share one glyph (same for \:
+  // ⍺\⍵ expand, f\ scan-last-axis). Category 'R' (see reduceStack's two
+  // R-keyed rules, and CAT_* lists above) keeps them out of the ordinary
+  // 'F'/'M' grammar rules entirely, rather than trying to special-case a
+  // shared category - seeded off a real bug: reusing plain 'M' let the
+  // generic monadic-operator rule (which permissively accepts a bare
+  // VALUE as its operand) grab a partial multi-element ⍺ strand (e.g.
+  // "0" out of "1 0") before the strand had even finished forming.
+  // ⌿/⍀ stay first-axis-only, plain 'M', unchanged - they already get
+  // first-axis semantics "for free" since a pervasive f like + combines
+  // whole top-level items elementwise on its own.
+  '/': { category:'R', name: 'compress' },
   '⌿': { category:'M', name: 'reduce' },
   '⍀': { category:'M', name: 'scan' },
+  '\\': { category:'R', name: 'expand' },
   '⍨': { category:'M', name: 'selfie' },
   ',': { category:'F', name: 'comma' },
   '⍳': { category:'F', name: 'iota' },
@@ -1252,6 +1266,23 @@ const G = {
     }
   }, 
   compress: (w, a) => {
+    if (a === undefined) {
+      // Monadic / is "reduce along the LAST axis" (see the / and \
+      // comment on global_category, and reduceStack's two R-keyed
+      // rules). ⌿ already reduces along the FIRST axis for free - a
+      // pervasive f like + combines whole top-level items elementwise on
+      // its own, so +⌿(2 3⍴⍳6) is [3,5,7] (rows added elementwise) with
+      // no special axis handling in G.reduce at all. Last axis has no
+      // such shortcut: it means "reduce each innermost vector on its
+      // own", so this recurses down to rank<=1 - reusing G.reduce's own
+      // identity rule there for a rank-0 leaf - before reducing each
+      // leaf independently. w here is ⍺⍺ (the operand function), not a
+      // value - same a===undefined dispatch idiom pick/squad/domino use
+      // to tell a monadic call from a dyadic one.
+      const f = w;
+      const reduceLastAxis = (arr) => (shapeRec(arr).length <= 1 ? G.reduce(f)(arr) : arr.map(reduceLastAxis));
+      return reduceLastAxis;
+    }
     // Either side broadcasts if it's scalar-like (a plain number/string,
     // or - the box-safety fix - a boxed value) to match the other side's
     // length. Verified against real Dyalog: 3/1 2 3 repeats the count 3
@@ -1285,6 +1316,46 @@ const G = {
       }
     }
     return (wasString && !wIsScalar) ? result.join('') : result;
+  },
+  // Expand (\, dyadic): compress's structural inverse. ⍺ is a 0/1 mask as
+  // long as the result; ⍵ supplies one item per 1 in ⍺, in order, and
+  // every 0 gets a fill. Ad hoc for now, like reduce's empty-vector
+  // identity elements above: fill is always plain 0 (not yet Dyalog's
+  // real rule of taking it from ⍵'s own prototype), and ⍺ must be a
+  // literal 0/1 mask (not yet the generalized form where a positive
+  // integer repeats and a negative one inserts that many fills). Verified
+  // against real Dyalog: 1 0 1 0 1\1 2 3 is 1 0 2 0 3.
+  expand: (w, a) => {
+    if (a === undefined) {
+      // Monadic \ is "scan along the LAST axis" - the scan/expand
+      // counterpart of compress's reduceLast above, for the same reason
+      // (⍀ already scans the FIRST axis for free via a pervasive f). w
+      // here is ⍺⍺, not a value.
+      const f = w;
+      const scanLastAxis = (arr) => (shapeRec(arr).length <= 1 ? G.scan(f)(arr) : arr.map(scanLastAxis));
+      return scanLastAxis;
+    }
+    if (!Array.isArray(a)) {
+      throw new Error('Expand requires a 0/1 mask vector for ⍺');
+    }
+    const witems = Array.isArray(w) ? w : [w];
+    let wi = 0;
+    const result = [];
+    for (const cell of a) {
+      const bit = isBoxed(cell) ? cell[0] : cell;
+      if (bit) {
+        if (wi >= witems.length) {
+          throw new Error('Length error: not enough elements for expand');
+        }
+        result.push(witems[wi++]);
+      } else {
+        result.push(0);
+      }
+    }
+    if (wi !== witems.length) {
+      throw new Error('Length error: too many elements for expand');
+    }
+    return result;
   },
   deal: (w, a) => {
     if(a===undefined) {
@@ -2236,17 +2307,32 @@ const breakExpressions = (tokens, from) => {
 // Category lists checked by reduceStack's belong() calls below, hoisted to
 // module scope so they're allocated once instead of on every token shift
 // (reduceStack runs once per token, potentially several times per token).
-const CAT_V_F_D_M = ['V', 'F', 'D', 'M'];
+// 'R' (/ and \, see their global_category comment) rides along in every
+// list below that already carries 'F' and/or 'M' - at parse time it
+// hasn't been decided yet whether a given R token is acting as a monadic
+// operator or a dyadic function, so it needs to be accepted everywhere
+// either one already is: as a boundary to either side of some OTHER
+// reduction (CAT_BOUNDARY_F/MVF/MF/MF_NOCOLON), as a train/strand
+// component (CAT_V_F_D_M), and as another operator's own operand
+// (CAT_F_V, so ⍨/¨/⍣ etc. can bind to / or \ the same way they bind to
+// any other function - e.g. quicksort's ⍵/⍨0>s in test.apl). Confirmed
+// the hard way, one omission at a time: leaving R out of CAT_BOUNDARY_F
+// orphaned ⊂'s own argument whenever / or \ sat immediately to its left
+// (1 0 1/⊂1 2 3), and leaving it out of CAT_F_V broke /⍨ outright (a
+// SYNTAX ERROR on test.apl's quicksort). Left out of plain CAT_BOUNDARY
+// on purpose: that one's for the train/Atop rule, which already excludes
+// plain F and M too, so R (F-or-M) belongs out as well.
+const CAT_V_F_D_M = ['V', 'F', 'D', 'M', 'R'];
 // 'Q' (⍞) is included below so it acts as a left boundary too - e.g.
 // ⍞1⌷⊢ can build the whole train 1⌷⊢ before ⍞ quotes it, without needing
 // ⍞(1⌷⊢). Left out of CAT_BOUNDARY_MF_NOCOLON on purpose: that one's for
 // what precedes an assignment target, unrelated to what ⍞ quotes.
-const CAT_BOUNDARY_F = ['F', '(', '←', 'Edge', ':', 'Q'];
-const CAT_BOUNDARY_MVF = ['M', 'V', 'F', '(', '←', 'Edge', ':', 'Q'];
-const CAT_BOUNDARY_MF = ['M', 'F', '(', '←', 'Edge', ':', 'Q'];
-const CAT_F_V = ['F', 'V'];
+const CAT_BOUNDARY_F = ['F', 'R', '(', '←', 'Edge', ':', 'Q'];
+const CAT_BOUNDARY_MVF = ['M', 'V', 'F', 'R', '(', '←', 'Edge', ':', 'Q'];
+const CAT_BOUNDARY_MF = ['M', 'F', 'R', '(', '←', 'Edge', ':', 'Q'];
+const CAT_F_V = ['F', 'V', 'R'];
 const CAT_BOUNDARY = ['(', '←', 'Edge', ':', 'Q'];
-const CAT_BOUNDARY_MF_NOCOLON = ['(', '←', 'M', 'F', 'Edge'];
+const CAT_BOUNDARY_MF_NOCOLON = ['(', '←', 'M', 'F', 'R', 'Edge'];
 const CAT_V_CLOSEPAREN = ['V', ')'];
 
 // Renders a statement list the same way at both the dfn-body level (via
@@ -2543,6 +2629,40 @@ const parseExpression = (expression, scope) => {
         const node = { type: 'DyadicApply', fn: C.node, w: D.node, a: B.node };
         stack.splice(size - 4, 4,
           { category: 'V', node }, A);
+        foundReduction = true;
+        continue;
+      }
+      // The two R-only rules below resolve / and \'s dual meaning (see
+      // their global_category comment) by pattern shape alone, checked
+      // ahead of the generic monadic-operator rule that follows: ⍺ R ⍵
+      // (both sides real values) is dyadic compress/expand, F R (an
+      // actual function to R's left) is the monadic reduce-last/scan-last
+      // operator. Unlike the generic rule just below, the monadic case
+      // here requires B to be strictly 'F' - never 'V' - precisely so it
+      // can never compete with the dyadic case over a bare value sitting
+      // to R's left; the generic rule's own permissive V-or-F operand
+      // check is what let it steal a fragment of an unfinished ⍺ strand
+      // before this file gave / and \ their own category.
+      if(ABCD &&
+        belong(A.category, CAT_BOUNDARY_MF) &&
+        B.category === 'V' &&
+        C.category === 'R' &&
+        D.category === 'V'
+      ) {
+        const node = { type: 'DyadicApply', fn: C.node, w: D.node, a: B.node };
+        stack.splice(size - 4, 4,
+          { category: 'V', node }, A);
+        foundReduction = true;
+        continue;
+      }
+      if(ABC &&
+        belong(A.category, CAT_BOUNDARY_MVF) &&
+        B.category === 'F' &&
+        C.category === 'R'
+      ) {
+        const node = { type: 'OperatorApply', operator: C.node, operand: B.node };
+        stack.splice(size - 3, 3,
+          { category: 'F', node }, A);
         foundReduction = true;
         continue;
       }
