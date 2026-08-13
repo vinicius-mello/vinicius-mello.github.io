@@ -960,8 +960,9 @@
       <button id="clearBtn" class="warn">Clear History</button>
       <button id="restartBtn" class="warn">Restart Session</button>
       <button id="helpBtn">Help</button>
-      <button id="sampleBtn">Insert Sample</button>
-      <button id="graphicsSampleBtn">Insert Graphics Sample</button>
+      <select id="exampleSelect" class="theme-select">
+        <option value="" selected disabled>Insert Example…</option>
+      </select>
     </div>
   </header>
 
@@ -1016,7 +1017,7 @@
         <section id="helpTabAbout" class="help-tab-panel">
           <p>APL.js is a small APL-to-JavaScript transpiler with a graphics-capable browser REPL, built as an educational project exploring how APL's array notation compiles to plain JS.</p>
           <p>It's made of three pieces: the transpiler core (tokenizer, parser, primitive library), this multi-cell REPL with SVG/d3/Observable Plot output and a JS/JS-object FFI, and a simpler translator-only demo page.</p>
-          <p>Version <span class="help-code">0.1</span> · <a href="https://github.com/vinicius-mello/apljs" target="_blank" rel="noopener noreferrer">github.com/vinicius-mello/apljs</a></p>
+          <p>Version <span class="help-code">0.2</span> · <a href="https://github.com/vinicius-mello/apljs" target="_blank" rel="noopener noreferrer">github.com/vinicius-mello/apljs</a></p>
         </section>
         <section id="helpTabImplementation" class="help-tab-panel">
           <div class="help-graphics-item">
@@ -1056,9 +1057,11 @@
     //                                 bracket/quote closing, theme -> syntax
     //                                 color mapping
     //   SAMPLE, GRAPHICS_SAMPLE,
+    //   LIFE_SAMPLE, EXAMPLES,
     //   APL_ESCAPES, PRIMITIVE_DOCS,
-    //   GRAPHICS_DOCS, FFI_EXAMPLES   static content for the "Insert Sample"
-    //                                 buttons and the Help overlay's tabs
+    //   GRAPHICS_DOCS, FFI_EXAMPLES   static content for the "Insert
+    //                                 Example" dropdown and the Help
+    //                                 overlay's tabs
     //   DOM element lookups, THEME_*,
     //   SESSION_STORAGE_KEY           element refs + localStorage keys
     //   createRuntimeContext          one Object.create(G) per session/
@@ -1199,6 +1202,53 @@
       "line←(Plot⍠#lineY)⍔⊢⊂vals",
       "(Plot⍠#plot)⍔⊢⊂⍠('marks' bars line)"
     ].join("\n");
+
+    const LIFE_SAMPLE = [
+      "⍝ Conway's Game of Life, animated via d3⍠(#interval ...). life is John",
+      "⍝ Scholes' celebrated one-liner, from his famous live-coded APL demo of",
+      "⍝ the game. It computes next-generation ⍵ in one shot: ∘.⊖ rotates ⍵ by",
+      "⍝ each of ¯1 0 1 along the first axis and ⌽¨ by each of ¯1 0 1 along the",
+      "⍝ second, giving the 9 shifted copies (including the untouched center);",
+      "⍝ +⌿+/ sums live neighbors (and the cell itself) across both; a cell",
+      "⍝ survives/is born when that sum is 3 (always) or 4 (only if it was",
+      "⍝ already alive).",
+      "life←{⊃1 ⍵ ∨.∧ 3 4 = +/ +⌿ ¯1 0 1 ∘.⊖ ¯1 0 1 ⌽¨ ⊂⍵}",
+      "n←40",
+      "t←? n n⍴2                 ⍝ random 0/1 seed grid, one roll per cell",
+      "w←10",
+      "svg←d3⍠(#create #svg) (#attr #width (w×n)) (#attr #height (w×n))",
+      "⍝ timer is declared before update on purpose: update reads timer, and a",
+      "⍝ name read inside a dfn resolves as global/local by what the parser has",
+      "⍝ already seen - had timer's real assignment come only after update (as",
+      "⍝ it must, since it needs update to exist first), that read would",
+      "⍝ wrongly resolve local and crash. This placeholder gets it seen early.",
+      "timer←⎕null",
+      "update←{",
+      "  ⍝ t⊢← (not t←) is required here: plain ← inside a dfn always binds a",
+      "  ⍝ LOCAL, even shadowing an outer global of the same name - it would",
+      "  ⍝ silently stop animating after one frame. ⊢← writes through to the",
+      "  ⍝ real global t instead, so state persists across ticks.",
+      "  ⍝ d3's interval callback receives elapsed milliseconds as ⍵ - stop",
+      "  ⍝ after 30s so a forgotten tab doesn't animate forever.",
+      "  30000<⍵: timer⍠(#stop ⎕null)",
+      "  t⊢←life t",
+      "  data←w×{(,⍵)/,⍳⍴⍵} t     ⍝ w×(index of every live cell, raveled)",
+      "  ⍝ — right before a newline joins it to the next line (with the",
+      "  ⍝ newline itself removed) - a soft wrap for one long ⍠ chain.",
+      "  svg⍠(#selectAll #rect) —",
+      "    (#data data ⍞{(0⌷⍵)+n×(1⌷⍵)}) —",
+      "    (#join #rect) (#attr #x ⍞0⌷⊢) (#attr #y ⍞1⌷⊢) —",
+      "    (#attr #width w) (#attr #height w)",
+      "}",
+      "timer←d3⍠(#interval (⍞update) 125)",
+      "svg⍠(#node ⎕null)"
+    ].join("\n");
+
+    const EXAMPLES = [
+      { id: "basics", label: "Basics: Collatz, recursion, trains, quadratic formula", code: SAMPLE },
+      { id: "graphics", label: "Graphics: d3 + Observable Plot", code: GRAPHICS_SAMPLE },
+      { id: "life", label: "Conway's Game of Life (d3, animated)", code: LIFE_SAMPLE }
+    ];
 
     const APL_ESCAPES = {
       lamp: "⍝",
@@ -1416,8 +1466,7 @@
     const clearBtn = document.getElementById("clearBtn");
     const restartBtn = document.getElementById("restartBtn");
     const helpBtn = document.getElementById("helpBtn");
-    const sampleBtn = document.getElementById("sampleBtn");
-    const graphicsSampleBtn = document.getElementById("graphicsSampleBtn");
+    const exampleSelect = document.getElementById("exampleSelect");
     const themeSelect = document.getElementById("themeSelect");
 
     const THEME_STORAGE_KEY = "apljs-theme";
@@ -2439,36 +2488,32 @@
       tab.addEventListener("click", () => setHelpTab(tab.dataset.tab));
     });
 
-    sampleBtn.addEventListener("click", () => {
-      if (!draftRecord || !draftRecord.editor) {
-        createInputCell(SAMPLE);
-        return;
-      }
-      draftRecord.editor.dispatch({
-        changes: {
-          from: 0,
-          to: draftRecord.editor.state.doc.length,
-          insert: SAMPLE
-        }
-      });
-      draftRecord.editor.focus();
-      setStatus("Sample inserted in the current input cell.");
+    EXAMPLES.forEach((entry) => {
+      const option = document.createElement("option");
+      option.value = entry.id;
+      option.textContent = entry.label;
+      exampleSelect.appendChild(option);
     });
 
-    graphicsSampleBtn.addEventListener("click", () => {
+    exampleSelect.addEventListener("change", () => {
+      const entry = EXAMPLES.find((e) => e.id === exampleSelect.value);
+      exampleSelect.value = "";
+      if (!entry) {
+        return;
+      }
       if (!draftRecord || !draftRecord.editor) {
-        createInputCell(GRAPHICS_SAMPLE);
+        createInputCell(entry.code);
         return;
       }
       draftRecord.editor.dispatch({
         changes: {
           from: 0,
           to: draftRecord.editor.state.doc.length,
-          insert: GRAPHICS_SAMPLE
+          insert: entry.code
         }
       });
       draftRecord.editor.focus();
-      setStatus("Graphics sample inserted in the current input cell.");
+      setStatus(`"${entry.label}" inserted in the current input cell.`);
     });
 
     themeSelect.addEventListener("change", () => {
