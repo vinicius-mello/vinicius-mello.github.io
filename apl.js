@@ -203,10 +203,11 @@ const global_category = {
   // before the strand had even finished forming. ⌿/⍀'s monadic form still
   // gets first-axis semantics "for free" since a pervasive f like +
   // combines whole top-level items elementwise on its own; their dyadic
-  // form (compress/expand-first) is structurally identical to /'s and \'s
-  // own dyadic form in this array model (neither recurses past the top
-  // level), so G.reduce/G.scan just delegate to G.compress/G.expand for
-  // the dyadic case instead of duplicating the algorithm.
+  // form (compress/expand-FIRST) shares its actual vector-level algorithm
+  // with /'s and \'s own dyadic form (compress/expand-LAST) via the
+  // compressAxis/expandAxis helpers, but each applies it at a different
+  // axis - ⌿/⍀ call it directly on ⍵'s top-level items, while /'s and \'s
+  // own G.compress/G.expand recurse down to rank<=1 first.
   '/': { category:'R', name: 'compress' },
   '⌿': { category:'R', name: 'reduce' },
   '⍀': { category:'R', name: 'scan' },
@@ -1075,6 +1076,68 @@ const totalCompare = (a, b) => {
 // non-negative k clamps at n, negative k counts back from n and clamps at 0.
 const cellRankFor = (k, n) => (k >= 0 ? Math.min(k, n) : Math.max(n + k, 0));
 
+// Dyadic compress/expand's actual vector-level algorithm, shared by both
+// axis forms: ⍺⌿⍵/⍺⍀⍵ (first axis) call these directly on ⍵'s top-level
+// items, while ⍺/⍵/⍺\⍵ (last axis, see G.compress/G.expand below) recurse
+// down to rank<=1 first and call these at every leaf instead.
+const compressAxis = (w, a) => {
+  // Either side broadcasts if it's scalar-like (a plain number/string, or -
+  // the box-safety fix - a boxed value) to match the other side's length.
+  // Verified against real Dyalog: 3/1 2 3 repeats the count 3 for every
+  // element (previously unsupported here - a bare a.length check required a
+  // to already be an array), and 1 0 1/⊂1 2 3 broadcasts the boxed scalar to
+  // 3 positions before dropping the middle one. Compress never discloses a
+  // boxed item on the w side - it's structural, not pervasive, so a
+  // kept/dropped/repeated item passes through exactly as it was, box or not.
+  const wasString = typeof w === 'string';
+  const witems = wasString ? w.split('') : w;
+  const wIsScalar = isScalarLike(witems);
+  const aIsScalar = isScalarLike(a);
+  if (!wIsScalar && !Array.isArray(witems)) {
+    throw new Error('Unsupported types for compress');
+  }
+  if (!aIsScalar && !Array.isArray(a)) {
+    throw new Error('Unsupported types for compress');
+  }
+  if (!wIsScalar && !aIsScalar && witems.length !== a.length) {
+    throw new Error('Length mismatch for compress');
+  }
+  const length = wIsScalar ? (aIsScalar ? 1 : a.length) : witems.length;
+  const result = [];
+  for (let i = 0; i < length; i++) {
+    const item = wIsScalar ? witems : witems[i];
+    const countCell = aIsScalar ? a : a[i];
+    const count = isBoxed(countCell) ? countCell[0] : countCell;
+    for (let j = 0; j < count; j++) {
+      result.push(item);
+    }
+  }
+  return (wasString && !wIsScalar) ? result.join('') : result;
+};
+const expandAxis = (w, a) => {
+  if (!Array.isArray(a)) {
+    throw new Error('Expand requires a 0/1 mask vector for ⍺');
+  }
+  const witems = Array.isArray(w) ? w : [w];
+  let wi = 0;
+  const result = [];
+  for (const cell of a) {
+    const bit = isBoxed(cell) ? cell[0] : cell;
+    if (bit) {
+      if (wi >= witems.length) {
+        throw new Error('Length error: not enough elements for expand');
+      }
+      result.push(witems[wi++]);
+    } else {
+      result.push(0);
+    }
+  }
+  if (wi !== witems.length) {
+    throw new Error('Length error: too many elements for expand');
+  }
+  return result;
+};
+
 // --- Runtime: one property per primitive glyph's `name` in global_category
 // above. Generated JS (see emitJs) calls into these directly, e.g. `2×3`
 // compiles to `G.times(3, 2)`. Monadic-only call sites simply omit `a`. ---
@@ -1301,39 +1364,15 @@ const G = {
       const reduceLastAxis = (arr) => (shapeRec(arr).length <= 1 ? G.reduce(f)(arr) : arr.map(reduceLastAxis));
       return reduceLastAxis;
     }
-    // Either side broadcasts if it's scalar-like (a plain number/string,
-    // or - the box-safety fix - a boxed value) to match the other side's
-    // length. Verified against real Dyalog: 3/1 2 3 repeats the count 3
-    // for every element (previously unsupported here - a bare a.length
-    // check required a to already be an array), and 1 0 1/⊂1 2 3
-    // broadcasts the boxed scalar to 3 positions before dropping the
-    // middle one. Compress never discloses a boxed item on the w side -
-    // it's structural, not pervasive, so a kept/dropped/repeated item
-    // passes through exactly as it was, box or not.
-    const wasString = typeof w === 'string';
-    const witems = wasString ? w.split('') : w;
-    const wIsScalar = isScalarLike(witems);
-    const aIsScalar = isScalarLike(a);
-    if (!wIsScalar && !Array.isArray(witems)) {
-      throw new Error('Unsupported types for compress');
-    }
-    if (!aIsScalar && !Array.isArray(a)) {
-      throw new Error('Unsupported types for compress');
-    }
-    if (!wIsScalar && !aIsScalar && witems.length !== a.length) {
-      throw new Error('Length mismatch for compress');
-    }
-    const length = wIsScalar ? (aIsScalar ? 1 : a.length) : witems.length;
-    const result = [];
-    for (let i = 0; i < length; i++) {
-      const item = wIsScalar ? witems : witems[i];
-      const countCell = aIsScalar ? a : a[i];
-      const count = isBoxed(countCell) ? countCell[0] : countCell;
-      for (let j = 0; j < count; j++) {
-        result.push(item);
-      }
-    }
-    return (wasString && !wIsScalar) ? result.join('') : result;
+    // Dyadic ⍺/⍵ compresses along the LAST axis (unlike ⍺⌿⍵, which stays on
+    // the first - see G.reduce's own dyadic branch, which calls compressAxis
+    // directly instead of this): recurse down to rank<=1, exactly like
+    // reduceLastAxis above, then compress each innermost vector on its own
+    // using the shared ⍺ mask/counts. Verified against real Dyalog: 1 0
+    // 1/2 3⍴⍳6 is [[0,2],[3,5]] (each ROW loses its middle element), while
+    // 1 0⌿2 3⍴⍳6 is [[0,1,2]] (the matrix loses its second ROW entirely).
+    const compressLastAxis = (arr) => (shapeRec(arr).length <= 1 ? compressAxis(arr, a) : arr.map(compressLastAxis));
+    return compressLastAxis(w);
   },
   // Expand (\, dyadic): compress's structural inverse. ⍺ is a 0/1 mask as
   // long as the result; ⍵ supplies one item per 1 in ⍺, in order, and
@@ -1353,27 +1392,13 @@ const G = {
       const scanLastAxis = (arr) => (shapeRec(arr).length <= 1 ? G.scan(f)(arr) : arr.map(scanLastAxis));
       return scanLastAxis;
     }
-    if (!Array.isArray(a)) {
-      throw new Error('Expand requires a 0/1 mask vector for ⍺');
-    }
-    const witems = Array.isArray(w) ? w : [w];
-    let wi = 0;
-    const result = [];
-    for (const cell of a) {
-      const bit = isBoxed(cell) ? cell[0] : cell;
-      if (bit) {
-        if (wi >= witems.length) {
-          throw new Error('Length error: not enough elements for expand');
-        }
-        result.push(witems[wi++]);
-      } else {
-        result.push(0);
-      }
-    }
-    if (wi !== witems.length) {
-      throw new Error('Length error: too many elements for expand');
-    }
-    return result;
+    // Dyadic ⍺\⍵ expands along the LAST axis (unlike ⍺⍀⍵, which stays on the
+    // first - see G.scan's own dyadic branch, which calls expandAxis
+    // directly instead of this): recurse down to rank<=1, exactly like
+    // scanLastAxis above, then expand each innermost vector on its own using
+    // the shared ⍺ mask.
+    const expandLastAxis = (arr) => (shapeRec(arr).length <= 1 ? expandAxis(arr, a) : arr.map(expandLastAxis));
+    return expandLastAxis(w);
   },
   deal: (w, a) => {
     if(a===undefined) {
@@ -1876,12 +1901,12 @@ const G = {
       };
     }
     // Dyadic ⍺⌿⍵: compress along the FIRST axis - selects/repeats whole
-    // top-level items of ⍵ by the counts in ⍺. Structurally identical to
-    // dyadic ⍺/⍵ in this array model (G.compress's own dyadic branch
-    // already operates on ⍵'s top-level items directly, i.e. the first
-    // axis, never recursing into a "true" last axis) - delegating instead
-    // of duplicating the algorithm.
-    return G.compress(w, a);
+    // top-level items of ⍵ by the counts in ⍺. Calls compressAxis directly
+    // (the same vector-level algorithm G.compress's own dyadic branch uses
+    // at its leaves) rather than going through G.compress itself, since
+    // G.compress now recurses into the LAST axis for higher-rank ⍵ - ⌿
+    // stays first-axis-only and must never do that recursion.
+    return compressAxis(w, a);
   },
   scan: (w, a) => {
     if (a === undefined) {
@@ -1907,10 +1932,11 @@ const G = {
         return result;
       };
     }
-    // Dyadic ⍺⍀⍵: expand along the FIRST axis - same reasoning as
-    // reduce/compress above, delegating to G.expand's own dyadic branch
-    // rather than duplicating it.
-    return G.expand(w, a);
+    // Dyadic ⍺⍀⍵: expand along the FIRST axis - same reasoning as reduce's
+    // own dyadic branch above: calls expandAxis directly rather than
+    // G.expand, since G.expand now recurses into the LAST axis for
+    // higher-rank ⍵.
+    return expandAxis(w, a);
   },
   // Key (⌸, monadic operator): f⌸w groups w's own items by value - for each
   // unique value (in first-occurrence order), f is called with (indices, key)
@@ -2792,12 +2818,18 @@ const parseExpression = (expression, scope) => {
         (((belong(A.category, CAT_BOUNDARY_MF) &&
         (B.category ===  'V')) )||
         ((belong(A.category, CAT_BOUNDARY_MVF) &&
-        (B.category === 'F')) ))
+        belong(B.category, ['F', 'R'])) ))
         &&
         C.category === 'D' &&
         belong(D.category, CAT_F_V)
       ) {
         //console.log('Found dyadic operator:', B.node, C.node, D.node);
+        // A D-operator's left operand (B) can be 'R' too (⌿/⍀//\\, e.g.
+        // ⌿⍤1 1), not just a plain 'F' - R is function-like here exactly
+        // like it already is on the right side (D's own CAT_F_V check
+        // already includes 'R'). Grouped with the 'F' branch, not given
+        // its own, since R behaves identically to F for this rule (both
+        // need the same CAT_BOUNDARY_MVF boundary on A).
         // f∘.g (outer product) tokenizes as emptyFunc . g - the jot's left
         // operand being literally the bare, unglobal-prefixed emptyFunc/dot
         // pair is what distinguishes this idiom from an ordinary a D w.
