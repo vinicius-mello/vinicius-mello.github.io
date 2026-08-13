@@ -2343,7 +2343,43 @@ const CAT_V_F_D_M = ['V', 'F', 'D', 'M', 'R'];
 const CAT_BOUNDARY_F = ['F', 'R', '(', '←', 'Edge', ':', 'Q'];
 const CAT_BOUNDARY_MVF = ['M', 'V', 'F', 'R', '(', '←', 'Edge', ':', 'Q'];
 const CAT_BOUNDARY_MF = ['M', 'F', 'R', '(', '←', 'Edge', ':', 'Q'];
+// _CALL variants of the three lists above, used only by the four rules
+// that immediately EXECUTE a function against a real argument (Apply,
+// its monadic-operator-combo cousin, DyadicApply, and R's dyadic
+// compress/expand) - everywhere else 'Q' stays, since those other rules
+// only ever compose a bigger, still-uncalled F (Atop/Fork/OperatorApply/
+// DyadicOperatorApply), which is exactly what ⍞ wants to widen across
+// (⍞0⌷⊢ should quote the whole train, not just 0). But letting 'Q' act
+// as boundary for an actual call is a trap: ⍞ f v would apply f to v
+// first (since Apply fires before ⍞'s own rule, checked last), and
+// quoting the resulting plain value is a silent no-op (there's no
+// G.quote - see ⍞'s own comment). Worse, it eats v as f's argument when
+// v was meant to sit beside the quoted f instead, e.g.
+// (#interval ⍞update 125) applying update to 125 instead of leaving
+// 125 as the interval's own delay argument next to the quoted callback
+// - forcing (⍞update) 125 to get the intended 2-element strand. Since
+// quoting a call's result is never useful, dropping 'Q' from just these
+// four rules is a strict improvement: it makes ⍞ bind to the bare
+// function/operator immediately to its right, before any call can
+// consume what follows.
+const CAT_BOUNDARY_F_CALL = ['F', 'R', '(', '←', 'Edge', ':'];
+const CAT_BOUNDARY_MVF_CALL = ['M', 'V', 'F', 'R', '(', '←', 'Edge', ':'];
+const CAT_BOUNDARY_MF_CALL = ['M', 'F', 'R', '(', '←', 'Edge', ':'];
 const CAT_F_V = ['F', 'V', 'R'];
+// Fork's own left tine (below) is the one CAT_F_V spot that must NOT
+// admit a bare R: unlike ⍨/¨/⍣ binding to an uncombined / or \ as their
+// operand (that's the case CAT_F_V exists for), a fork's leftmost tine
+// is read as a *complete* function - and / or \ alone is never complete,
+// it always still needs a function or value to its own left (F/ reduce,
+// ⍺/ compress). Since CAT_BOUNDARY_MVF also lets a plain F sit in the
+// fork's A slot, an uncombined R sitting in B would otherwise let e.g.
+// "+/÷≢" close the fork over "/÷≢" (R standing in for the left tine on
+// its own) one shift before "+" arrives to claim "/" as its reduce
+// operator - silently splitting +/ apart into a bogus (+)(/÷≢) atop
+// instead of the intended (+/)(÷)(≢) fork. Confirmed against
+// (+/÷≢)⍳10 (broken) vs (+⌿÷≢)⍳10 (fine - ⌿'s own category 'M' was
+// never in CAT_F_V to begin with).
+const CAT_TINE_F_V = ['F', 'V'];
 const CAT_BOUNDARY = ['(', '←', 'Edge', ':', 'Q'];
 const CAT_BOUNDARY_MF_NOCOLON = ['(', '←', 'M', 'F', 'R', 'Edge'];
 const CAT_V_CLOSEPAREN = ['V', ')'];
@@ -2632,7 +2668,7 @@ const parseExpression = (expression, scope) => {
         continue;
       }
       if(ABC &&
-        belong(A.category, CAT_BOUNDARY_F) &&
+        belong(A.category, CAT_BOUNDARY_F_CALL) &&
         B.category === 'F' &&
         C.category === 'V'
       ) {
@@ -2644,7 +2680,7 @@ const parseExpression = (expression, scope) => {
         continue;
       }
       if(ABCD &&
-        belong(A.category, CAT_BOUNDARY_MVF) &&
+        belong(A.category, CAT_BOUNDARY_MVF_CALL) &&
         B.category === 'F' &&
         C.category === 'F' &&
         D.category === 'V'
@@ -2657,7 +2693,7 @@ const parseExpression = (expression, scope) => {
         continue;
       }
       if(ABCD &&
-        belong(A.category, CAT_BOUNDARY_MF) &&
+        belong(A.category, CAT_BOUNDARY_MF_CALL) &&
         B.category === 'V' &&
         C.category === 'F' &&
         D.category === 'V'
@@ -2681,7 +2717,7 @@ const parseExpression = (expression, scope) => {
       // check is what let it steal a fragment of an unfinished ⍺ strand
       // before this file gave / and \ their own category.
       if(ABCD &&
-        belong(A.category, CAT_BOUNDARY_MF) &&
+        belong(A.category, CAT_BOUNDARY_MF_CALL) &&
         B.category === 'V' &&
         C.category === 'R' &&
         D.category === 'V'
@@ -2738,7 +2774,7 @@ const parseExpression = (expression, scope) => {
       }
       if(ABCD &&
         belong(A.category, CAT_BOUNDARY_MVF) &&
-        belong(B.category, CAT_F_V) &&
+        belong(B.category, CAT_TINE_F_V) &&
         C.category === 'F' &&
         D.category === 'F'
       ) {
