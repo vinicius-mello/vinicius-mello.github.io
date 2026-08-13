@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>chuck.js REPL</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #1e1e1e;
+    --fg: #d4d4d4;
+    --dim: #8a8a8a;
+    --accent: #6a9955;
+    --input-bg: #252526;
+    --panel-bg: #181818;
+    --border: #3c3c3c;
+    --row-hover: #2a2d2e;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  header p {
+    margin: 0.25rem 0 0;
+    font-size: 0.8rem;
+    opacity: 0.7;
+  }
+  button {
+    font-family: inherit;
+    font-size: 0.8rem;
+    background: var(--input-bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { border-color: var(--accent); }
+  #debug-toggle.active { color: var(--accent); border-color: var(--accent); }
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+  .line-input { color: #9cdcfe; }
+  .line-error { color: #f14c4c; }
+  form {
+    display: flex;
+    border-top: 1px solid var(--border);
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+  #input {
+    flex: 1;
+    background: var(--input-bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+  #input:focus {
+    outline: 1px solid var(--accent);
+  }
+
+  /* --- debug panel --- */
+  #debug {
+    display: none;
+    flex-direction: column;
+    width: 460px;
+    flex-shrink: 0;
+    height: 100%;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--border);
+    overflow: hidden;
+  }
+  body.debug-on #debug { display: flex; }
+  #debug-live {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #debug-live h2 {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+  }
+  .debug-section {
+    margin-bottom: 0.6rem;
+  }
+  .debug-section h3 {
+    margin: 0 0 0.2rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+    font-weight: 600;
+  }
+  .stack-view, #live-def {
+    font-size: 0.82rem;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.4rem 0.5rem;
+    min-height: 1.4em;
+    word-break: break-word;
+  }
+  .stack-view .empty, #live-def .empty { color: var(--dim); font-style: italic; }
+  .tok { color: #ce9178; }
+  .tok-word { color: #4ec9b0; }
+  #debug-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem 0.3rem;
+    flex-shrink: 0;
+  }
+  #debug-log-header h3 {
+    margin: 0;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+  }
+  #debug-log-wrap {
+    flex: 1;
+    overflow: auto;
+    padding: 0 1rem 1rem;
+  }
+  table#debug-log {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  #debug-log thead th {
+    position: sticky;
+    top: 0;
+    background: var(--panel-bg);
+    text-align: left;
+    padding: 0.25rem 0.4rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--dim);
+    font-weight: 600;
+  }
+  #debug-log tbody td {
+    padding: 0.2rem 0.4rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #debug-log tbody tr { cursor: pointer; }
+  #debug-log tbody tr:hover { background: var(--row-hover); }
+  #debug-log tbody tr.selected { background: #29414f; }
+  #debug-log tbody td.col-step { color: var(--dim); width: 2.2em; white-space: nowrap; }
+  #debug-log tbody td.col-mode { color: var(--dim); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="main">
+  <header>
+    <div>
+      <h1>chuck.js — REPL</h1>
+      <p>An educational Forth interpreter. Try: <code>2 3 + .</code> — ↑/↓ browse history.</p>
+    </div>
+    <button id="debug-toggle" type="button">Debug</button>
+  </header>
+  <div id="output"></div>
+  <form id="form" autocomplete="off">
+    <input id="input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder=": square dup * ;  5 square .">
+  </form>
+</div>
+
+<aside id="debug">
+  <div id="debug-live">
+    <h2>Live state</h2>
+    <div class="debug-section">
+      <h3>Data stack (stackS)</h3>
+      <div id="live-stackS" class="stack-view"></div>
+    </div>
+    <div class="debug-section">
+      <h3>Return stack (stackR)</h3>
+      <div id="live-stackR" class="stack-view"></div>
+    </div>
+    <div class="debug-section" style="margin-bottom:0;">
+      <h3>Definition being compiled</h3>
+      <div id="live-def"></div>
+    </div>
+  </div>
+  <div id="debug-log-header">
+    <h3>Step log</h3>
+    <button id="debug-clear" type="button">Clear</button>
+  </div>
+  <div id="debug-log-wrap">
+    <table id="debug-log">
+      <thead>
+        <tr><th class="col-step">#</th><th>word</th><th class="col-mode">mode</th><th>stackS</th><th>current definition</th></tr>
+      </thead>
+      <tbody id="debug-log-body"></tbody>
+    </table>
+  </div>
+</aside>
+
+<script src="chuck.js"></script>
+<script>
+(function () {
+  var output = document.getElementById('output');
+  var form = document.getElementById('form');
+  var input = document.getElementById('input');
+  var debugToggle = document.getElementById('debug-toggle');
+  var debugClear = document.getElementById('debug-clear');
+  var logBody = document.getElementById('debug-log-body');
+  var logWrap = document.getElementById('debug-log-wrap');
+  var liveStackS = document.getElementById('live-stackS');
+  var liveStackR = document.getElementById('live-stackR');
+  var liveDef = document.getElementById('live-def');
+
+  function appendLine(text, cls) {
+    var div = document.createElement('div');
+    if (cls) div.className = cls;
+    div.textContent = text;
+    output.appendChild(div);
+    output.scrollTop = output.scrollHeight;
+  }
+
+  function appendOutput(str) {
+    // preserve raw print() calls (may or may not end in newline) as one
+    // growing text node so ." foo" and multiple . in a row read naturally
+    var last = output.lastChild;
+    if (last && last.dataset && last.dataset.stream === '1') {
+      last.textContent += str;
+    } else {
+      var div = document.createElement('div');
+      div.dataset.stream = '1';
+      div.textContent = str;
+      output.appendChild(div);
+    }
+    output.scrollTop = output.scrollHeight;
+  }
+
+  // --- debug panel ---------------------------------------------------
+  var debugOn = false;
+  var stepCount = 0;
+  var MAX_LOG_ROWS = 500;
+
+  function fillStackView(el, items) {
+    el.innerHTML = '';
+    if (items.length === 0) {
+      var e = document.createElement('span');
+      e.className = 'empty';
+      e.textContent = '(empty)';
+      el.appendChild(e);
+      return;
+    }
+    el.textContent = items.join('  ');
+  }
+
+  // Renders a snapshot (from Chuck.snapshotState) into the "live state" cards.
+  function renderLive(snap) {
+    fillStackView(liveStackS, snap.stackS);
+    fillStackView(liveStackR, snap.stackR);
+    if (snap.currentWord) {
+      liveDef.textContent = ': ' + snap.currentWord + '  ' + snap.currentDefinition.join(' ') +
+        (snap.controlDepth ? '   [' + snap.controlDepth + ' open control frame(s)]' : '');
+    } else {
+      liveDef.innerHTML = '<span class="empty">(not compiling)</span>';
+    }
+  }
+
+  function addLogRow(stepNum, word, snap, errorMessage) {
+    var tr = document.createElement('tr');
+    if (errorMessage) tr.className = 'line-error';
+    function td(text, cls) {
+      var e = document.createElement('td');
+      if (cls) e.className = cls;
+      e.textContent = text;
+      return e;
+    }
+    tr.appendChild(td(String(stepNum), 'col-step'));
+    tr.appendChild(td(word));
+    tr.appendChild(td(snap.mode, 'col-mode'));
+    tr.appendChild(td(snap.stackS.join(' ')));
+    tr.appendChild(td(snap.currentWord ? snap.currentDefinition.join(' ') : ''));
+    tr.addEventListener('click', function () {
+      var prev = logBody.querySelector('tr.selected');
+      if (prev) prev.classList.remove('selected');
+      tr.classList.add('selected');
+      renderLive(snap);
+    });
+    logBody.appendChild(tr);
+    while (logBody.children.length > MAX_LOG_ROWS) logBody.removeChild(logBody.firstChild);
+    logWrap.scrollTop = logWrap.scrollHeight;
+  }
+
+  var state = Chuck.createState({ print: appendOutput });
+
+  state.onStep = function (word, errorMessage) {
+    if (!debugOn) return;
+    var snap = Chuck.snapshotState(state);
+    stepCount++;
+    renderLive(snap);
+    addLogRow(stepCount, word, snap, errorMessage);
+  };
+
+  debugToggle.addEventListener('click', function () {
+    debugOn = !debugOn;
+    document.body.classList.toggle('debug-on', debugOn);
+    debugToggle.classList.toggle('active', debugOn);
+    if (debugOn) renderLive(Chuck.snapshotState(state));
+  });
+
+  debugClear.addEventListener('click', function () {
+    logBody.innerHTML = '';
+    stepCount = 0;
+  });
+
+  var history = [];
+  var historyPos = -1;
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var line = input.value;
+    if (line.trim() === '') return;
+    appendLine('> ' + line, 'line-input');
+    history.push(line);
+    historyPos = history.length;
+    input.value = '';
+    Chuck.interpret(line, state);
+    appendLine('ok');
+  });
+
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowUp') {
+      if (historyPos > 0) {
+        historyPos--;
+        input.value = history[historyPos];
+        requestAnimationFrame(function () { input.selectionStart = input.selectionEnd = input.value.length; });
+      }
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      if (historyPos < history.length - 1) {
+        historyPos++;
+        input.value = history[historyPos];
+      } else {
+        historyPos = history.length;
+        input.value = '';
+      }
+      e.preventDefault();
+    }
+  });
+
+  appendLine('chuck.js ready. Type WORDS to see the dictionary.');
+  input.focus();
+})();
+</script>
+</body>
+</html>
