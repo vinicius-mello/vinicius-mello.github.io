@@ -111,9 +111,22 @@ const tokenizer = (text) => {
   const tokens = [];
   const specs = [
     { regex: /^([\r\n]|⋄)+/u, type: 'SEPARATOR' },
+    // Line continuation: an em dash right before a line break (spaces/tabs
+    // in between are fine) fuses the next line onto this one, both
+    // vanishing entirely - same treatment as WHITESPACE/COMMENT below. Em
+    // dash was picked over a plain backslash specifically because \ is
+    // already a real glyph (expand/scan) that legitimately ends a line on
+    // its own (e.g. `g←+\`), so a backslash-newline rule would silently
+    // swallow that. Em dash has no meaning elsewhere in APL, so this can't
+    // collide with anything - see the editor's "\dash" input escape.
+    { regex: /^—[^\S\r\n]*\r?\n/u, type: 'LINE_CONTINUATION' },
     { regex: /^⍝[^\n]*/u, type: 'COMMENT' },
     { regex: /^(⍺{1,2}|⍵{1,2}|∇{1,2}|[⍶⍹⍙])/u, type: 'SPECIAL_VAR' },
-    { regex: /^\s+/, type: 'WHITESPACE' },
+    // Excludes \r\n on purpose - \s alone would greedily swallow a trailing
+    // line's newline together with any spaces/tabs before it (e.g. "1   \n"),
+    // silently dropping the SEPARATOR token and fusing two lines into one
+    // expression. Bare \r\n is left for the SEPARATOR spec above to match.
+    { regex: /^[^\S\r\n]+/, type: 'WHITESPACE' },
     { regex: /^[¯]?\d+(\.\d+)?/u, type: 'NUMBER' },
     { regex: /^'[^'\\]*(?:\\.[^'\\]*)*'/, type: 'STRING' },
     { regex: /^#[0-9\p{L}\-]+/u, type: 'STRING' },
@@ -136,7 +149,7 @@ const tokenizer = (text) => {
     for (const spec of specs) {
       const match = text.slice(cursor).match(spec.regex);
       if (match) {
-        if (spec.type !== 'WHITESPACE' && spec.type !== 'COMMENT') {
+        if (spec.type !== 'WHITESPACE' && spec.type !== 'COMMENT' && spec.type !== 'LINE_CONTINUATION') {
           if(spec.type === 'SYMBOL' && match[0] === '∘.') {
             tokens.push({ type: 'SYMBOL', value: '→' });
             tokens.push({ type: 'SYMBOL', value: '.' });
