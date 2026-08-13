@@ -356,6 +356,14 @@
       text-transform: uppercase;
     }
 
+    .version {
+      margin-left: 6px;
+      font-size: 0.7rem;
+      letter-spacing: normal;
+      text-transform: none;
+      color: var(--muted);
+    }
+
     .subtitle {
       margin: 2px 0 0;
       font-size: 0.78rem;
@@ -943,7 +951,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1 class="title">APL.js REPL</h1>
+      <h1 class="title">APL.js REPL <span class="version">v0.2.1</span></h1>
       <p class="subtitle">An APL to JavaScript transpiler.</p>
     </div>
     <div class="toolbar">
@@ -1336,8 +1344,8 @@
       { glyph: "|", name: "Residue", monadic: "Absolute value: <code>|¯5</code> → 5", dyadic: "Remainder: <code>3|10</code> → 1" },
       { glyph: "⍴", name: "Rho", monadic: "Shape: <code>⍴2 3⍴⍳6</code> → 2 3", dyadic: "Reshape: <code>2 3⍴⍳6</code> → matrix" },
       { glyph: "/", name: "Compress / Reduce (last axis, operator)", monadic: "Fold each row: <code>+/2 3⍴⍳6</code> → 3 12", dyadic: "Replicate/select: <code>1 0 1/1 2 3</code> → 1 3" },
-      { glyph: "⌿", name: "Reduce (first axis, operator)", dyadic: "Fold each column: <code>+⌿2 3⍴⍳6</code> → 3 5 7" },
-      { glyph: "⍀", name: "Scan (first axis, operator)", dyadic: "Running fold down each column: <code>+⍀2 3⍴⍳6</code> → matrix" },
+      { glyph: "⌿", name: "Compress / Reduce (first axis, operator)", monadic: "Fold each column: <code>+⌿2 3⍴⍳6</code> → 3 5 7", dyadic: "Replicate/select ROWS: <code>1 0 1⌿3 3⍴⍳9</code> → (0 1 2)(6 7 8)" },
+      { glyph: "⍀", name: "Expand / Scan (first axis, operator)", monadic: "Running fold down each column: <code>+⍀2 3⍴⍳6</code> → matrix", dyadic: "Insert fills at each 0: <code>1 0 1⍀1 2</code> → 1 0 2" },
       { glyph: "\\", name: "Expand / Scan (last axis, operator)", monadic: "Running fold each row: <code>+\\2 3⍴⍳6</code> → matrix", dyadic: "Insert fills at each 0: <code>1 0 1\\1 2</code> → 1 0 2" },
       { glyph: "⍨", name: "Selfie (operator)", monadic: "Both args = ⍵: <code>+⍨3</code> → 6", dyadic: "Swap args: <code>5-⍨2</code> → ¯3" },
       { glyph: ",", name: "Comma", monadic: "Ravel: <code>,2 3⍴⍳6</code> → flat vector", dyadic: "Catenate: <code>1 2,3 4</code> → 1 2 3 4" },

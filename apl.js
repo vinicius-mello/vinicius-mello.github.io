@@ -20,7 +20,7 @@
 //     V  value               (a literal, a variable, ⍺/⍵, the result of
 //                             applying a function)
 //     F  function             (+ - × ⌷ ⊂ ... - monadic and/or dyadic)
-//     M  monadic operator     (¨ ⌿ ⍨ ... - takes one function/value operand)
+//     M  monadic operator     (¨ ⌸ ⍨ ... - takes one function/value operand)
 //     D  dyadic operator      (∘ . ⍣ ... - takes two operands)
 //     Q  quote marker          (⍞ - see its own comment below; a parse-time-
 //                             only relabelling, never a real runtime value)
@@ -189,22 +189,27 @@ const global_category = {
   '≥': { category:'F', name: 'greater_than_or_equal' },
   '|': { category:'F', name: 'residue' },
   '⍴': { category:'F', name: 'rho' },
-  // / and \ are genuinely dual-purpose in real APL - ⍺/⍵ compress and f/
-  // reduce-last-axis are as different in arity (dyadic vs monadic) as
-  // compress and reduce ever were, but share one glyph (same for \:
-  // ⍺\⍵ expand, f\ scan-last-axis). Category 'R' (see reduceStack's two
-  // R-keyed rules, and CAT_* lists above) keeps them out of the ordinary
-  // 'F'/'M' grammar rules entirely, rather than trying to special-case a
-  // shared category - seeded off a real bug: reusing plain 'M' let the
-  // generic monadic-operator rule (which permissively accepts a bare
-  // VALUE as its operand) grab a partial multi-element ⍺ strand (e.g.
-  // "0" out of "1 0") before the strand had even finished forming.
-  // ⌿/⍀ stay first-axis-only, plain 'M', unchanged - they already get
-  // first-axis semantics "for free" since a pervasive f like + combines
-  // whole top-level items elementwise on its own.
+  // /, \, ⌿ and ⍀ are all genuinely dual-purpose in real APL - ⍺/⍵
+  // compress and f/ reduce-last-axis are as different in arity (dyadic vs
+  // monadic) as compress and reduce ever were, but share one glyph (same
+  // for \: ⍺\⍵ expand, f\ scan-last-axis; and their first-axis
+  // counterparts, ⌿: ⍺⌿⍵ compress, f⌿ reduce; ⍀: ⍺⍀⍵ expand, f⍀ scan).
+  // Category 'R' (see reduceStack's two R-keyed rules, and CAT_* lists
+  // above) keeps all four out of the ordinary 'F'/'M' grammar rules
+  // entirely, rather than trying to special-case a shared category -
+  // seeded off a real bug: reusing plain 'M' let the generic
+  // monadic-operator rule (which permissively accepts a bare VALUE as its
+  // operand) grab a partial multi-element ⍺ strand (e.g. "0" out of "1 0")
+  // before the strand had even finished forming. ⌿/⍀'s monadic form still
+  // gets first-axis semantics "for free" since a pervasive f like +
+  // combines whole top-level items elementwise on its own; their dyadic
+  // form (compress/expand-first) is structurally identical to /'s and \'s
+  // own dyadic form in this array model (neither recurses past the top
+  // level), so G.reduce/G.scan just delegate to G.compress/G.expand for
+  // the dyadic case instead of duplicating the algorithm.
   '/': { category:'R', name: 'compress' },
-  '⌿': { category:'M', name: 'reduce' },
-  '⍀': { category:'M', name: 'scan' },
+  '⌿': { category:'R', name: 'reduce' },
+  '⍀': { category:'R', name: 'scan' },
   '\\': { category:'R', name: 'expand' },
   '⍨': { category:'M', name: 'selfie' },
   ',': { category:'F', name: 'comma' },
@@ -1838,44 +1843,75 @@ const G = {
     }
     return f(g(w),a);
   },
-  reduce: ((f) => (a) => {
-    // Rank 0 (a plain scalar, or a box - a box is a 1-element JS array,
-    // which would otherwise slip through as "an array to reduce" and get
-    // silently disclosed by reduceRight's own single-element shortcut).
-    // Verified against real Dyalog: +/5 is 5, and (+/⊂1 2 3)≡⊂1 2 3 - a
-    // rank-0 argument has no axis to reduce along, so reduce is identity.
-    if (!Array.isArray(a) || isBoxed(a)) {
-      return a;
+  reduce: (w, a) => {
+    if (a === undefined) {
+      // Monadic f⌿ (w here is ⍺⍺, the operand function - same
+      // a===undefined dispatch idiom pick/squad/domino/compress use to
+      // tell a monadic call from a dyadic one) reduces along the FIRST
+      // axis "for free": a pervasive f like + combines whole top-level
+      // items elementwise on its own, so +⌿(2 3⍴⍳6) is [3,5,7] (rows
+      // added elementwise) - no axis-recursion needed here at all, unlike
+      // compress's own monadic (reduce-LAST-axis) branch.
+      const f = w;
+      return (arr) => {
+        // Rank 0 (a plain scalar, or a box - a box is a 1-element JS
+        // array, which would otherwise slip through as "an array to
+        // reduce" and get silently disclosed by reduceRight's own
+        // single-element shortcut). Verified against real Dyalog: +⌿5 is
+        // 5, and (+⌿⊂1 2 3)≡⊂1 2 3 - a rank-0 argument has no axis to
+        // reduce along, so reduce is identity.
+        if (!Array.isArray(arr) || isBoxed(arr)) {
+          return arr;
+        }
+        if (arr.length === 0) {
+          // Ad hoc identity elements, for now: a proper fix needs every
+          // primitive to expose its own identity element (+⌿⍬ is 0, ×⌿⍬
+          // is 1, ∧⌿⍬ is 1, etc. in real Dyalog), which nothing here
+          // currently does. Only the two most common cases are covered.
+          if (f === G.plus) return 0;
+          if (f === G.times) return 1;
+          throw new Error('Reduce cannot be applied to an empty array');
+        }
+        return arr.reduceRight(f);
+      };
     }
-    if (a.length === 0) {
-      // Ad hoc identity elements, for now: a proper fix needs every
-      // primitive to expose its own identity element (+/⍬ is 0, ×/⍬ is 1,
-      // ∧/⍬ is 1, etc. in real Dyalog), which nothing here currently does.
-      // Only the two most common cases are covered.
-      if (f === G.plus) return 0;
-      if (f === G.times) return 1;
-      throw new Error('Reduce cannot be applied to an empty array');
+    // Dyadic ⍺⌿⍵: compress along the FIRST axis - selects/repeats whole
+    // top-level items of ⍵ by the counts in ⍺. Structurally identical to
+    // dyadic ⍺/⍵ in this array model (G.compress's own dyadic branch
+    // already operates on ⍵'s top-level items directly, i.e. the first
+    // axis, never recursing into a "true" last axis) - delegating instead
+    // of duplicating the algorithm.
+    return G.compress(w, a);
+  },
+  scan: (w, a) => {
+    if (a === undefined) {
+      // Monadic f⍀ scans along the FIRST axis, the ⍀/⌿ counterpart of
+      // reduce's monadic branch above - w here is ⍺⍺, not a value.
+      const f = w;
+      return (arr) => {
+        // Same rank-0 identity rule as reduce, above - verified against
+        // real Dyalog: +⍀5 is 5 (not ,5), and (+⍀⊂1 2 3)≡⊂1 2 3.
+        if (!Array.isArray(arr) || isBoxed(arr)) {
+          return arr;
+        }
+        if (arr.length === 0) {
+          throw new Error('Scan cannot be applied to an empty array');
+        }
+        const result = [];
+        let acc = arr[0];
+        result.push(acc);
+        for (let i = 1; i < arr.length; i++) {
+          acc = f(acc, arr[i]);
+          result.push(acc);
+        }
+        return result;
+      };
     }
-    return a.reduceRight(f);
-  }),
-  scan: ((f) => (a) => {
-    // Same rank-0 identity rule as reduce, above - verified against real
-    // Dyalog: +\5 is 5 (not ,5), and (+\⊂1 2 3)≡⊂1 2 3.
-    if (!Array.isArray(a) || isBoxed(a)) {
-      return a;
-    }
-    if (a.length === 0) {
-      throw new Error('Scan cannot be applied to an empty array');
-    }
-    const result = [];
-    let acc = a[0];
-    result.push(acc);
-    for (let i = 1; i < a.length; i++) {
-      acc = f(acc, a[i]);
-      result.push(acc);
-    }
-    return result;
-  }),
+    // Dyadic ⍺⍀⍵: expand along the FIRST axis - same reasoning as
+    // reduce/compress above, delegating to G.expand's own dyadic branch
+    // rather than duplicating it.
+    return G.expand(w, a);
+  },
   // Key (⌸, monadic operator): f⌸w groups w's own items by value - for each
   // unique value (in first-occurrence order), f is called with (indices, key)
   // i.e. ⍵=indices into w, ⍺=the key itself. a f⌸w classifies by a instead -
@@ -2377,8 +2413,9 @@ const CAT_F_V = ['F', 'V', 'R'];
 // its own) one shift before "+" arrives to claim "/" as its reduce
 // operator - silently splitting +/ apart into a bogus (+)(/÷≢) atop
 // instead of the intended (+/)(÷)(≢) fork. Confirmed against
-// (+/÷≢)⍳10 (broken) vs (+⌿÷≢)⍳10 (fine - ⌿'s own category 'M' was
-// never in CAT_F_V to begin with).
+// (+/÷≢)⍳10 (broken before this fix) vs (+⌿÷≢)⍳10 (fine even before this
+// fix, back when ⌿ was still plain 'M' rather than 'R' like / - now that
+// ⌿/⍀ share R too, both spellings go through this same exclusion).
 const CAT_TINE_F_V = ['F', 'V'];
 const CAT_BOUNDARY = ['(', '←', 'Edge', ':', 'Q'];
 const CAT_BOUNDARY_MF_NOCOLON = ['(', '←', 'M', 'F', 'R', 'Edge'];
