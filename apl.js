@@ -1763,8 +1763,18 @@ const G = {
   },
   iota: (w, a) => {
     if (a === undefined) {
+      // ⍳ of a vector argument (an index generator, e.g. ⍳2 2) yields an
+      // array shaped like ⍵ whose elements are themselves index vectors -
+      // in real Dyalog those elements are nested/boxed (⎕←⍳2 2 shows boxed
+      // pairs), never plain sub-arrays. Each idx here MUST be enclosed:
+      // left raw, a multi-element idx is structurally indistinguishable
+      // from a real extra axis, so shapeRec would misread e.g. ⍳3 3 as a
+      // genuine 3×3×2 array instead of a 3×3 array of boxed 2-vectors -
+      // exactly what broke dyadic compress/expand (which dispatch on
+      // shapeRec) once ,⍳⍴⍵-style index vectors got compressed/expanded
+      // against a same-length mask.
       if (Array.isArray(w)) {
-        return fillShapeRec(w, (idx, index) => idx);
+        return fillShapeRec(w, (idx, index) => encloseIfNeeded(idx));
       }
       if (typeof w === 'number') {
         return Array.from({ length: w }, (_, i) => i);
