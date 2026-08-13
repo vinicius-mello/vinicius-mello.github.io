@@ -2422,8 +2422,7 @@ const emitJs = (node, asTarget = false) => {
     case 'Block': {
       let prefix = '';
       if (node.declarations.length > 0) {
-        const decls = node.declarations.map((d) => (d[0] === '[' ? `${d} = []` : d)).join(', ');
-        prefix = `let ${decls}; `;
+        prefix = `let ${node.declarations.join(', ')}; `;
       }
       return prefix + emitStatements(node.statements);
     }
@@ -2432,6 +2431,31 @@ const emitJs = (node, asTarget = false) => {
     default:
       throw new Error(`Unknown AST node type: ${node.type}`);
   }
+};
+
+// An assignment target is always an Identifier or a Strand of them (e.g.
+// `a b c` in `a b c←⍵`) - these two walk that same shape to get, respectively,
+// the bare names being bound (for scope bookkeeping/declarations, always
+// unprefixed - a `let` binding can never be a dotted property) and the target
+// rendered as plain local JS bindings, ignoring whatever `.global` each
+// Identifier carries. Used by the two assignment-forming reductions below:
+// plain `←` always binds locally inside a dfn (see assignedNames/
+// localTargetText's callers), while `⊢←` forces every name in the target
+// through to G instead (see globalTargetText).
+const assignedNames = (node) => {
+  if (node.type === 'Identifier') return [node.name];
+  if (node.type === 'Strand') return node.elements.flatMap(assignedNames);
+  throw new Error(`Invalid assignment target: ${node.type}`);
+};
+const localTargetText = (node) => {
+  if (node.type === 'Identifier') return node.name;
+  if (node.type === 'Strand') return `[${node.elements.map(localTargetText).join(', ')}]`;
+  throw new Error(`Invalid assignment target: ${node.type}`);
+};
+const globalTargetText = (node) => {
+  if (node.type === 'Identifier') return `G.${node.name}`;
+  if (node.type === 'Strand') return `[${node.elements.map(globalTargetText).join(', ')}]`;
+  throw new Error(`Invalid assignment target: ${node.type}`);
 };
 
 // A "train" is an implicit composition of functions formed by bare
@@ -2759,21 +2783,45 @@ const parseExpression = (expression, scope) => {
         C.category === '←' &&
         belong(D.category, CAT_V_F_D_M)
       ) {
-        // The scope key has to be a string, and the assignment target may
-        // be a strand (e.g. `a b c←⍵`, whose Strand node renders as
-        // "[a, b, c]" - valid on both sides, array literal or destructuring
-        // pattern) rather than a plain Identifier, so it's rendered here via
-        // emitJs the same way the old text-based version always had it
-        // pre-rendered. See find_category for what "global" means here.
-        const Btext = emitJs(B.node, true);
-        const [categoryEntry, global] = find_category(Btext, scope);
-        const strippedBtext = global ? Btext.slice(2) : Btext;
+        // Real dfn scoping rule: every name plain ← assigns to becomes
+        // local, even if a same-named global already exists - it shadows
+        // rather than writes through (only the explicit `name⊢←` form
+        // below reaches an outer global from inside a dfn). At the top
+        // level (scope.length===1) there's no local scope to bind into at
+        // all, so the target still goes straight to G as it always did.
+        const isDfnScope = scope.length > 1;
+        const targetText = isDfnScope ? localTargetText(B.node) : emitJs(B.node, true);
+        const strippedBtext = isDfnScope ? targetText : targetText.slice(2);
+        const [categoryEntry] = find_category(strippedBtext, scope);
         const firstAlphaAssign = strippedBtext === '_a_' && categoryEntry && categoryEntry.name === ''; // First assignment of ⍺ in a DFN
-        const node = { type: 'Assign', target: B.node, targetText: Btext, value: D.node, firstAlphaAssign };
-        scope[scope.length - 1][strippedBtext] =
-          { category: D.category, name: strippedBtext };
+        const node = { type: 'Assign', target: B.node, targetText, value: D.node, firstAlphaAssign };
+        if (isDfnScope) {
+          for (const name of assignedNames(B.node)) {
+            scope[scope.length - 1][name] = { category: D.category, name };
+          }
+        } else {
+          scope[scope.length - 1][strippedBtext] = { category: D.category, name: strippedBtext };
+        }
         stack.splice(size - 4, 4,
           { category: D.category, node }, A);
+        foundReduction = true;
+        continue;
+      }
+      if(ABCD &&
+        belong(A.category, CAT_V_F_D_M) &&
+        B.category === 'F' && B.node.type === 'Identifier' && B.node.name === 'right' &&
+        C.category === '←' &&
+        belong(D.category, CAT_V_F_D_M)
+      ) {
+        // name⊢← - Dyalog's explicit-global-assignment escape hatch: the
+        // only way to write straight through to an outer/global name from
+        // inside a dfn, since plain ← just above always binds a local
+        // instead. Forces every name in the target to G, and - unlike
+        // plain ← - never adds anything to the current scope: a global
+        // write declares nothing local.
+        const node = { type: 'Assign', target: A.node, targetText: globalTargetText(A.node), value: D.node, firstAlphaAssign: false };
+        stack.splice(size - 4, 4,
+          { category: D.category, node });
         foundReduction = true;
         continue;
       }
