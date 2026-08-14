@@ -80,12 +80,27 @@
   .line-error { color: #f14c4c; }
   form {
     display: flex;
+    align-items: flex-end;
     border-top: 1px solid var(--border);
     padding: 0.5rem;
     gap: 0.5rem;
   }
+  #examples {
+    flex-shrink: 0;
+    font-family: inherit;
+    font-size: 0.8rem;
+    background: var(--input-bg);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem 0.5rem;
+    cursor: pointer;
+    max-width: 9rem;
+  }
+  #examples:hover { border-color: var(--accent); }
   #input {
     flex: 1;
+    min-width: 0;
     background: var(--input-bg);
     color: var(--fg);
     border: 1px solid var(--border);
@@ -93,6 +108,10 @@
     padding: 0.5rem 0.75rem;
     font-family: inherit;
     font-size: 0.9rem;
+    line-height: 1.4;
+    resize: none;
+    overflow-y: auto;
+    max-height: 40vh;
   }
   #input:focus {
     outline: 1px solid var(--accent);
@@ -201,7 +220,8 @@
   </header>
   <div id="output"></div>
   <form id="form" autocomplete="off">
-    <input id="input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder=": square dup * ;  5 square .">
+    <select id="examples" title="Insert example"></select>
+    <textarea id="input" rows="1" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder=": square dup * ;  5 square .  (Shift+Enter = new line)"></textarea>
   </form>
 </div>
 
@@ -241,6 +261,7 @@
   var output = document.getElementById('output');
   var form = document.getElementById('form');
   var input = document.getElementById('input');
+  var examples = document.getElementById('examples');
   var debugToggle = document.getElementById('debug-toggle');
   var debugClear = document.getElementById('debug-clear');
   var logBody = document.getElementById('debug-log-body');
@@ -351,6 +372,11 @@
   var history = [];
   var historyPos = -1;
 
+  function autoResizeInput() {
+    input.style.height = 'auto';
+    input.style.height = input.scrollHeight + 'px';
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var line = input.value;
@@ -359,19 +385,31 @@
     history.push(line);
     historyPos = history.length;
     input.value = '';
+    autoResizeInput();
     Chuck.interpret(line, state);
     appendLine('ok');
   });
 
+  input.addEventListener('input', autoResizeInput);
+
   input.addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowUp') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { cancelable: true }));
+      return;
+    }
+    // history navigation only makes sense while editing a single-line entry
+    var singleLine = input.value.indexOf('\n') === -1;
+    if (e.key === 'ArrowUp' && singleLine) {
       if (historyPos > 0) {
         historyPos--;
         input.value = history[historyPos];
+        autoResizeInput();
         requestAnimationFrame(function () { input.selectionStart = input.selectionEnd = input.value.length; });
       }
       e.preventDefault();
-    } else if (e.key === 'ArrowDown') {
+    } else if (e.key === 'ArrowDown' && singleLine) {
       if (historyPos < history.length - 1) {
         historyPos++;
         input.value = history[historyPos];
@@ -379,8 +417,44 @@
         historyPos = history.length;
         input.value = '';
       }
+      autoResizeInput();
       e.preventDefault();
     }
+  });
+
+  // --- example snippets ----------------------------------------------
+  var EXAMPLES = [
+    { label: 'Simple addition', code: '2 3 + .' },
+    { label: 'Define a word', code: ': SQUARE DUP * ;\n5 SQUARE .' },
+    { label: 'Recursive factorial', code: ': FACT DUP 1 > IF DUP 1 - RECURSE * THEN ;\n5 FACT .' },
+    { label: 'Variable', code: 'VARIABLE X\n10 X !\nX @ .' },
+    { label: 'DO/LOOP', code: ': COUNT 5 0 DO I . LOOP ;\nCOUNT' },
+    { label: 'DOES> (CONSTANT)', code: ': CONSTANT CREATE , DOES> @ ;\n5 CONSTANT FIVE\nFIVE .' },
+    { label: 'POSTPONE (MYIF)', code: ': MYIF POSTPONE IF ; IMMEDIATE\n: CHECK DUP 0 > MYIF ." pos" ELSE ." nonpos" THEN ;\n5 CHECK' }
+  ];
+
+  (function populateExamples() {
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Examples…';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    examples.appendChild(placeholder);
+    EXAMPLES.forEach(function (ex, i) {
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = ex.label;
+      examples.appendChild(opt);
+    });
+  })();
+
+  examples.addEventListener('change', function () {
+    if (examples.value === '') return;
+    input.value = EXAMPLES[Number(examples.value)].code;
+    examples.selectedIndex = 0;
+    autoResizeInput();
+    input.focus();
+    input.selectionStart = input.selectionEnd = input.value.length;
   });
 
   appendLine('chuck.js ready. Type WORDS to see the dictionary.');
