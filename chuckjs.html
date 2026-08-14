@@ -149,7 +149,7 @@
     color: var(--dim);
     font-weight: 600;
   }
-  .stack-view, #live-def {
+  .stack-view, #live-def, #live-control {
     font-size: 0.82rem;
     background: var(--input-bg);
     border: 1px solid var(--border);
@@ -158,7 +158,7 @@
     min-height: 1.4em;
     word-break: break-word;
   }
-  .stack-view .empty, #live-def .empty { color: var(--dim); font-style: italic; }
+  .stack-view .empty, #live-def .empty, #live-control .empty { color: var(--dim); font-style: italic; }
   .tok { color: #ce9178; }
   .tok-word { color: #4ec9b0; }
   #debug-log-header {
@@ -236,9 +236,13 @@
       <h3>Return stack (stackR)</h3>
       <div id="live-stackR" class="stack-view"></div>
     </div>
-    <div class="debug-section" style="margin-bottom:0;">
+    <div class="debug-section">
       <h3>Definition being compiled</h3>
       <div id="live-def"></div>
+    </div>
+    <div class="debug-section" style="margin-bottom:0;">
+      <h3>Other compile targets (open control frames)</h3>
+      <div id="live-control"></div>
     </div>
   </div>
   <div id="debug-log-header">
@@ -269,6 +273,7 @@
   var liveStackS = document.getElementById('live-stackS');
   var liveStackR = document.getElementById('live-stackR');
   var liveDef = document.getElementById('live-def');
+  var liveControl = document.getElementById('live-control');
 
   function appendLine(text, cls) {
     var div = document.createElement('div');
@@ -310,6 +315,26 @@
     el.textContent = items.join('  ');
   }
 
+  // One line of text per open control frame (IF/BEGIN/BEGIN...WHILE/DO),
+  // innermost first — these are the "other" compile targets that
+  // compileAppend redirects to instead of currentDefinition while nested
+  // inside a control structure.
+  function describeControlFrameLine(frame) {
+    switch (frame.type) {
+      case 'IF':
+        return 'IF (' + frame.active + ' branch active)  true: ' + frame.trueBranch.join(' ') +
+          (frame.falseBranch ? '   false: ' + frame.falseBranch.join(' ') : '   false: (no ELSE yet)');
+      case 'BEGIN':
+        return 'BEGIN  body: ' + frame.body.join(' ');
+      case 'BEGIN...WHILE':
+        return 'BEGIN...WHILE  cond: ' + frame.condPart.join(' ') + '   body: ' + frame.bodyPart.join(' ');
+      case 'DO':
+        return 'DO  body: ' + frame.body.join(' ');
+      default:
+        return frame.type;
+    }
+  }
+
   // Renders a snapshot (from Chuck.snapshotState) into the "live state" cards.
   function renderLive(snap) {
     fillStackView(liveStackS, snap.stackS);
@@ -319,6 +344,16 @@
         (snap.controlDepth ? '   [' + snap.controlDepth + ' open control frame(s)]' : '');
     } else {
       liveDef.innerHTML = '<span class="empty">(not compiling)</span>';
+    }
+    if (snap.controlStack && snap.controlStack.length) {
+      liveControl.innerHTML = '';
+      snap.controlStack.slice().reverse().forEach(function (frame, i) {
+        var div = document.createElement('div');
+        div.textContent = '[' + (snap.controlStack.length - i) + '] ' + describeControlFrameLine(frame);
+        liveControl.appendChild(div);
+      });
+    } else {
+      liveControl.innerHTML = '<span class="empty">(no open control frames)</span>';
     }
   }
 

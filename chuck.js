@@ -806,6 +806,30 @@
     return String(entry);
   }
 
+  // Describes one open control-stack frame (IF/BEGIN/BEGIN-WHILE/DO): the
+  // branch(es) currently receiving compiled items, rendered through
+  // describeEntry. This is the "other compile target" besides
+  // currentDefinition — compileAppend redirects here while the frame is open.
+  function describeControlFrame(state, f) {
+    function d(arr) { return arr.map(function (v) { return describeEntry(state, v); }); }
+    switch (f.type) {
+      case 'if':
+        return {
+          type: 'IF', active: f.active,
+          trueBranch: d(f.trueBranch),
+          falseBranch: f.falseBranch ? d(f.falseBranch) : null
+        };
+      case 'begin':
+        return { type: 'BEGIN', body: d(f.body) };
+      case 'begin-while':
+        return { type: 'BEGIN...WHILE', condPart: d(f.condPart), bodyPart: d(f.bodyPart) };
+      case 'do':
+        return { type: 'DO', body: d(f.body) };
+      default:
+        return { type: f.type };
+    }
+  }
+
   // A point-in-time, display-ready snapshot of state: both stacks and the
   // definition currently being compiled (if any), all rendered through
   // describeEntry. Safe to keep around after the fact (plain strings/arrays,
@@ -819,7 +843,8 @@
       currentDefinition: state.currentDefinition
         ? state.currentDefinition.map(function (v) { return describeEntry(state, v); })
         : null,
-      controlDepth: state.controlStack.length
+      controlDepth: state.controlStack.length,
+      controlStack: state.controlStack.map(function (f) { return describeControlFrame(state, f); })
     };
   }
 
