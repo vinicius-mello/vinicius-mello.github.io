@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Editor CindyJS</title>
+  <title>CindyJS Editor</title>
   <link rel="stylesheet" href="css/codemirror.css">
   <link rel="stylesheet" href="css/darcula.css">
   <link rel="stylesheet" href="css/show-hint.css">
@@ -255,6 +255,35 @@
       border: 0;
     }
 
+    .example-select {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      max-width: 152px;
+      padding: 0 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(15, 23, 42, 0.82);
+      color: var(--text-main);
+      font: inherit;
+      font-size: 0.62rem;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease, border-color 120ms ease;
+    }
+
+    .example-select:hover,
+    .example-select:focus-visible {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+      border-color: rgba(249, 115, 22, 0.42);
+      outline: none;
+    }
+
+    .example-select option {
+      background: #10141d;
+      color: var(--text-main);
+    }
+
     .editor-shell {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto;
@@ -388,8 +417,8 @@
     }
 
     .docs-dialog {
-      width: min(980px, 100%);
-      height: min(82vh, 100%);
+      width: min(1080px, 100%);
+      height: min(84vh, 100%);
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       background: rgba(11, 18, 32, 0.98);
@@ -422,16 +451,179 @@
       font-size: 0.66rem;
     }
 
+    .docs-search {
+      flex: 0 1 220px;
+      min-width: 0;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 10px;
+      color: var(--text-main);
+      font: inherit;
+      font-size: 0.68rem;
+      padding: 6px 10px;
+    }
+
+    .docs-search::placeholder {
+      color: var(--text-soft);
+    }
+
+    .docs-search:focus-visible {
+      outline: none;
+      border-color: rgba(249, 115, 22, 0.55);
+    }
+
     .docs-body {
-      margin: 0;
-      padding: 14px;
-      overflow: auto;
-      white-space: pre-wrap;
-      font-family: "Cascadia Code", "Fira Code", monospace;
-      font-size: 12px;
-      line-height: 1.45;
-      color: #e5edf7;
+      display: grid;
+      grid-template-columns: 176px minmax(0, 1fr);
+      min-height: 0;
       background: linear-gradient(180deg, rgba(10, 15, 27, 0.98), rgba(15, 23, 42, 0.96));
+    }
+
+    .docs-nav {
+      list-style: none;
+      margin: 0;
+      padding: 10px 8px;
+      overflow-y: auto;
+      border-right: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(9, 13, 22, 0.6);
+    }
+
+    .docs-nav li + li {
+      margin-top: 2px;
+    }
+
+    .docs-nav-link {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      color: var(--text-soft);
+      font: inherit;
+      font-size: 0.64rem;
+      line-height: 1.3;
+      padding: 6px 8px;
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+
+    .docs-nav-link:hover,
+    .docs-nav-link:focus-visible {
+      color: var(--text-main);
+      border-color: rgba(249, 115, 22, 0.32);
+      outline: none;
+    }
+
+    .docs-nav-link.is-hidden {
+      display: none;
+    }
+
+    .docs-content {
+      overflow-y: auto;
+      padding: 16px 20px 24px;
+    }
+
+    .docs-section {
+      padding-top: 6px;
+      margin-bottom: 22px;
+      scroll-margin-top: 8px;
+    }
+
+    .docs-section.is-hidden {
+      display: none;
+    }
+
+    .docs-section-title {
+      margin: 0 0 10px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: #f8fafc;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .docs-block {
+      margin-bottom: 12px;
+    }
+
+    .docs-block-label {
+      margin: 0 0 5px;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+    }
+
+    .docs-text {
+      margin: 0 0 4px;
+      font-size: 0.74rem;
+      line-height: 1.55;
+      color: #d7e1ee;
+    }
+
+    .docs-code {
+      margin: 0;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-left: 3px solid rgba(148, 163, 184, 0.32);
+      background: rgba(8, 12, 20, 0.78);
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 11.5px;
+      line-height: 1.55;
+      color: #d9e7f3;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .docs-code.is-example {
+      border-left-color: rgba(249, 115, 22, 0.6);
+    }
+
+    .docs-list {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 0.74rem;
+      line-height: 1.6;
+      color: #d7e1ee;
+    }
+
+    .docs-link {
+      color: #fb923c;
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .docs-link:hover {
+      text-decoration: underline;
+    }
+
+    .doc-kw {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
+    .doc-fn {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    .doc-const {
+      color: #34d399;
+      font-weight: 600;
+    }
+
+    .doc-mod {
+      color: #f472b6;
+      font-weight: 600;
+    }
+
+    .docs-empty {
+      color: var(--text-soft);
+      font-size: 0.72rem;
+      padding: 12px 2px;
     }
 
     @media (max-width: 1120px) {
@@ -504,7 +696,7 @@
         id="workspaceSplitter"
         class="splitter"
         role="separator"
-        aria-label="Redimensionar painel"
+        aria-label="Resize panel"
         aria-orientation="vertical"
         aria-valuemin="42"
         aria-valuemax="68"
@@ -514,7 +706,7 @@
 
       <article class="panel editor-panel">
         <aside class="sidebar">
-          <div id="bufferTabs" class="tablist" role="tablist" aria-label="Buffers de script"></div>
+          <div id="bufferTabs" class="tablist" role="tablist" aria-label="Script buffers"></div>
         </aside>
 
         <div class="editor-shell">
@@ -523,6 +715,9 @@
             <button id="saveButton" class="button button-secondary" type="button" title="Ctrl-S">Save</button>
             <label class="file-button" for="inputFile" title="Ctrl-F">Open</label>
             <button id="docsButton" class="button button-secondary" type="button">Docs</button>
+            <select id="exampleSelect" class="example-select" title="Load example">
+              <option value="" disabled selected>Examples…</option>
+            </select>
             <input class="file-input" type="file" id="inputFile" accept=".js,.txt,.json">
           </div>
           <div class="editor-frame">
@@ -542,11 +737,15 @@
       <header class="docs-header">
         <div>
           <h2 id="docsTitle" class="docs-title">CindyJS Summary</h2>
-          <div id="docsStatus" class="docs-status">Carregando documentação...</div>
+          <div id="docsStatus" class="docs-status">Local summary based on the official CindyJS documentation.</div>
         </div>
+        <input id="docsSearch" class="docs-search" type="search" placeholder="Search function or keyword...">
         <button id="closeDocsButton" class="button button-secondary" type="button">Close</button>
       </header>
-      <pre id="docsContent" class="docs-body"></pre>
+      <div class="docs-body">
+        <ul id="docsNav" class="docs-nav"></ul>
+        <div id="docsContent" class="docs-content"></div>
+      </div>
     </section>
   </div>
 
@@ -609,6 +808,297 @@
         ");"
       ].join("\n");
 
+      function exampleConfig(options) {
+        const opts = options || {};
+        const autoplay = opts.autoplay !== false;
+        const background = opts.background || "rgb(168,176,192)";
+        const points = opts.points || [];
+
+        const geometryBlock = points.length
+          ? "  geometry: [\n" + points.map(function (point, index) {
+              return [
+                "    {",
+                "      name: `" + point.name + "`,",
+                "      kind: `P`,",
+                "      type: `Free`,",
+                "      pos: [" + point.pos[0] + ", " + point.pos[1] + "]",
+                "    }" + (index === points.length - 1 ? "" : ",")
+              ].join("\n");
+            }).join("\n") + "\n  ]"
+          : "  geometry: []";
+
+        return [
+          "{",
+          "  ports: [",
+          "    {",
+          "      id: `port`,",
+          "      axes: false,",
+          "      grid: 0,",
+          "      background: `" + background + "`",
+          "    }",
+          "  ],",
+          "  animation:",
+          "  {",
+          "    autoplay: " + autoplay,
+          "  },",
+          geometryBlock,
+          "}"
+        ].join("\n");
+      }
+
+      // Adapted from concepts shown in the official CindyJS gallery
+      // (https://cindyjs.org/gallery/main/) - rewritten for this editor's
+      // buffer/config model, not copied verbatim from the gallery sources.
+      const EXAMPLES = [
+        {
+          label: "Sunflower Spiral",
+          group: "Basic",
+          config: defaultConfig,
+          scripts: { draw: defaultDrawScript }
+        },
+        {
+          label: "Chaos Game: Sierpinski",
+          group: "Fractals",
+          config: exampleConfig({
+            autoplay: false,
+            background: "rgb(18,20,26)",
+            points: [
+              { name: "A", pos: [-3, -2] },
+              { name: "B", pos: [3, -2] },
+              { name: "C", pos: [0, 3.2] }
+            ]
+          }),
+          scripts: {
+            draw: [
+              "p = (0,0);",
+              "repeat(4000, i,",
+              "  r = random();",
+              "  if(r<1/3, v=A, if(r<2/3, v=B, v=C));",
+              "  p = (p+v)/2;",
+              "  if(i>10, draw(p, size->1.2, color->(0.15,0.65,0.9), alpha->0.85));",
+              ");"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Barnsley Fern",
+          group: "Fractals",
+          config: exampleConfig({ autoplay: false, background: "rgb(12,16,13)" }),
+          scripts: {
+            draw: [
+              "p = (0,0);",
+              "repeat(8000, i,",
+              "  r = random();",
+              "  if(r<0.01,",
+              "    q = (0, 0.16*p.y),",
+              "    if(r<0.86,",
+              "      q = (0.85*p.x+0.04*p.y, -0.04*p.x+0.85*p.y+1.6),",
+              "      if(r<0.93,",
+              "        q = (0.2*p.x-0.26*p.y, 0.23*p.x+0.22*p.y+1.6),",
+              "        q = (-0.15*p.x+0.28*p.y, 0.26*p.x+0.24*p.y+0.44)",
+              "      )",
+              "    )",
+              "  );",
+              "  p = q;",
+              "  if(i>5, draw(p*0.9, size->1, color->(0.2,0.75,0.25), alpha->0.9));",
+              ");"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Julia Set (CindyGL)",
+          group: "Complex Functions",
+          config: exampleConfig({ autoplay: false, background: "rgb(6,6,10)" }),
+          scripts: {
+            draw: [
+              "colorplot(",
+              "  z = #*0.35;",
+              "  c = (-0.74543, 0.11301);",
+              "  n = 0;",
+              "  escaped = 0;",
+              "  repeat(60,",
+              "    if(escaped==0,",
+              "      z = (z.x^2-z.y^2, 2*z.x*z.y) + c;",
+              "      if(z.x^2+z.y^2>4, escaped=1, n=n+1);",
+              "    );",
+              "  );",
+              "  t = n/40;",
+              "  if(t>1, t=1);",
+              "  if(escaped==0, (0.03,0.03,0.08), (0.03,0.03,0.08)*(1-t) + hue(0.05+0.65*t)*t)",
+              ");"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Newton Fractal (z³-1)",
+          group: "Complex Functions",
+          config: exampleConfig({ autoplay: false, background: "rgb(6,6,10)" }),
+          scripts: {
+            draw: [
+              "colorplot(",
+              "  z = #*0.6;",
+              "  n = 0;",
+              "  repeat(25,",
+              "    fz = (z.x^3-3*z.x*z.y^2-1, 3*z.x^2*z.y-z.y^3);",
+              "    dz = (3*(z.x^2-z.y^2), 6*z.x*z.y);",
+              "    denom = dz.x^2+dz.y^2;",
+              "    if(denom>0.000001,",
+              "      inv = (dz.x/denom, -dz.y/denom);",
+              "      delta = (fz.x*inv.x-fz.y*inv.y, fz.x*inv.y+fz.y*inv.x);",
+              "      z = z - delta;",
+              "    );",
+              "    n = n+1;",
+              "  );",
+              "  d1 = dist(z,(1,0));",
+              "  d2 = dist(z,(-0.5,0.8660254));",
+              "  d3 = dist(z,(-0.5,-0.8660254));",
+              "  shade = 1-n/40;",
+              "  if(d1<d2 & d1<d3, (shade,0.15,0.1),",
+              "    if(d2<d3, (0.1,shade,0.15), (0.1,0.15,shade))",
+              "  )",
+              ");"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Ford Circles",
+          group: "Combinatorics",
+          config: exampleConfig({ autoplay: false }),
+          scripts: {
+            init: "gcd(a,b) := if(b==0, a, gcd(b, a-b*floor(a/b)));",
+            draw: [
+              "N = 12;",
+              "forall(1..N, q,",
+              "  forall(0..q, p,",
+              "    if(gcd(p,q)==1,",
+              "      cx = p/q*6-3;",
+              "      r = 1/(2*q^2)*6;",
+              "      drawcircle((cx, r), r, color->hue(q/N), alpha->0.85, size->1);",
+              "    );",
+              "  );",
+              ");"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Pythagorean Dissection (interactive)",
+          group: "2D Geometry",
+          config: exampleConfig({
+            autoplay: false,
+            points: [
+              { name: "C", pos: [0, -1.5] },
+              { name: "A", pos: [3.5, -1.5] },
+              { name: "B", pos: [0, 2.2] }
+            ]
+          }),
+          scripts: {
+            draw: [
+              "dirA = A-C;",
+              "lenA = dist(C,A);",
+              "lenB = dist(C,B);",
+              "if(lenA>0.05 & lenB>0.05,",
+              "  u = dirA/lenA;",
+              "  p = (-u.y, u.x);",
+              "  D = C + p*lenB;",
+              "",
+              "  sqCA = [C, A, A-p*lenA, C-p*lenA];",
+              "  sqCD = [C, D, D-u*lenB, C-u*lenB];",
+              "",
+              "  hyp = dist(A,D);",
+              "  hDir = (D-A)/hyp;",
+              "  hPerp = (-hDir.y, hDir.x);",
+              "  side = if((hPerp.x*(C.x-A.x)+hPerp.y*(C.y-A.y))>0, hPerp*(-1), hPerp);",
+              "  sqHyp = [A, D, D+side*hyp, A+side*hyp];",
+              "",
+              "  fillpoly(sqCA, color->(0.95,0.55,0.2), alpha->0.55);",
+              "  fillpoly(sqCD, color->(0.3,0.75,0.95), alpha->0.55);",
+              "  fillpoly(sqHyp, color->(0.55,0.9,0.4), alpha->0.55);",
+              "",
+              "  drawpoly([C,A,D,C], color->(0.05,0.05,0.08), size->2);",
+              "",
+              "  areaLegs = lenA^2+lenB^2;",
+              "  areaHyp = hyp^2;",
+              "  drawtext((-3.5,-6.2), \"a^2+b^2 = \" + format(areaLegs,2) + \"   c^2 = \" + format(areaHyp,2), color->(0.05,0.05,0.08));",
+              ");"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Bouncing Ball",
+          group: "Physics",
+          config: exampleConfig({ autoplay: true }),
+          scripts: {
+            draw: [
+              "t = seconds();",
+              "T = 1.1;",
+              "H = 5;",
+              "s = (t - T*floor(t/T))/T;",
+              "y = H*4*s*(1-s) - 3;",
+              "x = 3*sin(t*0.6);",
+              "",
+              "drawpoly([(-4,-3),(4,-3)], color->(0.3,0.3,0.35), size->3);",
+              "",
+              "squash = 1-0.6*s*(1-s)*4;",
+              "fillcircle((x,y), 0.5*squash, color->(0.95,0.55,0.2), alpha->0.9);",
+              "drawcircle((x,y), 0.5*squash, color->(0.95,0.35,0.25), alpha->0.95, size->2);"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Fourier Synthesis (square wave)",
+          group: "Calculus",
+          config: exampleConfig({ autoplay: true }),
+          scripts: {
+            draw: [
+              "t = seconds();",
+              "N = 9;",
+              "pts = [];",
+              "forall(0..140, k,",
+              "  x = -4 + 8*k/140;",
+              "  ph = x*1.3 - t*1.6;",
+              "  y = 0;",
+              "  forall(1..N, n,",
+              "    m = 2*n-1;",
+              "    y = y + sin(m*ph)/m;",
+              "  );",
+              "  pts = append(pts, (x, y*1.15));",
+              ");",
+              "connect(pts, color->(0.35,0.85,0.95), size->2.6);",
+              "drawtext((-3.8,4.2), \"Sum of \" + N + \" odd harmonics\", color->(0.85,0.9,0.95));"
+            ].join("\n")
+          }
+        },
+        {
+          label: "Analog Clock",
+          group: "Cindy Magic",
+          config: exampleConfig({ autoplay: true }),
+          scripts: {
+            draw: [
+              "t = seconds();",
+              "cx = 0; cy = 0; R = 3.6;",
+              "",
+              "drawcircle((cx,cy), R, color->(0.08,0.08,0.1), size->3);",
+              "forall(0..11, k,",
+              "  ang = k*30°;",
+              "  p1 = (cx+R*0.88*sin(ang), cy+R*0.88*cos(ang));",
+              "  p2 = (cx+R*sin(ang), cy+R*cos(ang));",
+              "  drawpoly([p1,p2], color->(0.15,0.15,0.18), size->2.4);",
+              ");",
+              "",
+              "hourAngle = t*0.05;",
+              "minAngle = t*0.6;",
+              "secAngle = t*3.6;",
+              "",
+              "drawpoly([(cx,cy),(cx+R*0.5*sin(hourAngle), cy+R*0.5*cos(hourAngle))], color->(0.1,0.1,0.12), size->4);",
+              "drawpoly([(cx,cy),(cx+R*0.75*sin(minAngle), cy+R*0.75*cos(minAngle))], color->(0.1,0.1,0.12), size->3);",
+              "drawpoly([(cx,cy),(cx+R*0.9*sin(secAngle), cy+R*0.9*cos(secAngle))], color->(0.85,0.2,0.2), size->1.6);",
+              "",
+              "fillcircle((cx,cy), 0.12, color->(0.1,0.1,0.12));"
+            ].join("\n")
+          }
+        }
+      ];
+
       function inspect(object, indent) {
         const currentIndent = indent || "";
 
@@ -665,7 +1155,67 @@
 
       state.buffers.config = defaultConfig;
       state.buffers.draw = defaultDrawScript;
-      
+
+      const SESSION_STORAGE_KEY = "cindyjs:session";
+      let workspaceWidthValue = 50;
+      let saveSessionTimer = null;
+
+      function saveSession() {
+        try {
+          const data = {
+            buffers: state.buffers,
+            activeBuffer: state.activeBuffer,
+            workspaceWidth: workspaceWidthValue
+          };
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
+        } catch (error) {
+          // Storage unavailable (quota, private browsing) - session just won't persist.
+        }
+      }
+
+      function scheduleSessionSave() {
+        if (saveSessionTimer) {
+          clearTimeout(saveSessionTimer);
+        }
+        saveSessionTimer = setTimeout(saveSession, 400);
+      }
+
+      function loadSession() {
+        try {
+          const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+          if (!raw) {
+            return null;
+          }
+          const data = JSON.parse(raw);
+          return data && typeof data === "object" ? data : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function restoreSession() {
+        const data = loadSession();
+        if (!data || typeof data.buffers !== "object" || data.buffers === null) {
+          return;
+        }
+
+        bufferNames.forEach(function (name) {
+          if (typeof data.buffers[name] === "string") {
+            state.buffers[name] = data.buffers[name];
+          }
+        });
+
+        if (typeof data.activeBuffer === "string" && state.buffers.hasOwnProperty(data.activeBuffer)) {
+          state.activeBuffer = data.activeBuffer;
+        }
+
+        if (typeof data.workspaceWidth === "number" && isFinite(data.workspaceWidth)) {
+          workspaceWidthValue = data.workspaceWidth;
+        }
+      }
+
+      restoreSession();
+
       const tabsRoot = document.getElementById("bufferTabs");
       const inputFile = document.getElementById("inputFile");
       const runButton = document.getElementById("runButton");
@@ -676,7 +1226,10 @@
       const consoleOutput = document.getElementById("console");
       const docsOverlay = document.getElementById("docsOverlay");
       const docsContent = document.getElementById("docsContent");
+      const docsNav = document.getElementById("docsNav");
+      const docsSearch = document.getElementById("docsSearch");
       const docsStatus = document.getElementById("docsStatus");
+      const exampleSelect = document.getElementById("exampleSelect");
       const workspace = document.querySelector(".workspace");
       const splitter = document.getElementById("workspaceSplitter");
 
@@ -979,34 +1532,462 @@
         };
       }
 
-      let docsLoaded = false;
+      const DOCS_SECTIONS = [
+        {
+          title: "1. Control Structures",
+          blocks: [
+            { kind: "code", lines: [
+              "if(condition, expression)",
+              "if(condition, exprTrue, exprFalse)",
+              "while(condition, expression)",
+              "repeat(number, expression)",
+              "repeat(number, variable, expression)",
+              "forall(list, expression)",
+              "forall(list, variable, expression)",
+              "regional(a, b, c)",
+              "createvar(x)",
+              "removevar(x)"
+            ] },
+            { kind: "examples", lines: [
+              "if(x < 0, println(\"negative\"));",
+              "if(x > 0, 1, -1);",
+              "repeat(5, i, println(i));",
+              "forall(1..5, k, draw((k, k)));"
+            ] }
+          ]
+        },
+        {
+          title: "2. Drawing and Visualization",
+          blocks: [
+            { kind: "code", lines: [
+              "draw(obj)",
+              "draw(pointA, pointB)",
+              "drawall(list)",
+              "connect(pointList)",
+              "drawpoly(pointList)",
+              "fillpoly(pointList)",
+              "drawcircle(center, radius)",
+              "fillcircle(center, radius)",
+              "drawarc(p1, p2, p3)",
+              "fillarc(p1, p2, p3)",
+              "drawtext(position, text)"
+            ] },
+            { kind: "code", label: "Common modifiers", lines: [
+              "color->(r,g,b)",
+              "alpha->0.8",
+              "size->4",
+              "pointsize->6",
+              "linesize->2",
+              "pointcolor->(1,0,0)",
+              "linecolor->(0,0,1)",
+              "start->1",
+              "stop->10",
+              "step->2",
+              "dashtype->2",
+              "dashing->4",
+              "dashpattern->[4,2]"
+            ] },
+            { kind: "examples", lines: [
+              "draw((1,2), color->(1,0.4,0));",
+              "drawcircle((0,0), 2, color->(0,0.7,1));",
+              "fillcircle((0,0), 1, color->(1,0,0), alpha->0.4);",
+              "drawtext((2,3), \"Hi\");"
+            ] }
+          ]
+        },
+        {
+          title: "3. Console and Debugging",
+          blocks: [
+            { kind: "code", lines: [
+              "print(expr)",
+              "println(expr)",
+              "err(expr)",
+              "assert(condition, message)",
+              "clearconsole()"
+            ] },
+            { kind: "examples", lines: [
+              "println(\"value=\" + x);",
+              "err(x);",
+              "assert(length(list) > 0, \"empty list\");"
+            ] }
+          ]
+        },
+        {
+          title: "4. Time and Animation",
+          blocks: [
+            { kind: "code", lines: [
+              "time()",
+              "date()",
+              "seconds()",
+              "resetclock()",
+              "simulationtime()",
+              "playanimation()",
+              "pauseanimation()",
+              "stopanimation()"
+            ] },
+            { kind: "examples", lines: [
+              "t = time();",
+              "println(seconds());",
+              "playanimation();"
+            ] }
+          ]
+        },
+        {
+          title: "5. List Operations",
+          blocks: [
+            { kind: "code", lines: [
+              "1..10",
+              "length(list)",
+              "contains(list, value)",
+              "concat(list1, list2)",
+              "remove(list1, list2)",
+              "common(list1, list2)",
+              "append(list, value)",
+              "prepend(value, list)",
+              "apply(list, expr)",
+              "apply(list, var, expr)",
+              "select(list, condition)",
+              "select(list, var, condition)",
+              "sort(list)",
+              "reverse(list)",
+              "flatten(list)",
+              "pairs(list)"
+            ] },
+            { kind: "examples", lines: [
+              "apply(1..5, #^2);",
+              "select(1..10, isodd(#));",
+              "append([1,2], 3);",
+              "concat([1,2], [3,4]);"
+            ] }
+          ]
+        },
+        {
+          title: "6. Geometric Operations",
+          blocks: [
+            { kind: "code", lines: [
+              "join(p1, p2)",
+              "meet(l1, l2)",
+              "parallel(point, line)",
+              "parallel(line, point)",
+              "para(...)",
+              "perpendicular(point, line)",
+              "perpendicular(line, point)",
+              "perpendicular(vector)",
+              "perp(...)",
+              "area(p1, p2, p3)",
+              "point(v)",
+              "line(v)",
+              "geotype(v)",
+              "complex(point)",
+              "gauss(complexNumber)",
+              "crossratio(a, b, c, d)",
+              "linereflect(line)",
+              "pointreflect(point)",
+              "map(...)",
+              "allpoints()",
+              "alllines()"
+            ] },
+            { kind: "examples", lines: [
+              "r = join(A, B);",
+              "p = meet(r, s);",
+              "h = perpendicular(A, r);",
+              "println(area(A, B, C));"
+            ] }
+          ]
+        },
+        {
+          title: "7. Strings",
+          blocks: [
+            { kind: "code", lines: [
+              "text(expr)",
+              "substring(text, start, end)",
+              "indexof(text, fragment)",
+              "indexof(text, fragment, start)",
+              "tokenize(text, separator)",
+              "replace(text, oldValue, newValue)",
+              "replace(text, replacements)",
+              "parse(text)",
+              "parseCSV(text)",
+              "format(number, digits)"
+            ] },
+            { kind: "code", label: "Useful modifiers", lines: [
+              "autoconvert->false",
+              "delimiter->\";\"",
+              "truncate->false"
+            ] },
+            { kind: "examples", lines: [
+              "text(pi);",
+              "substring(\"abcdef\", 2, 5);",
+              "replace(\"abcabc\", \"a\", \"X\");",
+              "parse(\"3+4\");",
+              "format(pi, 4);"
+            ] }
+          ]
+        },
+        {
+          title: "8. Vectors, Matrices and Linear Algebra",
+          blocks: [
+            { kind: "code", lines: [
+              "sum(list)",
+              "sum(list, expr)",
+              "sum(list, var, expr)",
+              "product(list)",
+              "product(list, expr)",
+              "product(list, var, expr)",
+              "max(list)",
+              "min(list)",
+              "transpose(matrix)",
+              "row(matrix, i)",
+              "column(matrix, i)",
+              "submatrix(matrix, column, row)",
+              "rowmatrix(vector)",
+              "columnmatrix(vector)",
+              "zerovector(n)",
+              "zeromatrix(rows, columns)",
+              "det(matrix)",
+              "dist(v1, v2)",
+              "inverse(matrix)",
+              "eigenvalues(matrix)",
+              "eigenvectors(matrix)",
+              "linearsolve(A, b)",
+              "mincostmatching(A)",
+              "convexhull3d(list)"
+            ] },
+            { kind: "examples", lines: [
+              "sum(1..10);",
+              "transpose([[1,2],[3,4]]);",
+              "det([[1,2],[3,4]]);",
+              "linearsolve([[1,1],[1,-1]], [4,0]);"
+            ] }
+          ]
+        },
+        {
+          title: "9. Common Math",
+          blocks: [
+            { kind: "code", lines: [
+              "sin(x)",
+              "cos(x)",
+              "tan(x)",
+              "sqrt(x)",
+              "abs(x)",
+              "exp(x)",
+              "log(x)",
+              "hue(x)"
+            ] },
+            { kind: "code", label: "Constants", lines: [
+              "pi",
+              "i",
+              "true",
+              "false",
+              "___"
+            ] },
+            { kind: "examples", lines: [
+              "sin(30°);",
+              "cos(pi/4);",
+              "sqrt(2);",
+              "hue(0.5);"
+            ] }
+          ]
+        },
+        {
+          title: "10. Syntax Notes",
+          blocks: [
+            { kind: "code", label: "Variable assignment", lines: ["x = 10;"] },
+            { kind: "code", label: "Function definition", lines: ["f(x) := x^2 + 1;"] },
+            { kind: "code", label: "Sequence of commands", lines: ["a = 1;", "b = 2;", "println(a + b);"] },
+            { kind: "code", label: "Modifiers use arrows", lines: ["draw(A, color->(1,0,0), size->5);"] },
+            { kind: "code", label: "Lists", lines: ["[1,2,3]"] },
+            { kind: "code", label: "Vectors can also be written with parentheses", lines: ["(1,2)"] },
+            { kind: "code", label: "Integer range", lines: ["1..10"] }
+          ]
+        },
+        {
+          title: "11. Useful Mini Examples",
+          blocks: [
+            { kind: "code", label: "Point spiral", code: "repeat(200, i,\n  p = (cos(i*12°), sin(i*12°)) * i / 30;\n  draw(p, color->hue(i/30), size->3);\n);" },
+            { kind: "code", label: "Filter even numbers", code: "select(1..20, # % 2 == 0);" },
+            { kind: "code", label: "Map squares", code: "apply(1..10, #^2);" },
+            { kind: "code", label: "Simple debug", code: "println(\"A=\" + text(A.xy));" },
+            { kind: "code", label: "Time-based animation", code: "t = seconds();\ndraw((cos(t), sin(t)));" }
+          ]
+        },
+        {
+          title: "12. Official Reference",
+          blocks: [
+            { kind: "link", label: "Main reference: https://cindyjs.org/ref/", url: "https://cindyjs.org/ref/" },
+            { kind: "list", label: "Source pages used for this summary", items: [
+              "Control Operators",
+              "Elementary Drawing Functions",
+              "Console Output",
+              "Timing and Animations",
+              "Elementary List Operations",
+              "Geometric Operators",
+              "String Operators",
+              "Vectors and Matrices",
+              "Language"
+            ] }
+          ]
+        }
+      ];
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function highlightCindyLine(rawLine) {
+        const pattern = /[A-Za-z_#][A-Za-z0-9_]*(?:->)?/g;
+        let result = "";
+        let lastIndex = 0;
+        let match;
+
+        while ((match = pattern.exec(rawLine))) {
+          result += escapeHtml(rawLine.slice(lastIndex, match.index));
+          const token = match[0];
+          const isModifier = token.endsWith("->");
+          const word = (isModifier ? token.slice(0, -2) : token).toLowerCase();
+          let cssClass = null;
+
+          if (isModifier || cindyModifierSet.has(word)) {
+            cssClass = "doc-mod";
+          } else if (cindyKeywordSet.has(word)) {
+            cssClass = "doc-kw";
+          } else if (cindyFunctionSet.has(word)) {
+            cssClass = "doc-fn";
+          } else if (cindyConstantSet.has(word)) {
+            cssClass = "doc-const";
+          }
+
+          result += cssClass
+            ? "<span class=\"" + cssClass + "\">" + escapeHtml(token) + "</span>"
+            : escapeHtml(token);
+          lastIndex = match.index + token.length;
+        }
+
+        result += escapeHtml(rawLine.slice(lastIndex));
+        return result;
+      }
+
+      function highlightCindyBlock(code) {
+        return code.split("\n").map(highlightCindyLine).join("\n");
+      }
+
+      function renderDocsBlock(block) {
+        const labelHtml = block.label
+          ? "<p class=\"docs-block-label\">" + escapeHtml(block.label) + "</p>"
+          : "";
+
+        if (block.kind === "text") {
+          return "<div class=\"docs-block\">" + labelHtml + "<p class=\"docs-text\">" + escapeHtml(block.text) + "</p></div>";
+        }
+
+        if (block.kind === "list") {
+          const items = block.items.map(function (item) {
+            return "<li>" + escapeHtml(item) + "</li>";
+          }).join("");
+          return "<div class=\"docs-block\">" + labelHtml + "<ul class=\"docs-list\">" + items + "</ul></div>";
+        }
+
+        if (block.kind === "link") {
+          return "<div class=\"docs-block\"><a class=\"docs-link\" href=\"" + escapeHtml(block.url) + "\" target=\"_blank\" rel=\"noopener\">" + escapeHtml(block.label || block.url) + "</a></div>";
+        }
+
+        if (block.kind === "examples") {
+          return "<div class=\"docs-block\"><p class=\"docs-block-label\">Examples</p><pre class=\"docs-code is-example\">" + highlightCindyBlock(block.lines.join("\n")) + "</pre></div>";
+        }
+
+        const code = block.code !== undefined ? block.code : block.lines.join("\n");
+        return "<div class=\"docs-block\">" + labelHtml + "<pre class=\"docs-code\">" + highlightCindyBlock(code) + "</pre></div>";
+      }
+
+      function blockSearchText(block) {
+        if (block.kind === "text") {
+          return block.text;
+        }
+        if (block.kind === "list") {
+          return (block.label || "") + " " + block.items.join(" ");
+        }
+        if (block.kind === "link") {
+          return (block.label || "") + " " + block.url;
+        }
+        return (block.label || "") + " " + (block.code !== undefined ? block.code : block.lines.join(" "));
+      }
+
+      let docsBuilt = false;
+
+      function buildDocsUI() {
+        const navFragments = [];
+        const contentFragments = [];
+
+        DOCS_SECTIONS.forEach(function (section, index) {
+          const anchorId = "docs-section-" + index;
+          const searchText = (section.title + " " + section.blocks.map(blockSearchText).join(" ")).toLowerCase();
+
+          navFragments.push(
+            "<li><button type=\"button\" class=\"docs-nav-link\" data-target=\"" + anchorId + "\">" + escapeHtml(section.title) + "</button></li>"
+          );
+
+          contentFragments.push(
+            "<section class=\"docs-section\" id=\"" + anchorId + "\" data-search=\"" + escapeHtml(searchText) + "\">" +
+              "<h3 class=\"docs-section-title\">" + escapeHtml(section.title) + "</h3>" +
+              section.blocks.map(renderDocsBlock).join("") +
+            "</section>"
+          );
+        });
+
+        docsNav.innerHTML = navFragments.join("");
+        docsContent.innerHTML = contentFragments.join("");
+
+        docsNav.querySelectorAll(".docs-nav-link").forEach(function (button) {
+          button.addEventListener("click", function () {
+            const target = document.getElementById(button.dataset.target);
+            if (target) {
+              target.scrollIntoView({ block: "start", behavior: "smooth" });
+            }
+          });
+        });
+      }
+
+      function filterDocs(query) {
+        const normalized = query.trim().toLowerCase();
+        const sections = docsContent.querySelectorAll(".docs-section");
+        const navLinks = docsNav.querySelectorAll(".docs-nav-link");
+        let visibleCount = 0;
+
+        sections.forEach(function (section, index) {
+          const matches = normalized === "" || section.dataset.search.indexOf(normalized) !== -1;
+          section.classList.toggle("is-hidden", !matches);
+          navLinks[index].classList.toggle("is-hidden", !matches);
+          if (matches) {
+            visibleCount += 1;
+          }
+        });
+
+        let emptyState = docsContent.querySelector(".docs-empty");
+        if (visibleCount === 0) {
+          if (!emptyState) {
+            emptyState = document.createElement("p");
+            emptyState.className = "docs-empty";
+            docsContent.appendChild(emptyState);
+          }
+          emptyState.textContent = "No results for \"" + query.trim() + "\".";
+        } else if (emptyState) {
+          emptyState.remove();
+        }
+      }
 
       function openDocs() {
         docsOverlay.classList.add("is-open");
         docsOverlay.setAttribute("aria-hidden", "false");
-        closeDocsButton.focus();
 
-        if (docsLoaded) {
-          return;
+        if (!docsBuilt) {
+          buildDocsUI();
+          docsBuilt = true;
         }
 
-        docsStatus.textContent = "Carregando documentação...";
-        fetch("cindyjs-docs.txt")
-          .then(function (response) {
-            if (!response.ok) {
-              throw new Error("Falha ao carregar documentação");
-            }
-            return response.text();
-          })
-          .then(function (text) {
-            docsContent.textContent = text;
-            docsStatus.textContent = "Local summary based on the official CindyJS documentation.";
-            docsLoaded = true;
-          })
-          .catch(function () {
-            docsContent.textContent = "Não foi possível carregar o arquivo cindyjs-docs.txt.";
-            docsStatus.textContent = "Erro ao carregar documentação.";
-          });
+        docsSearch.focus();
       }
 
       function closeDocs() {
@@ -1084,12 +2065,17 @@
         }
       });
 
-      editor.on("change", persistActiveBuffer);
+      editor.on("change", function () {
+        persistActiveBuffer();
+        scheduleSessionSave();
+      });
 
       function applyWorkspaceWidth(value) {
         const nextValue = Math.min(resizeBounds.max, Math.max(resizeBounds.min, value));
-        document.documentElement.style.setProperty("--workspace-canvas-width", nextValue + "%");  
+        document.documentElement.style.setProperty("--workspace-canvas-width", nextValue + "%");
         splitter.setAttribute("aria-valuenow", String(Math.round(nextValue)));
+        workspaceWidthValue = nextValue;
+        scheduleSessionSave();
         editor.refresh();
       }
 
@@ -1161,6 +2147,7 @@
         editor.setValue(state.buffers[name]);
         updateTabs();
         editor.focus();
+        scheduleSessionSave();
       }
 
       function collectScripts() {
@@ -1219,10 +2206,46 @@
           delete loadedConfig.scripts;
           state.buffers.config = inspect(loadedConfig).trimStart();
           editor.setValue(state.buffers[state.activeBuffer]);
+          saveSession();
           runCode();
         };
 
         reader.readAsText(file);
+      }
+
+      function applyExample(example) {
+        bufferNames.forEach(function (name) {
+          if (name === "config") {
+            return;
+          }
+          state.buffers[name] = (example.scripts && example.scripts[name]) || "";
+        });
+
+        state.buffers.config = example.config;
+        state.activeBuffer = "draw";
+        editor.setValue(state.buffers[state.activeBuffer]);
+        updateTabs();
+        saveSession();
+        runCode();
+      }
+
+      function populateExamples() {
+        const groups = {};
+
+        EXAMPLES.forEach(function (example, index) {
+          let optgroup = groups[example.group];
+          if (!optgroup) {
+            optgroup = document.createElement("optgroup");
+            optgroup.label = example.group;
+            exampleSelect.appendChild(optgroup);
+            groups[example.group] = optgroup;
+          }
+
+          const option = document.createElement("option");
+          option.value = String(index);
+          option.textContent = example.label;
+          optgroup.appendChild(option);
+        });
       }
 
       function createTabs() {
@@ -1249,6 +2272,9 @@
       docsButton.addEventListener("click", openDocs);
       closeDocsButton.addEventListener("click", closeDocs);
       clearConsoleButton.addEventListener("click", clearConsole);
+      docsSearch.addEventListener("input", function () {
+        filterDocs(docsSearch.value);
+      });
       docsOverlay.addEventListener("click", function (event) {
         if (event.target === docsOverlay) {
           closeDocs();
@@ -1266,9 +2292,17 @@
         }
         inputFile.value = "";
       });
+      exampleSelect.addEventListener("change", function () {
+        const index = Number(exampleSelect.value);
+        if (!Number.isNaN(index) && EXAMPLES[index]) {
+          applyExample(EXAMPLES[index]);
+        }
+        exampleSelect.selectedIndex = 0;
+      });
 
       createTabs();
-      applyWorkspaceWidth(50);
+      populateExamples();
+      applyWorkspaceWidth(workspaceWidthValue);
       state.cindy = CindyJS(parseConfig(state.buffers.config));
       editor.refresh();
       runCode();
