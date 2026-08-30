@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="../css/style.css">
   <style>
     html {
       background:
@@ -33,11 +33,24 @@
       letter-spacing: 0.04em;
     }
 
-    .home-email {
+    .home-header a {
       font-family: 'Michroma', sans-serif;
       font-size: 0.72rem;
       color: rgba(255, 255, 255, 0.65);
       letter-spacing: 0.02em;
+      text-decoration: none;
+    }
+
+    .home-header a:hover {
+      color: rgba(224, 164, 88, 0.9);
+    }
+
+    .tagline {
+      margin: 10px 0 0;
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.55);
+      letter-spacing: 0.01em;
     }
 
     hr {
@@ -91,24 +104,18 @@
       letter-spacing: 0.03em;
       line-height: 1.4;
     }
+
   </style>
 </head>
 <body>
 <div class="home-header">
-  <h1>Prof. Vinícius</h1>
-  <div class="home-email">vinicius.mello@ufba.br</div>
+  <h1>Geometria Analítica</h1>
+  <a href="../index.html">Prof. Vinícius</a>
 </div>
+<p class="tagline">Artefatos e ferramentas interativas do curso.</p>
 <hr/>
 <div class="app-grid">
-  <a class="app-card" href="apl.html"><span>APL.js</span></a>
-  <a class="app-card" href="guacyra.html"><span>Guacyra</span></a>
-  <a class="app-card" href="cindyjs.html"><span>CindyJS</span></a>
-  <a class="app-card" href="rotulador.html"><span>Rotulador de Cores</span></a>
-  <a class="app-card" href="marpit.html"><span>Marpit</span></a>
-  <a class="app-card" href="cofgl-wAst/asteroids/index.html"><span>Asteroids</span></a>
-  <a class="app-card" href="obscnv/index.html"><span>obscnv</span></a>
-  <a class="app-card" href="chuckjs.html"><span>chuck.js</span></a>
-  <a class="app-card" href="GA/index.html"><span>GA</span></a>
+  <a class="app-card" href="mesa-isometrias.html"><span>Mesa de Isometrias</span></a>
 </div>
 </body>
 </html>

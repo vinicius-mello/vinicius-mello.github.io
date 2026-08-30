@@ -1,0 +1,1211 @@
+<title>Mesa de Isometrias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-base:#2955C8;
+    --c-base-fill:rgba(41,85,200,0.16);
+    --c-target:#C23B78;
+    --c-target-fill:rgba(194,59,120,0.10);
+    --c-rot:#6E4FC2;
+    --c-trans:#157F6E;
+    --c-refl:#B8791A;
+    --c-success:#1F9254;
+    --c-success-fill:rgba(31,146,84,0.12);
+    --c-warning:#B4590E;
+    --shadow:rgba(22,35,58,0.14);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-base:#6C93FF;
+      --c-base-fill:rgba(108,147,255,0.22);
+      --c-target:#E86FA6;
+      --c-target-fill:rgba(232,111,166,0.14);
+      --c-rot:#A78BFA;
+      --c-trans:#4FD8BE;
+      --c-refl:#F0A94E;
+      --c-success:#4ADE80;
+      --c-success-fill:rgba(74,222,128,0.14);
+      --c-warning:#FBBF74;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-base:#6C93FF;
+    --c-base-fill:rgba(108,147,255,0.22);
+    --c-target:#E86FA6;
+    --c-target-fill:rgba(232,111,166,0.14);
+    --c-rot:#A78BFA;
+    --c-trans:#4FD8BE;
+    --c-refl:#F0A94E;
+    --c-success:#4ADE80;
+    --c-success-fill:rgba(74,222,128,0.14);
+    --c-warning:#FBBF74;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Public Sans','Segoe UI',system-ui,sans-serif;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button{ font-family:inherit; }
+  input{ font-family:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1180px;
+    margin:0 auto;
+    padding:0.85rem 1rem 1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+    min-height:100svh;
+  }
+
+  /* ---------- header ---------- */
+  .app-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.55rem; align-items:center; }
+  .brand-mark{
+    font-family:'Big Shoulders Display',sans-serif;
+    font-size:1.4rem;
+    font-weight:800;
+    color:var(--brand);
+    line-height:1;
+  }
+  .brand-text h1{
+    font-size:clamp(1.05rem,2.2vw,1.35rem);
+    text-transform:uppercase;
+    color:var(--ink);
+    display:inline;
+  }
+  .brand-text p{
+    margin:0.1rem 0 0;
+    color:var(--ink-muted);
+    font-size:0.78rem;
+    max-width:52ch;
+  }
+  .stats{ display:flex; gap:1.1rem; }
+  .stat{ text-align:right; }
+  .stat-label{
+    display:block;
+    font-size:0.62rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--ink-muted);
+  }
+  .stat-value{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:1.1rem;
+    font-weight:600;
+    color:var(--brand);
+    line-height:1.2;
+  }
+
+  /* ---------- workspace grid ---------- */
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(250px,300px) 1fr;
+    gap:0.75rem;
+    align-items:start;
+    flex:1;
+    min-height:0;
+  }
+  @media (max-width:880px){
+    .workspace{ grid-template-columns:1fr; }
+  }
+
+  .tray{ display:flex; flex-direction:column; gap:0.55rem; transition:opacity 0.15s; }
+  .tray.busy{ opacity:0.55; pointer-events:none; }
+  .tray-block{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:0.55rem 0.65rem 0.6rem;
+  }
+  .tray-block h2{
+    font-size:0.82rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink);
+    margin-bottom:0.4rem;
+  }
+
+  /* ---------- palette ---------- */
+  .palette{ display:flex; flex-direction:column; gap:0.4rem; }
+  .palette-card{
+    position:relative;
+    border:1.5px dashed var(--card-accent, var(--line-major));
+    border-radius:6px;
+    padding:0.35rem 0.4rem 0.35rem 0.55rem;
+    background:var(--paper);
+    cursor:grab;
+  }
+  .palette-card:active{ cursor:grabbing; }
+  .palette-card[data-type="R"]{ --card-accent:var(--c-rot); }
+  .palette-card[data-type="T"]{ --card-accent:var(--c-trans); }
+  .palette-card[data-type="M"]{ --card-accent:var(--c-refl); }
+  .palette-card-head{
+    display:flex; align-items:center; gap:0.45rem;
+  }
+  .palette-card-symbol{
+    font-family:'Big Shoulders Display',sans-serif;
+    font-weight:800;
+    font-size:1.1rem;
+    color:var(--card-accent);
+  }
+  .palette-card-symbol sub{ font-size:0.62em; }
+  .palette-card-name{
+    flex:1;
+    min-width:0;
+    font-size:0.72rem;
+    font-weight:600;
+    color:var(--ink-muted);
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+  }
+  .add-btn{
+    flex-shrink:0;
+    border:1px solid var(--card-accent);
+    background:transparent;
+    color:var(--card-accent);
+    font-weight:600;
+    font-size:0.7rem;
+    padding:0.2rem 0.48rem;
+    border-radius:5px;
+    cursor:pointer;
+    transition:background 0.15s, color 0.15s;
+  }
+  .add-btn:hover{ background:var(--card-accent); color:var(--paper-raised); }
+
+  /* ---------- program list ---------- */
+  .program-head{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.5rem; }
+  .program-head h2{ margin:0; }
+  .program-head-actions{ display:flex; align-items:center; gap:0.35rem; }
+  .program-head-actions .primary-btn{ padding:0.3rem 0.6rem; font-size:0.76rem; }
+  .ghost-btn{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--ink-muted);
+    font-size:0.76rem;
+    padding:0.28rem 0.55rem;
+    border-radius:5px;
+    cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+
+  .program-list{
+    list-style:none;
+    margin:0; padding:0 0.3rem 0 0;
+    display:flex; flex-direction:column;
+    min-height:2rem;
+    max-height:34vh;
+    overflow-y:auto;
+    scrollbar-width:thin;
+    scrollbar-color:var(--line-major) transparent;
+  }
+  .program-list::-webkit-scrollbar{ width:10px; }
+  .program-list::-webkit-scrollbar-track{ background:transparent; }
+  .program-list::-webkit-scrollbar-thumb{
+    background-color:var(--line-major);
+    border-radius:999px;
+    border:2.5px solid transparent;
+    background-clip:padding-box;
+  }
+  .program-list::-webkit-scrollbar-thumb:hover{
+    background-color:var(--brand);
+  }
+  .program-empty{
+    font-size:0.76rem;
+    color:var(--ink-muted);
+    border:1px dashed var(--border);
+    border-radius:6px;
+    padding:0.6rem 0.6rem;
+    text-align:center;
+  }
+  .prog-item{
+    display:flex;
+    align-items:flex-start;
+    gap:0.4rem;
+    padding:0.38rem 0.3rem;
+    border-top:1px dashed var(--border);
+    border-left:4px solid var(--item-accent, var(--line-major));
+    background:var(--paper);
+    border-radius:0 4px 4px 0;
+  }
+  .prog-item:first-child{ border-top:none; }
+  .prog-item.type-R{ --item-accent:var(--c-rot); }
+  .prog-item.type-T{ --item-accent:var(--c-trans); }
+  .prog-item.type-M{ --item-accent:var(--c-refl); }
+  .prog-item.dragging{ opacity:0.4; }
+  .prog-handle{
+    color:var(--ink-muted);
+    cursor:grab;
+    font-size:0.9rem;
+    padding-top:0.1rem;
+    user-select:none;
+  }
+  .prog-order{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.68rem;
+    font-weight:600;
+    color:var(--item-accent);
+    background:color-mix(in srgb, var(--item-accent) 16%, transparent);
+    border-radius:50%;
+    width:1.15rem; height:1.15rem;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+    margin-top:0.05rem;
+  }
+  .prog-main{ flex:1; min-width:0; }
+  .prog-title{
+    font-family:'Big Shoulders Display',sans-serif;
+    font-weight:700;
+    font-size:0.92rem;
+    color:var(--ink);
+  }
+  .prog-title small{
+    font-family:'Public Sans',sans-serif;
+    font-weight:500;
+    font-size:0.64rem;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--ink-muted);
+    margin-left:0.25rem;
+  }
+  .prog-params{ margin-top:0.25rem; display:flex; flex-direction:column; gap:0.25rem; }
+  .prog-params label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.76rem;
+    color:var(--ink);
+    display:flex; align-items:center; gap:0.25rem;
+  }
+  .mono-input{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.78rem;
+    width:3.6rem;
+    padding:0.14rem 0.3rem;
+    border:1px solid var(--border);
+    border-radius:4px;
+    background:var(--paper-raised);
+    color:var(--ink);
+  }
+  .vector-params{
+    flex-direction:row; align-items:center; gap:0.15rem;
+    font-family:'IBM Plex Mono',monospace; font-size:0.82rem;
+  }
+  .vector-params .mono-input{ width:3rem; }
+  .prog-actions{
+    display:flex; flex-direction:column; gap:0.12rem;
+    align-items:center;
+  }
+  .icon-btn{
+    width:1.3rem; height:1.3rem;
+    border:1px solid var(--border);
+    background:var(--paper-raised);
+    color:var(--ink-muted);
+    border-radius:4px;
+    font-size:0.62rem;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    padding:0;
+  }
+  .icon-btn:hover:not(:disabled){ border-color:var(--ink); color:var(--ink); }
+  .icon-btn:disabled{ opacity:0.3; cursor:default; }
+  .icon-btn.danger:hover{ border-color:var(--c-target); color:var(--c-target); }
+
+  /* ---------- primary buttons ---------- */
+  .primary-btn{
+    background:var(--brand);
+    color:var(--brand-ink);
+    border:none;
+    font-weight:700;
+    font-size:0.84rem;
+    padding:0.46rem 0.8rem;
+    border-radius:6px;
+    cursor:pointer;
+    transition:filter 0.15s;
+  }
+  .primary-btn:hover:not(:disabled){ filter:brightness(1.08); }
+  .primary-btn:disabled{ opacity:0.4; cursor:default; }
+  .primary-btn.alt{ background:var(--paper-raised); color:var(--brand); border:1.5px solid var(--brand); }
+  .primary-btn.alt:hover{ background:var(--brand); color:var(--brand-ink); }
+
+  /* ---------- matrix modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(10,16,30,0.55);
+    display:flex; align-items:center; justify-content:center;
+    padding:1rem;
+    z-index:100;
+  }
+  .modal-overlay[hidden]{ display:none; }
+  .modal-box{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:0.9rem 1rem 1.05rem;
+    max-width:min(92vw,340px);
+    width:100%;
+    box-shadow:0 24px 60px -20px var(--shadow);
+  }
+  .modal-head{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:0.65rem;
+  }
+  .modal-head h3{
+    font-size:0.88rem;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    color:var(--ink);
+  }
+  .matrix-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:0.12rem 0.6rem;
+    font-family:'IBM Plex Mono',monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:0.78rem;
+    color:var(--ink);
+  }
+  .matrix-row{ display:contents; }
+  .matrix-row span{ text-align:right; }
+  .matrix-caption{
+    margin:0.4rem 0 0;
+    font-size:0.66rem;
+    color:var(--ink-muted);
+  }
+
+  /* ---------- board ---------- */
+  .board{ display:flex; flex-direction:column; gap:0.5rem; min-height:0; }
+  .board-toolbar{
+    display:flex; justify-content:space-between; align-items:center;
+    flex-wrap:wrap; gap:0.5rem;
+  }
+  .legend{ display:flex; gap:0.85rem; flex-wrap:wrap; }
+  .legend-item{
+    display:flex; align-items:center; gap:0.35rem;
+    font-size:0.74rem; color:var(--ink-muted);
+  }
+  .swatch{
+    width:0.75rem; height:0.75rem;
+    border-radius:2px;
+    display:inline-block;
+  }
+  .swatch-base{ background:var(--c-base); }
+  .swatch-target{ background:transparent; border:2px dashed var(--c-target); }
+  .board-controls{ display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap; }
+  .board-controls label{ font-size:0.72rem; color:var(--ink-muted); }
+  select{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.76rem;
+    padding:0.24rem 0.35rem;
+    border-radius:5px;
+    border:1px solid var(--border);
+    background:var(--paper-raised);
+    color:var(--ink);
+  }
+  select:disabled{ opacity:0.5; }
+
+  .canvas-frame{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:10px;
+    box-shadow:0 1px 0 var(--border) inset, 0 6px 18px -10px var(--shadow);
+    padding:0.45rem;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+  svg#canvas{ display:block; width:auto; height:auto; max-width:100%; max-height:100%; aspect-ratio:1/1; }
+
+  .grid-line{ stroke:var(--line-minor); stroke-width:0.02; }
+  .grid-line-major{ stroke:var(--line-major); stroke-width:0.035; }
+  .axis-line{ stroke:var(--line-major); stroke-width:0.055; }
+  .axis-arrow{ fill:var(--line-major); }
+  .axis-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.62px;
+    fill:var(--ink-muted);
+  }
+  .axis-preview{ stroke:var(--c-refl); stroke-width:0.05; stroke-dasharray:0.18 0.14; opacity:0; transition:opacity 0.25s; }
+  .axis-preview.visible{ opacity:0.85; }
+  #originDot{ fill:var(--line-major); }
+  .origin-pulse{
+    fill:none; stroke:var(--c-rot); stroke-width:0.06; opacity:0;
+    transform-origin:0px 0px;
+  }
+  .origin-pulse.pulsing{ animation:originPulse 0.65s ease-out infinite; }
+  @keyframes originPulse{
+    0%{ opacity:0.9; r:0.2; }
+    100%{ opacity:0; r:1.1; }
+  }
+
+  .fig-target{
+    fill:var(--c-target-fill);
+    stroke:var(--c-target);
+    stroke-width:0.07;
+    stroke-dasharray:0.22 0.16;
+  }
+  .fig-target.matched{ stroke:var(--c-success); stroke-dasharray:none; fill:var(--c-success-fill); }
+  .fig-base{
+    fill:var(--c-base-fill);
+    stroke:var(--c-base);
+    stroke-width:0.08;
+  }
+  .fig-base.matched{ stroke:var(--c-success); }
+
+  .celebrate{ position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+  .confetti-piece{
+    position:absolute; top:-8%; width:7px; height:11px;
+    animation:confettiFall 1.1s ease-in forwards;
+  }
+  @keyframes confettiFall{
+    0%{ transform:translate(0,0) rotate(0deg); opacity:1; }
+    100%{ transform:translate(calc(var(--drift,0) * 60px), 130%) rotate(280deg); opacity:0; }
+  }
+
+  /* ---------- feedback ---------- */
+  .feedback{
+    border:1px solid var(--border);
+    border-left:4px solid var(--line-major);
+    background:var(--paper-raised);
+    border-radius:0 6px 6px 0;
+    padding:0.4rem 0.65rem;
+    font-size:0.78rem;
+  }
+  .feedback-msg{ margin:0; }
+  .feedback-success{ border-left-color:var(--c-success); background:var(--c-success-fill); }
+  .feedback-warning{ border-left-color:var(--c-warning); }
+  .feedback-neutral{ border-left-color:var(--line-major); }
+
+  .hint-panel{
+    background:var(--paper-sunken);
+    border:1px dashed var(--c-refl);
+    border-radius:6px;
+    padding:0.4rem 0.65rem;
+    font-size:0.76rem;
+    color:var(--ink);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .confetti-piece, .origin-pulse.pulsing{ animation:none !important; }
+  }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◹</span>
+      <div class="brand-text">
+        <h1>Mesa de Isometrias</h1>
+        <p>Componha R<sub>θ</sub>, T<sub>v</sub> e M<sub>e</sub> até o F azul coincidir com o alvo rosa.</p>
+      </div>
+    </div>
+    <div class="stats" aria-live="polite">
+      <div class="stat"><span class="stat-label">Desafio</span><span class="stat-value" id="challengeNum">1</span></div>
+      <div class="stat"><span class="stat-label">Resolvidos</span><span class="stat-value" id="solvedCount">0</span></div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="tray">
+      <section class="tray-block">
+        <h2>Blocos</h2>
+        <div class="palette" id="palette">
+          <div class="palette-card" data-type="R" draggable="true">
+            <div class="palette-card-head">
+              <span class="palette-card-symbol">R<sub>θ</sub></span>
+              <span class="palette-card-name">Rotação</span>
+              <button type="button" class="add-btn" data-type="R">+ Adicionar</button>
+            </div>
+          </div>
+          <div class="palette-card" data-type="T" draggable="true">
+            <div class="palette-card-head">
+              <span class="palette-card-symbol">T<sub>v</sub></span>
+              <span class="palette-card-name">Translação</span>
+              <button type="button" class="add-btn" data-type="T">+ Adicionar</button>
+            </div>
+          </div>
+          <div class="palette-card" data-type="M" draggable="true">
+            <div class="palette-card-head">
+              <span class="palette-card-symbol">M<sub>e</sub></span>
+              <span class="palette-card-name">Reflexão</span>
+              <button type="button" class="add-btn" data-type="M">+ Adicionar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tray-block">
+        <div class="program-head">
+          <h2>Sua composição</h2>
+          <div class="program-head-actions">
+            <button type="button" class="primary-btn" id="applyBtn" disabled>▶ Animar</button>
+            <button type="button" class="ghost-btn" id="matrixBtn">🔢 Matriz</button>
+            <button type="button" class="ghost-btn" id="clearProgramBtn">Limpar</button>
+          </div>
+        </div>
+        <ol class="program-list" id="programList" aria-label="Sequência de transformações">
+          <li class="program-empty">Clique em “+ Adicionar” em um bloco, ou arraste-o para cá.</li>
+        </ol>
+      </section>
+    </aside>
+
+    <section class="board" id="board">
+      <div class="board-toolbar">
+        <div class="legend">
+          <span class="legend-item"><i class="swatch swatch-base"></i>Figura base</span>
+          <span class="legend-item"><i class="swatch swatch-target"></i>Alvo</span>
+        </div>
+        <div class="board-controls">
+          <label for="difficultySelect">Passos ocultos</label>
+          <select id="difficultySelect">
+            <option value="1">1 — Fácil</option>
+            <option value="2" selected>2 — Médio</option>
+            <option value="3">3 — Difícil</option>
+          </select>
+          <button type="button" class="ghost-btn" id="hintBtn">💡 Dica</button>
+          <button type="button" class="primary-btn alt" id="newChallengeBtn">🎲 Novo desafio</button>
+        </div>
+      </div>
+
+      <div class="canvas-frame" id="canvasFrame">
+        <svg id="canvas" viewBox="-10 -10 20 20" role="img" aria-label="Grade cartesiana com a figura base e a figura alvo">
+          <g id="world" transform="scale(1,-1)">
+            <g id="gridLines"></g>
+            <line class="axis-line" x1="-9.6" y1="0" x2="9.6" y2="0"></line>
+            <line class="axis-line" x1="0" y1="-9.6" x2="0" y2="9.6"></line>
+            <polygon class="axis-arrow" points="9.3,-0.25 9.9,0 9.3,0.25"></polygon>
+            <polygon class="axis-arrow" points="-0.25,9.3 0,9.9 0.25,9.3"></polygon>
+            <g transform="translate(9.5,-0.85) scale(1,-1)"><text class="axis-label">x</text></g>
+            <g transform="translate(0.32,9.45) scale(1,-1)"><text class="axis-label">y</text></g>
+            <line id="axisPreview" class="axis-preview" hidden></line>
+            <circle id="originDot" cx="0" cy="0" r="0.09"></circle>
+            <circle id="originPulse" class="origin-pulse" cx="0" cy="0" r="0.35" hidden></circle>
+            <polygon id="targetPoly" class="fig-target" points=""></polygon>
+            <polygon id="basePoly" class="fig-base" points=""></polygon>
+          </g>
+        </svg>
+        <div class="celebrate" id="celebrate" aria-hidden="true"></div>
+      </div>
+
+      <div class="feedback feedback-neutral" id="feedback" role="status" aria-live="polite">
+        <p class="feedback-msg">O F já mostra o resultado da sua composição. Clique em Animar para ver o passo a passo.</p>
+      </div>
+
+      <div class="hint-panel" id="hintPanel" hidden></div>
+    </section>
+  </main>
+
+  <div class="modal-overlay" id="matrixModal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="matrixModalTitle">
+      <div class="modal-head">
+        <h3 id="matrixModalTitle">Matriz 3×3 resultante</h3>
+        <button type="button" class="icon-btn" id="matrixModalClose" aria-label="Fechar">✕</button>
+      </div>
+      <div id="matrixModalBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const DEG = Math.PI/180;
+  const EPS = 0.06;
+  const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- geometry helpers ----------
+  function rotatePoint(p, thetaDeg){
+    const t=thetaDeg*DEG, c=Math.cos(t), s=Math.sin(t);
+    return [p[0]*c - p[1]*s, p[0]*s + p[1]*c];
+  }
+  function translatePointXY(x,y,vx,vy){ return [x+vx, y+vy]; }
+  function reflectPoint(p, phiDeg){
+    const t2=2*phiDeg*DEG, c=Math.cos(t2), s=Math.sin(t2);
+    return [p[0]*c + p[1]*s, p[0]*s - p[1]*c];
+  }
+  function transformPoints(points, block){
+    if(block.type==='R') return points.map(p=>rotatePoint(p, block.theta));
+    if(block.type==='T') return points.map(p=>translatePointXY(p[0],p[1],block.vx,block.vy));
+    return points.map(p=>reflectPoint(p, block.phi));
+  }
+  function applyComposition(blocks, points){
+    return blocks.reduce((pts,b)=>transformPoints(pts,b), points);
+  }
+  function dist(a,b){ return Math.hypot(a[0]-b[0], a[1]-b[1]); }
+  function signedArea(points){
+    let s=0;
+    for(let i=0;i<points.length;i++){
+      const [x1,y1]=points[i], [x2,y2]=points[(i+1)%points.length];
+      s += x1*y2 - x2*y1;
+    }
+    return s/2;
+  }
+  function blockMatrix(block){
+    if(block.type==='R'){
+      const t=block.theta*DEG, c=Math.cos(t), s=Math.sin(t);
+      return [[c,-s,0],[s,c,0],[0,0,1]];
+    }
+    if(block.type==='T'){
+      return [[1,0,block.vx],[0,1,block.vy],[0,0,1]];
+    }
+    const t2=2*block.phi*DEG, c=Math.cos(t2), s=Math.sin(t2);
+    return [[c,s,0],[s,-c,0],[0,0,1]];
+  }
+  function matMul(A,B){
+    const R=[[0,0,0],[0,0,0],[0,0,0]];
+    for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+      let sum=0; for(let k=0;k<3;k++) sum += A[i][k]*B[k][j];
+      R[i][j]=sum;
+    }
+    return R;
+  }
+  function compositionMatrix(blocks){
+    let M=[[1,0,0],[0,1,0],[0,0,1]];
+    for(const b of blocks) M = matMul(blockMatrix(b), M);
+    return M;
+  }
+  function fmt(n){
+    const r = Math.round(n*100)/100;
+    return Object.is(r,-0) ? '0' : String(r);
+  }
+  function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+  // ---------- figure: block letter "F" (asymmetric) ----------
+  const FSHAPE = [[0,0],[1,0],[1,2],[2,2],[2,3],[1,3],[1,4],[3,4],[3,5],[0,5]];
+  let basePos = {bx:-5, by:-5};
+  function canonicalBaseVertices(){
+    return FSHAPE.map(([x,y])=>[x+basePos.bx, y+basePos.by]);
+  }
+
+  // ---------- dom refs ----------
+  const appEl = document.querySelector('.app');
+  const trayEl = document.querySelector('.tray');
+  const boardEl = document.getElementById('board');
+  const canvasFrameEl = document.getElementById('canvasFrame');
+  const paletteEl = document.getElementById('palette');
+  const programListEl = document.getElementById('programList');
+  const applyBtn = document.getElementById('applyBtn');
+  const clearProgramBtn = document.getElementById('clearProgramBtn');
+  const matrixBtn = document.getElementById('matrixBtn');
+  const matrixModalEl = document.getElementById('matrixModal');
+  const matrixModalBodyEl = document.getElementById('matrixModalBody');
+  const matrixModalCloseEl = document.getElementById('matrixModalClose');
+  const difficultySelect = document.getElementById('difficultySelect');
+  const hintBtn = document.getElementById('hintBtn');
+  const hintPanelEl = document.getElementById('hintPanel');
+  const newChallengeBtn = document.getElementById('newChallengeBtn');
+  const gridLinesEl = document.getElementById('gridLines');
+  const axisPreviewEl = document.getElementById('axisPreview');
+  const originPulseEl = document.getElementById('originPulse');
+  const targetPolyEl = document.getElementById('targetPoly');
+  const basePolyEl = document.getElementById('basePoly');
+  const feedbackEl = document.getElementById('feedback');
+  const celebrateEl = document.getElementById('celebrate');
+  const challengeNumEl = document.getElementById('challengeNum');
+  const solvedCountEl = document.getElementById('solvedCount');
+
+  // ---------- persistent stats ----------
+  const STORAGE_KEY = 'mesa-isometrias-stats-v1';
+  function loadStats(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if(raw && typeof raw==='object') return raw;
+    }catch(e){}
+    return { solved:0 };
+  }
+  function saveStats(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)); }catch(e){} }
+  let stats = loadStats();
+
+  // ---------- state ----------
+  let program = [];
+  let idCounter = 1;
+  let currentChallenge = null;
+  let challengeNumber = 0;
+  let solvedThisRound = false;
+  let animating = false;
+
+  // ---------- grid rendering ----------
+  function buildGrid(){
+    const MIN=-9, MAX=9;
+    let html='';
+    for(let i=MIN;i<=MAX;i++){
+      if(i===0) continue;
+      const major = (i%5===0);
+      html += `<line class="grid-line${major?' grid-line-major':''}" x1="${i}" y1="${MIN}" x2="${i}" y2="${MAX}"></line>`;
+      html += `<line class="grid-line${major?' grid-line-major':''}" x1="${MIN}" y1="${i}" x2="${MAX}" y2="${i}"></line>`;
+    }
+    gridLinesEl.innerHTML = html;
+  }
+
+  function pointsToAttr(points){
+    return points.map(p=>`${p[0].toFixed(4)},${p[1].toFixed(4)}`).join(' ');
+  }
+  function renderBase(points){ basePolyEl.setAttribute('points', pointsToAttr(points)); }
+  function renderTarget(points){ targetPolyEl.setAttribute('points', pointsToAttr(points)); }
+
+  // ---------- fit the canvas to the exact leftover vertical space ----------
+  function fitCanvas(){
+    if(window.innerWidth < 880){ canvasFrameEl.style.height = ''; return; }
+    const top = canvasFrameEl.getBoundingClientRect().top;
+    const boardGap = parseFloat(getComputedStyle(boardEl).rowGap) || 0;
+    let reserved = feedbackEl.offsetHeight + boardGap;
+    if(!hintPanelEl.hidden) reserved += hintPanelEl.offsetHeight + boardGap;
+    reserved += parseFloat(getComputedStyle(appEl).paddingBottom) || 0;
+    const available = window.innerHeight - top - reserved;
+    canvasFrameEl.style.height = Math.max(200, available) + 'px';
+  }
+  let fitScheduled = false;
+  function scheduleFit(){
+    if(fitScheduled) return;
+    fitScheduled = true;
+    requestAnimationFrame(()=>{ fitScheduled = false; fitCanvas(); });
+  }
+  window.addEventListener('resize', scheduleFit);
+  window.addEventListener('load', scheduleFit);
+
+  // ---------- live result (F = current composition applied to the base) ----------
+  function currentResultPoints(){
+    return applyComposition(program, canonicalBaseVertices());
+  }
+  function syncLiveResult(){
+    if(animating) return;
+    const pts = currentResultPoints();
+    renderBase(pts);
+    if(program.length===0){
+      targetPolyEl.classList.remove('matched');
+      basePolyEl.classList.remove('matched');
+      setFeedback('neutral', 'O F já mostra o resultado da sua composição. Clique em Animar para ver o passo a passo.');
+      return;
+    }
+    evaluateResult(pts);
+  }
+
+  // ---------- challenge generation ----------
+  function randNiceAngle(){
+    const options=[];
+    for(let a=15;a<=345;a+=15) options.push(a);
+    return options[Math.floor(Math.random()*options.length)];
+  }
+  function randAxisAngle(){
+    const options=[];
+    for(let a=0;a<180;a+=15) options.push(a);
+    return options[Math.floor(Math.random()*options.length)];
+  }
+  function randTransComponent(){
+    const mags=[1,2,3,4,5,6];
+    const mag=mags[Math.floor(Math.random()*mags.length)];
+    return Math.random()<0.5 ? mag : -mag;
+  }
+  function randomHiddenBlock(){
+    const kind = ['R','T','M'][Math.floor(Math.random()*3)];
+    if(kind==='R') return {type:'R', theta: randNiceAngle()};
+    if(kind==='T') return {type:'T', vx: randTransComponent(), vy: randTransComponent()};
+    return {type:'M', phi: randAxisAngle()};
+  }
+  function generateChallenge(n, base){
+    for(let attempt=0; attempt<300; attempt++){
+      const comp = Array.from({length:n}, randomHiddenBlock);
+      const target = applyComposition(comp, base);
+      const inBounds = target.every(([x,y]) => Math.abs(x)<=9.3 && Math.abs(y)<=9.3);
+      if(!inBounds) continue;
+      const identical = target.every((p,i)=> dist(p, base[i]) < 0.08);
+      if(identical) continue;
+      return { comp, target };
+    }
+    const comp=[{type:'T', vx:4, vy:3}];
+    return { comp, target: applyComposition(comp, base) };
+  }
+
+  function newChallenge(){
+    challengeNumber++;
+    basePos = { bx: randInt(-7,-1), by: randInt(-7,-1) };
+    const base = canonicalBaseVertices();
+    const difficulty = parseInt(difficultySelect.value,10);
+    const { comp, target } = generateChallenge(difficulty, base);
+    currentChallenge = { comp, target, difficulty };
+    program = [];
+    solvedThisRound = false;
+    renderTarget(target);
+    renderProgramList();
+    syncLiveResult();
+    hintPanelEl.hidden = true;
+    challengeNumEl.textContent = challengeNumber;
+    applyBtn.disabled = true;
+  }
+
+  // ---------- program (student's blocks) ----------
+  function makeBlock(type){
+    if(type==='R') return {id:idCounter++, type, theta:90};
+    if(type==='T') return {id:idCounter++, type, vx:3, vy:2};
+    return {id:idCounter++, type, phi:0};
+  }
+  function addBlock(type){
+    program.push(makeBlock(type));
+    renderProgramList();
+    applyBtn.disabled = program.length===0;
+    syncLiveResult();
+  }
+  function removeBlock(id){
+    program = program.filter(b=>b.id!==id);
+    renderProgramList();
+    applyBtn.disabled = program.length===0;
+    syncLiveResult();
+  }
+  function moveBlock(id, dir){
+    const i = program.findIndex(b=>b.id===id);
+    const j = i+dir;
+    if(i<0 || j<0 || j>=program.length) return;
+    const tmp = program[i]; program[i]=program[j]; program[j]=tmp;
+    renderProgramList();
+    syncLiveResult();
+  }
+  function clearProgram(){
+    if(animating) return;
+    program=[];
+    renderProgramList();
+    applyBtn.disabled=true;
+    syncLiveResult();
+  }
+  function setParam(id, field, value){
+    const b = program.find(b=>b.id===id);
+    if(b) b[field]=value;
+  }
+
+  function blockLabelHtml(type){
+    return type==='R' ? 'R<sub>θ</sub>' : type==='T' ? 'T<sub>v</sub>' : 'M<sub>e</sub>';
+  }
+  function blockName(type){
+    return type==='R' ? 'Rotação' : type==='T' ? 'Translação' : 'Reflexão';
+  }
+  function blockPlain(type){
+    return type==='R' ? 'Rθ' : type==='T' ? 'Tv' : 'Me';
+  }
+
+  function paramsHtml(b){
+    if(b.type==='R'){
+      return `<div class="prog-params">
+        <label>θ = <input type="number" step="1" value="${b.theta}" data-id="${b.id}" data-field="theta" class="mono-input"> °</label>
+      </div>`;
+    }
+    if(b.type==='T'){
+      return `<div class="prog-params vector-params">
+        (<input type="number" step="1" value="${b.vx}" data-id="${b.id}" data-field="vx" class="mono-input">,
+        <input type="number" step="1" value="${b.vy}" data-id="${b.id}" data-field="vy" class="mono-input">)
+      </div>`;
+    }
+    return `<div class="prog-params">
+      <label>e = <input type="number" step="1" value="${b.phi}" data-id="${b.id}" data-field="phi" class="mono-input"> °</label>
+    </div>`;
+  }
+
+  function renderProgramList(){
+    if(program.length===0){
+      programListEl.innerHTML = '<li class="program-empty">Clique em “+ Adicionar” em um bloco, ou arraste-o para cá.</li>';
+      return;
+    }
+    programListEl.innerHTML = program.map((b, idx)=>`
+      <li class="prog-item type-${b.type}" draggable="true" data-id="${b.id}">
+        <span class="prog-handle" aria-hidden="true">⠿</span>
+        <span class="prog-order">${idx+1}</span>
+        <div class="prog-main">
+          <span class="prog-title">${blockLabelHtml(b.type)} <small>${blockName(b.type)}</small></span>
+          ${paramsHtml(b)}
+        </div>
+        <div class="prog-actions">
+          <button type="button" class="icon-btn" data-action="up" data-id="${b.id}" ${idx===0?'disabled':''} aria-label="Mover para cima">▲</button>
+          <button type="button" class="icon-btn" data-action="down" data-id="${b.id}" ${idx===program.length-1?'disabled':''} aria-label="Mover para baixo">▼</button>
+          <button type="button" class="icon-btn danger" data-action="delete" data-id="${b.id}" aria-label="Remover bloco">✕</button>
+        </div>
+      </li>
+    `).join('');
+  }
+
+  function matrixModalHtml(){
+    const M = compositionMatrix(program);
+    const rows = M.map(row=>`<div class="matrix-row">${row.map(v=>`<span>${fmt(v)}</span>`).join('')}</div>`).join('');
+    return `<div class="matrix-grid">${rows}</div><p class="matrix-caption">p′ = M · p, em coordenadas homogêneas (x, y, 1)</p>`;
+  }
+  function onMatrixModalKeydown(e){ if(e.key==='Escape') closeMatrixModal(); }
+  function openMatrixModal(){
+    matrixModalBodyEl.innerHTML = matrixModalHtml();
+    matrixModalEl.hidden = false;
+    matrixModalCloseEl.focus();
+    document.addEventListener('keydown', onMatrixModalKeydown);
+  }
+  function closeMatrixModal(){
+    matrixModalEl.hidden = true;
+    document.removeEventListener('keydown', onMatrixModalKeydown);
+    matrixBtn.focus();
+  }
+
+  function setFeedback(kind, msg){
+    feedbackEl.className = 'feedback feedback-'+kind;
+    feedbackEl.querySelector('.feedback-msg').textContent = msg;
+    scheduleFit();
+  }
+
+  // ---------- animation ----------
+  function easeInOutCubic(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+  function reflectInterp(p, phiDeg, t){
+    const ph = phiDeg*DEG, c=Math.cos(ph), s=Math.sin(ph);
+    const u =  p[0]*c + p[1]*s;
+    const v = -p[0]*s + p[1]*c;
+    const vScaled = v*(1-2*t);
+    return [u*c - vScaled*s, u*s + vScaled*c];
+  }
+  function showAxisPreview(phiDeg){
+    const p=phiDeg*DEG, L=14;
+    axisPreviewEl.setAttribute('x1', -L*Math.cos(p));
+    axisPreviewEl.setAttribute('y1', -L*Math.sin(p));
+    axisPreviewEl.setAttribute('x2', L*Math.cos(p));
+    axisPreviewEl.setAttribute('y2', L*Math.sin(p));
+    axisPreviewEl.hidden = false;
+    requestAnimationFrame(()=>axisPreviewEl.classList.add('visible'));
+  }
+  function hideAxisPreview(){
+    axisPreviewEl.classList.remove('visible');
+    setTimeout(()=>{ axisPreviewEl.hidden = true; }, 260);
+  }
+  function showOriginPulse(){ originPulseEl.hidden=false; originPulseEl.classList.add('pulsing'); }
+  function hideOriginPulse(){ originPulseEl.classList.remove('pulsing'); setTimeout(()=>{ originPulseEl.hidden=true; },200); }
+
+  function animateBlock(start, block, end, onFrame, onDone){
+    const duration = block.type==='M' ? 750 : 620;
+    const t0 = performance.now();
+    let cleanup = null;
+    if(block.type==='M'){ showAxisPreview(block.phi); cleanup = hideAxisPreview; }
+    else if(block.type==='R'){ showOriginPulse(); cleanup = hideOriginPulse; }
+    function frame(now){
+      const raw = Math.min(1, (now-t0)/duration);
+      const t = easeInOutCubic(raw);
+      let pts;
+      if(block.type==='R') pts = start.map(p=>rotatePoint(p, block.theta*t));
+      else if(block.type==='T') pts = start.map(p=>[p[0]+block.vx*t, p[1]+block.vy*t]);
+      else pts = start.map(p=>reflectInterp(p, block.phi, t));
+      onFrame(pts);
+      if(raw<1) requestAnimationFrame(frame);
+      else { if(cleanup) cleanup(); onDone(); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function runProgram(){
+    if(animating || program.length===0) return;
+    animating = true;
+    trayEl.classList.add('busy');
+    newChallengeBtn.disabled = true;
+    difficultySelect.disabled = true;
+    setFeedback('neutral', 'Animando composição…');
+    let current = canonicalBaseVertices();
+    renderBase(current);
+    let i=0;
+    function step(){
+      if(i>=program.length){ finish(current); return; }
+      const block = program[i];
+      const start = current.map(p=>p.slice());
+      const end = transformPoints(start, block);
+      if(REDUCE_MOTION){
+        current = end; renderBase(current); i++; step(); return;
+      }
+      animateBlock(start, block, end, (pts)=>renderBase(pts), ()=>{ current = end; i++; step(); });
+    }
+    step();
+  }
+  function finish(finalPoints){
+    animating = false;
+    trayEl.classList.remove('busy');
+    applyBtn.disabled = program.length===0;
+    newChallengeBtn.disabled = false;
+    difficultySelect.disabled = false;
+    evaluateResult(finalPoints);
+  }
+
+  function evaluateResult(finalPoints){
+    const target = currentChallenge.target;
+    let maxErr = 0;
+    for(let i=0;i<finalPoints.length;i++) maxErr = Math.max(maxErr, dist(finalPoints[i], target[i]));
+    const matched = maxErr < EPS;
+    if(matched){
+      targetPolyEl.classList.add('matched');
+      basePolyEl.classList.add('matched');
+      if(!solvedThisRound){
+        solvedThisRound = true;
+        stats.solved = (stats.solved||0)+1;
+        solvedCountEl.textContent = stats.solved;
+        saveStats();
+        celebrate();
+      }
+      setFeedback('success', `Isometria correta! Você usou ${program.length} bloco(s) — o desafio foi montado com ${currentChallenge.comp.length}.`);
+    } else {
+      targetPolyEl.classList.remove('matched');
+      basePolyEl.classList.remove('matched');
+      const orientMismatch = Math.sign(signedArea(finalPoints)||1) !== Math.sign(signedArea(target)||1);
+      let msg = maxErr < 1.4 ? 'Quase lá — ajuste fino nos parâmetros.' : 'Ainda não é isso. Reveja os parâmetros ou a ordem dos blocos.';
+      if(orientMismatch) msg += ' A orientação da figura está invertida em relação ao alvo: talvez falte (ou sobre) uma reflexão.';
+      setFeedback('warning', msg);
+    }
+  }
+
+  function celebrate(){
+    if(REDUCE_MOTION) return;
+    const colors = ['var(--c-base)','var(--c-target)','var(--c-rot)','var(--c-trans)','var(--c-refl)'];
+    for(let i=0;i<18;i++){
+      const piece = document.createElement('span');
+      piece.className='confetti-piece';
+      piece.style.left = (8+Math.random()*84)+'%';
+      piece.style.background = colors[i%colors.length];
+      piece.style.animationDelay = (Math.random()*0.25)+'s';
+      piece.style.setProperty('--drift', (Math.random()*2-1).toFixed(2));
+      celebrateEl.appendChild(piece);
+      piece.addEventListener('animationend', ()=>piece.remove());
+    }
+  }
+
+  // ---------- events: palette ----------
+  paletteEl.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.add-btn');
+    if(btn) addBlock(btn.dataset.type);
+  });
+  paletteEl.addEventListener('dragstart', (e)=>{
+    const card = e.target.closest('.palette-card');
+    if(!card) return;
+    e.dataTransfer.setData('text/plain', 'new:'+card.dataset.type);
+    e.dataTransfer.effectAllowed='copy';
+  });
+
+  // ---------- events: program list ----------
+  programListEl.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.icon-btn');
+    if(btn){
+      const id = Number(btn.dataset.id), action = btn.dataset.action;
+      if(action==='delete') removeBlock(id);
+      else if(action==='up') moveBlock(id,-1);
+      else if(action==='down') moveBlock(id,1);
+    }
+  });
+  programListEl.addEventListener('input', (e)=>{
+    const inp = e.target.closest('input[data-field]');
+    if(!inp) return;
+    let value = parseFloat(inp.value);
+    if(Number.isNaN(value)) value = 0;
+    setParam(Number(inp.dataset.id), inp.dataset.field, value);
+    syncLiveResult();
+  });
+  programListEl.addEventListener('dragstart', (e)=>{
+    const item = e.target.closest('.prog-item');
+    if(!item) return;
+    e.dataTransfer.setData('text/plain', 'move:'+item.dataset.id);
+    e.dataTransfer.effectAllowed='move';
+    item.classList.add('dragging');
+  });
+  programListEl.addEventListener('dragend', (e)=>{
+    const item = e.target.closest('.prog-item');
+    if(item) item.classList.remove('dragging');
+  });
+  programListEl.addEventListener('dragover', (e)=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+  programListEl.addEventListener('drop', (e)=>{
+    e.preventDefault();
+    const data = e.dataTransfer.getData('text/plain');
+    if(!data) return;
+    const items = [...programListEl.querySelectorAll('.prog-item')];
+    let insertIndex = items.length;
+    for(let i=0;i<items.length;i++){
+      const rect = items[i].getBoundingClientRect();
+      if(e.clientY < rect.top + rect.height/2){ insertIndex = i; break; }
+    }
+    if(data.startsWith('new:')){
+      program.splice(insertIndex, 0, makeBlock(data.slice(4)));
+    } else if(data.startsWith('move:')){
+      const id = Number(data.slice(5));
+      const fromIdx = program.findIndex(b=>b.id===id);
+      if(fromIdx===-1) return;
+      const [b] = program.splice(fromIdx,1);
+      let idx = insertIndex;
+      if(fromIdx < idx) idx--;
+      program.splice(idx,0,b);
+    }
+    renderProgramList();
+    applyBtn.disabled = program.length===0;
+    syncLiveResult();
+  });
+
+  // ---------- events: controls ----------
+  applyBtn.addEventListener('click', runProgram);
+  clearProgramBtn.addEventListener('click', clearProgram);
+  newChallengeBtn.addEventListener('click', newChallenge);
+  difficultySelect.addEventListener('change', newChallenge);
+  matrixBtn.addEventListener('click', openMatrixModal);
+  matrixModalCloseEl.addEventListener('click', closeMatrixModal);
+  matrixModalEl.addEventListener('click', (e)=>{ if(e.target===matrixModalEl) closeMatrixModal(); });
+  hintBtn.addEventListener('click', ()=>{
+    if(!currentChallenge) return;
+    const seq = currentChallenge.comp.map(b=>blockPlain(b.type)).join(' → ');
+    hintPanelEl.innerHTML = `<strong>Dica:</strong> o desafio foi montado com ${currentChallenge.comp.length} passo(s), nesta ordem: ${seq}. Os valores exatos (θ, v ou e) ficam por sua conta.`;
+    hintPanelEl.hidden = false;
+    scheduleFit();
+  });
+
+  // ---------- boot ----------
+  buildGrid();
+  renderProgramList();
+  solvedCountEl.textContent = stats.solved||0;
+  newChallenge();
+})();
+</script>
