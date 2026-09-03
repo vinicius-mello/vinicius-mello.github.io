@@ -1,0 +1,881 @@
+<title>Mesa de Curvas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-segmento:#2955C8;
+    --c-poligonal:#157F6E;
+    --c-bezier:#6E4FC2;
+    --c-circulo:#B8791A;
+    --c-success:#1F9254;
+    --c-warning:#B4590E;
+    --c-danger:#C23B78;
+    --shadow:rgba(22,35,58,0.14);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-segmento:#6C93FF;
+      --c-poligonal:#4FD8BE;
+      --c-bezier:#A78BFA;
+      --c-circulo:#F0A94E;
+      --c-success:#4ADE80;
+      --c-warning:#FBBF74;
+      --c-danger:#E86FA6;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-segmento:#6C93FF;
+    --c-poligonal:#4FD8BE;
+    --c-bezier:#A78BFA;
+    --c-circulo:#F0A94E;
+    --c-success:#4ADE80;
+    --c-warning:#FBBF74;
+    --c-danger:#E86FA6;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Public Sans','Segoe UI',system-ui,sans-serif;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button{ font-family:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1280px;
+    margin:0 auto;
+    padding:0.85rem 1rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+    min-height:100svh;
+  }
+
+  /* ---------- header ---------- */
+  .app-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.55rem; align-items:center; }
+  .brand-mark{
+    font-family:'Big Shoulders Display',sans-serif;
+    font-size:1.5rem;
+    font-weight:800;
+    color:var(--brand);
+    line-height:1;
+  }
+  .brand-text h1{
+    font-size:clamp(1.05rem,2.2vw,1.35rem);
+    text-transform:uppercase;
+    color:var(--ink);
+    display:inline;
+  }
+  .brand-text p{
+    margin:0.1rem 0 0;
+    color:var(--ink-muted);
+    font-size:0.78rem;
+    max-width:56ch;
+  }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; }
+
+  /* ---------- workspace ---------- */
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(260px,300px) 1fr;
+    gap:0.75rem;
+    align-items:start;
+    flex:1;
+    min-height:0;
+  }
+  @media (max-width:860px){
+    .workspace{ grid-template-columns:1fr; }
+  }
+
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+  }
+  .panel h2{
+    font-size:0.8rem;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--ink);
+    margin-bottom:0.45rem;
+  }
+
+  /* ---------- tool palette ---------- */
+  .tools{ display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; }
+  .tool-btn{
+    display:flex; flex-direction:column; align-items:flex-start; gap:0.1rem;
+    border:1.5px solid var(--tool-accent, var(--border));
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:7px;
+    padding:0.4rem 0.5rem;
+    cursor:pointer;
+    text-align:left;
+    transition:background 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .tool-btn .tool-sym{
+    font-family:'Big Shoulders Display',sans-serif;
+    font-weight:800;
+    font-size:1rem;
+    color:var(--tool-accent, var(--ink-muted));
+  }
+  .tool-btn .tool-name{
+    font-size:0.68rem;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.02em;
+    color:var(--ink-muted);
+  }
+  .tool-btn[data-tool="mover"]{ --tool-accent:var(--ink-muted); grid-column:1 / -1; flex-direction:row; align-items:center; gap:0.4rem; }
+  .tool-btn[data-tool="segmento"]{ --tool-accent:var(--c-segmento); }
+  .tool-btn[data-tool="poligonal"]{ --tool-accent:var(--c-poligonal); }
+  .tool-btn[data-tool="bezier"]{ --tool-accent:var(--c-bezier); }
+  .tool-btn[data-tool="circulo"]{ --tool-accent:var(--c-circulo); }
+  .tool-btn:hover{ box-shadow:0 0 0 1px var(--tool-accent, var(--border)) inset; }
+  .tool-btn.active{ background:var(--tool-accent, var(--brand)); }
+  .tool-btn.active .tool-sym,
+  .tool-btn.active .tool-name{ color:var(--brand-ink); }
+
+  .draft-hint{
+    margin-top:0.5rem;
+    font-size:0.74rem;
+    color:var(--ink-muted);
+    background:var(--paper-sunken);
+    border-radius:6px;
+    padding:0.4rem 0.5rem;
+    min-height:2.4em;
+  }
+  .draft-actions{ display:flex; gap:0.4rem; margin-top:0.4rem; }
+
+  /* ---------- object list ---------- */
+  .obj-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:0.3rem; max-height:26vh; overflow-y:auto; }
+  .obj-empty{ font-size:0.76rem; color:var(--ink-muted); border:1px dashed var(--border); border-radius:6px; padding:0.55rem; text-align:center; }
+  .obj-item{
+    display:flex; align-items:center; gap:0.4rem;
+    padding:0.32rem 0.45rem;
+    border-left:4px solid var(--item-accent, var(--line-major));
+    background:var(--paper);
+    border-radius:0 5px 5px 0;
+    cursor:pointer;
+    font-size:0.78rem;
+  }
+  .obj-item.selected{ background:var(--paper-sunken); box-shadow:0 0 0 1px var(--item-accent) inset; }
+  .obj-item .obj-name{ flex:1; font-weight:600; }
+  .obj-item .obj-detail{ color:var(--ink-muted); font-family:'IBM Plex Mono',monospace; font-size:0.7rem; }
+  .obj-item[data-type="segmento"]{ --item-accent:var(--c-segmento); }
+  .obj-item[data-type="poligonal"]{ --item-accent:var(--c-poligonal); }
+  .obj-item[data-type="bezier"]{ --item-accent:var(--c-bezier); }
+  .obj-item[data-type="circulo"]{ --item-accent:var(--c-circulo); }
+
+  /* ---------- inspector ---------- */
+  .inspector-empty{ font-size:0.78rem; color:var(--ink-muted); }
+  .t-row{ display:flex; align-items:center; gap:0.5rem; }
+  .t-row input[type="range"]{ flex:1; accent-color:var(--sel-accent, var(--brand)); }
+  .t-readout{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.78rem;
+    font-variant-numeric:tabular-nums;
+    color:var(--sel-accent, var(--brand));
+    min-width:3.4em;
+    text-align:right;
+  }
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.76rem;
+    line-height:1.5;
+    background:var(--paper-sunken);
+    border-radius:6px;
+    padding:0.5rem 0.6rem;
+    color:var(--ink);
+    overflow-x:auto;
+  }
+  .formula-box .f-main{ color:var(--sel-accent, var(--brand)); font-weight:600; }
+  .formula-box .f-sub{ color:var(--ink-muted); }
+  .point-controls{ display:flex; gap:0.35rem; margin-top:0.55rem; flex-wrap:wrap; }
+
+  /* ---------- buttons ---------- */
+  .primary-btn{
+    background:var(--brand); color:var(--brand-ink); border:none;
+    font-weight:700; font-size:0.8rem; padding:0.4rem 0.7rem;
+    border-radius:6px; cursor:pointer; transition:filter 0.15s;
+  }
+  .primary-btn:hover:not(:disabled){ filter:brightness(1.08); }
+  .primary-btn:disabled{ opacity:0.4; cursor:default; }
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  .ghost-btn.danger:hover{ border-color:var(--c-danger); color:var(--c-danger); }
+
+  /* ---------- board ---------- */
+  .board{
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    display:flex;
+    min-height:60svh;
+  }
+  #canvas{ width:100%; height:100%; display:block; touch-action:none; cursor:crosshair; }
+  #canvas.mode-mover{ cursor:default; }
+  .grid-line{ stroke:var(--line-minor); stroke-width:0.02; }
+  .grid-line-major{ stroke:var(--line-major); stroke-width:0.035; }
+  .axis-line{ stroke:var(--line-major); stroke-width:0.05; }
+
+  .curve-shape{ fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .curve-shape.w-thin{ stroke-width:0.09; }
+  .curve-shape.w-thick{ stroke-width:0.13; }
+  .guide-line{ fill:none; stroke:var(--ink-muted); stroke-width:0.04; stroke-dasharray:0.12 0.1; opacity:0.65; }
+  .decasteljau-line{ fill:none; stroke-width:0.045; stroke-dasharray:0.09 0.08; opacity:0.55; }
+  .decasteljau-dot{ opacity:0.75; }
+
+  .handle{ cursor:grab; }
+  .handle:active{ cursor:grabbing; }
+  .handle-hit{ fill:transparent; }
+  .handle-dot{ fill:var(--paper-raised); stroke-width:0.045; }
+  .handle-dot.anchor{ fill:var(--h-accent, var(--ink)); }
+
+  .moving-point{ fill:var(--sel-accent, var(--brand)); stroke:var(--paper-raised); stroke-width:0.05; }
+  .moving-label-bg{ fill:var(--paper-raised); opacity:0.9; }
+  .moving-label{ font-family:'IBM Plex Mono',monospace; font-size:0.5px; fill:var(--sel-accent, var(--brand)); font-weight:600; }
+
+  .footer-note{ font-size:0.72rem; color:var(--ink-muted); text-align:center; padding-top:0.2rem; }
+  .footer-note a{ color:var(--ink-muted); }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">&int;</span>
+      <div class="brand-text">
+        <h1>Mesa de Curvas</h1>
+        <p>Segmentos, poligonais, curvas de Bézier e círculos — construídos, parametrizados e manipulados à mão, como no Capítulo 2 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ghost-btn" id="demoBtn">↺ Exemplo do livro</button>
+      <button type="button" class="ghost-btn danger" id="clearBtn">🗑 Limpar mesa</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Ferramenta</h2>
+        <div class="tools" id="tools">
+          <button type="button" class="tool-btn" data-tool="mover"><span class="tool-sym">✥</span><span class="tool-name">Mover</span></button>
+          <button type="button" class="tool-btn" data-tool="segmento"><span class="tool-sym">AB</span><span class="tool-name">Segmento</span></button>
+          <button type="button" class="tool-btn" data-tool="poligonal"><span class="tool-sym">⟨P⟩</span><span class="tool-name">Poligonal</span></button>
+          <button type="button" class="tool-btn" data-tool="bezier"><span class="tool-sym">B(t)</span><span class="tool-name">Bézier</span></button>
+          <button type="button" class="tool-btn" data-tool="circulo"><span class="tool-sym">○</span><span class="tool-name">Círculo</span></button>
+        </div>
+        <div class="draft-hint" id="draftHint">Escolha uma ferramenta e clique na mesa para começar.</div>
+        <div class="draft-actions" id="draftActions" hidden>
+          <button type="button" class="primary-btn" id="finishDraftBtn">✓ Concluir</button>
+          <button type="button" class="ghost-btn" id="cancelDraftBtn">Cancelar</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Objetos na mesa</h2>
+        <ul class="obj-list" id="objList"></ul>
+      </div>
+
+      <div class="panel" id="inspector">
+        <h2>Inspecionar</h2>
+        <div id="inspectorBody"><p class="inspector-empty">Selecione um objeto na lista, ou clique sobre uma curva na mesa, para ver sua parametrização e movê-la com o parâmetro <em>t</em>.</p></div>
+      </div>
+    </aside>
+
+    <div class="board">
+      <svg id="canvas" viewBox="-2 -12 24 14" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Mesa de trabalho com grade cartesiana onde curvas paramétricas são construídas">
+        <g id="world" transform="scale(1,-1)">
+          <g id="gridLayer"></g>
+          <g id="shapesLayer"></g>
+          <g id="handlesLayer"></g>
+          <g id="movingLayer"></g>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <p class="footer-note">Companheira do Capítulo 2 (“Curvas I: Representações Paramétricas”) de <em>Geometria Analítica com Aplicações</em> — Vinícius Mello &amp; Claude.</p>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  const svg = document.getElementById('canvas');
+  const worldEl = document.getElementById('world');
+  const gridLayer = document.getElementById('gridLayer');
+  const shapesLayer = document.getElementById('shapesLayer');
+  const handlesLayer = document.getElementById('handlesLayer');
+  const movingLayer = document.getElementById('movingLayer');
+  const toolsEl = document.getElementById('tools');
+  const draftHintEl = document.getElementById('draftHint');
+  const draftActionsEl = document.getElementById('draftActions');
+  const objListEl = document.getElementById('objList');
+  const inspectorBodyEl = document.getElementById('inspectorBody');
+  const demoBtn = document.getElementById('demoBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const finishDraftBtn = document.getElementById('finishDraftBtn');
+  const cancelDraftBtn = document.getElementById('cancelDraftBtn');
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const STORAGE_KEY = 'mesa-curvas-v1';
+
+  const ACCENT = { segmento:'var(--c-segmento)', poligonal:'var(--c-poligonal)', bezier:'var(--c-bezier)', circulo:'var(--c-circulo)' };
+  const LABEL  = { segmento:'Segmento', poligonal:'Poligonal', bezier:'Bézier', circulo:'Círculo' };
+  const HINTS  = {
+    mover:    'Arraste qualquer ponto para reformar a curva. Clique numa curva para selecioná-la.',
+    segmento: 'Clique para marcar A, depois clique de novo para marcar B.',
+    poligonal:'Clique para adicionar vértices, um a um. Quando terminar, clique em “Concluir” (mín. 2 pontos).',
+    bezier:   'Clique para adicionar pontos de controle, um a um. Quanto mais pontos, maior o grau. Depois, “Concluir” (mín. 2 pontos).',
+    circulo:  'Clique para marcar o centro, depois clique de novo para marcar um ponto da borda (define o raio).'
+  };
+
+  let objects = [];
+  let nextId = 1;
+  let tool = 'mover';
+  let draft = null;               // { type, points:[{x,y}] }
+  let selectedId = null;
+  let tValue = 0.35;
+  let dragRef = null;             // { target:'draft'|'object', objId, idx }
+
+  // ---------- geometry helpers ----------
+  function lerp(A,B,t){ return { x:(1-t)*A.x+t*B.x, y:(1-t)*A.y+t*B.y }; }
+  function dist(A,B){ return Math.hypot(B.x-A.x, B.y-A.y); }
+
+  function deCasteljauLevels(pts, t){
+    const levels = [pts.slice()];
+    let cur = pts;
+    while(cur.length > 1){
+      const next = [];
+      for(let i=0;i<cur.length-1;i++) next.push(lerp(cur[i], cur[i+1], t));
+      levels.push(next);
+      cur = next;
+    }
+    return levels;
+  }
+  function bezierPoint(pts, t){ return deCasteljauLevels(pts,t).at(-1)[0]; }
+  function bezierSamples(pts, n){
+    const out = [];
+    for(let i=0;i<=n;i++) out.push(bezierPoint(pts, i/n));
+    return out;
+  }
+  function polylineSegCount(pts){ return Math.max(1, pts.length-1); }
+  function polylinePoint(pts, t){
+    if(pts.length === 1) return pts[0];
+    const n = pts.length-1;
+    let T = t*n;
+    let i = Math.floor(T);
+    if(i >= n) i = n-1;
+    if(i < 0) i = 0;
+    return lerp(pts[i], pts[i+1], T-i);
+  }
+  function polylineLength(pts){
+    let L = 0;
+    for(let i=0;i<pts.length-1;i++) L += dist(pts[i],pts[i+1]);
+    return L;
+  }
+  function circleRadius(obj){ return dist(obj.points[0], obj.points[1]); }
+  function circlePoint(obj, t){
+    const r = circleRadius(obj);
+    const theta = t*2*Math.PI;
+    return { x: obj.points[0].x + r*Math.cos(theta), y: obj.points[0].y + r*Math.sin(theta) };
+  }
+  function fmt(n){ return (Math.round(n*100)/100).toFixed(2); }
+
+  function pointAt(obj, t){
+    if(obj.type === 'segmento') return lerp(obj.points[0], obj.points[1], t);
+    if(obj.type === 'poligonal') return polylinePoint(obj.points, t);
+    if(obj.type === 'bezier') return bezierPoint(obj.points, t);
+    if(obj.type === 'circulo') return circlePoint(obj, t);
+  }
+
+  // ---------- persistence ----------
+  function save(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ objects, nextId }));
+    }catch(e){ /* ignore */ }
+  }
+  function load(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return false;
+      const data = JSON.parse(raw);
+      if(!Array.isArray(data.objects) || !data.objects.length) return false;
+      objects = data.objects;
+      nextId = data.nextId || (objects.length+1);
+      return true;
+    }catch(e){ return false; }
+  }
+
+  function loadDemo(){
+    objects = [{ id:nextId++, type:'bezier', points:[{x:4,y:1},{x:10,y:9},{x:16,y:1}] }];
+    selectedId = objects[0].id;
+    tValue = 0.5;
+    save();
+    render();
+  }
+
+  // ---------- coordinate conversion ----------
+  function screenToMath(clientX, clientY){
+    const pt = svg.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const inv = worldEl.getScreenCTM().inverse();
+    const p = pt.matrixTransform(inv);
+    return { x:p.x, y:p.y };
+  }
+
+  // ---------- grid ----------
+  function buildGrid(){
+    const xMin=-2, xMax=22, yMin=-2, yMax=12;
+    let html = '';
+    for(let x=xMin; x<=xMax; x++){
+      const major = x % 5 === 0;
+      html += `<line class="grid-line${major?' grid-line-major':''}" x1="${x}" y1="${yMin}" x2="${x}" y2="${yMax}"></line>`;
+    }
+    for(let y=yMin; y<=yMax; y++){
+      const major = y % 5 === 0;
+      html += `<line class="grid-line${major?' grid-line-major':''}" x1="${xMin}" y1="${y}" x2="${xMax}" y2="${y}"></line>`;
+    }
+    html += `<line class="axis-line" x1="${xMin}" y1="0" x2="${xMax}" y2="0"></line>`;
+    html += `<line class="axis-line" x1="0" y1="${yMin}" x2="0" y2="${yMax}"></line>`;
+    gridLayer.innerHTML = html;
+  }
+
+  // ---------- rendering ----------
+  function ptsAttr(pts){ return pts.map(p=>`${p.x},${p.y}`).join(' '); }
+
+  function svgEl(tag, attrs){
+    const el = document.createElementNS(NS, tag);
+    for(const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+
+  function renderShapes(){
+    shapesLayer.innerHTML = '';
+    for(const obj of objects){
+      const accent = ACCENT[obj.type];
+      const isSel = obj.id === selectedId;
+      if(obj.type === 'segmento'){
+        const [A,B] = obj.points;
+        const l = svgEl('line', { x1:A.x,y1:A.y,x2:B.x,y2:B.y, class:'curve-shape '+(isSel?'w-thick':'w-thin'), style:`stroke:${accent}`, 'data-obj':obj.id });
+        shapesLayer.appendChild(l);
+      } else if(obj.type === 'poligonal'){
+        const l = svgEl('polyline', { points:ptsAttr(obj.points), class:'curve-shape '+(isSel?'w-thick':'w-thin'), style:`stroke:${accent}`, 'data-obj':obj.id });
+        shapesLayer.appendChild(l);
+      } else if(obj.type === 'bezier'){
+        if(obj.points.length > 2){
+          const guide = svgEl('polyline', { points:ptsAttr(obj.points), class:'guide-line' });
+          shapesLayer.appendChild(guide);
+        }
+        const samples = bezierSamples(obj.points, 48);
+        const l = svgEl('polyline', { points:ptsAttr(samples), class:'curve-shape '+(isSel?'w-thick':'w-thin'), style:`stroke:${accent}`, 'data-obj':obj.id });
+        shapesLayer.appendChild(l);
+        if(isSel && obj.points.length > 2){
+          const levels = deCasteljauLevels(obj.points, tValue);
+          for(let li=1; li<levels.length-1; li++){
+            const lvl = levels[li];
+            const dl = svgEl('polyline', { points:ptsAttr(lvl), class:'decasteljau-line', style:`stroke:${accent}` });
+            shapesLayer.appendChild(dl);
+            for(const p of lvl){
+              shapesLayer.appendChild(svgEl('circle', { cx:p.x, cy:p.y, r:0.09, class:'decasteljau-dot', style:`fill:${accent}` }));
+            }
+          }
+        }
+      } else if(obj.type === 'circulo'){
+        const r = circleRadius(obj);
+        const guide = svgEl('line', { x1:obj.points[0].x, y1:obj.points[0].y, x2:obj.points[1].x, y2:obj.points[1].y, class:'guide-line' });
+        shapesLayer.appendChild(guide);
+        const c = svgEl('circle', { cx:obj.points[0].x, cy:obj.points[0].y, r:r, class:'curve-shape '+(isSel?'w-thick':'w-thin'), style:`stroke:${accent}`, 'data-obj':obj.id });
+        shapesLayer.appendChild(c);
+      }
+    }
+    // draft preview
+    if(draft){
+      const accent = ACCENT[draft.type];
+      const pts = draft.points;
+      if(draft.type === 'circulo' && pts.length === 2){
+        const r = dist(pts[0],pts[1]);
+        shapesLayer.appendChild(svgEl('line', { x1:pts[0].x,y1:pts[0].y,x2:pts[1].x,y2:pts[1].y, class:'guide-line' }));
+        shapesLayer.appendChild(svgEl('circle', { cx:pts[0].x, cy:pts[0].y, r:r, class:'curve-shape w-thin', style:`stroke:${accent}`, 'stroke-dasharray':'0.12 0.1' }));
+      } else if(pts.length >= 2){
+        if(draft.type === 'bezier'){
+          shapesLayer.appendChild(svgEl('polyline', { points:ptsAttr(pts), class:'guide-line' }));
+          const samples = bezierSamples(pts, 48);
+          shapesLayer.appendChild(svgEl('polyline', { points:ptsAttr(samples), class:'curve-shape w-thin', style:`stroke:${accent}`, 'stroke-dasharray':'0.12 0.1' }));
+        } else {
+          shapesLayer.appendChild(svgEl('polyline', { points:ptsAttr(pts), class:'curve-shape w-thin', style:`stroke:${accent}`, 'stroke-dasharray':'0.12 0.1' }));
+        }
+      }
+    }
+  }
+
+  function renderHandles(){
+    handlesLayer.innerHTML = '';
+    function addHandle(objId, idx, p, accent, anchor){
+      const g = svgEl('g', { class:'handle', 'data-obj':objId, 'data-idx':idx });
+      g.appendChild(svgEl('circle', { cx:p.x, cy:p.y, r:0.42, class:'handle-hit' }));
+      g.appendChild(svgEl('circle', { cx:p.x, cy:p.y, r: anchor?0.15:0.12, class:'handle-dot'+(anchor?' anchor':''), style:`stroke:${accent}; --h-accent:${accent}` }));
+      handlesLayer.appendChild(g);
+    }
+    for(const obj of objects){
+      const accent = ACCENT[obj.type];
+      obj.points.forEach((p, idx)=>{
+        const anchor = obj.type==='circulo' ? idx===0 : false;
+        addHandle(obj.id, idx, p, accent, anchor);
+      });
+    }
+    if(draft){
+      const accent = ACCENT[draft.type];
+      draft.points.forEach((p, idx)=> addHandle('draft', idx, p, accent, draft.type==='circulo' && idx===0));
+    }
+  }
+
+  function renderMovingPoint(){
+    movingLayer.innerHTML = '';
+    const obj = objects.find(o=>o.id===selectedId);
+    if(!obj) return;
+    const p = pointAt(obj, tValue);
+    const accent = ACCENT[obj.type];
+    movingLayer.appendChild(svgEl('circle', { cx:p.x, cy:p.y, r:0.22, class:'moving-point', style:`--sel-accent:${accent}` }));
+  }
+
+  function objLabel(obj){
+    if(obj.type === 'bezier') return `Bézier · grau ${obj.points.length-1}`;
+    if(obj.type === 'poligonal') return `Poligonal · ${obj.points.length} vértices`;
+    if(obj.type === 'segmento') return 'Segmento';
+    if(obj.type === 'circulo') return `Círculo · r=${fmt(circleRadius(obj))}`;
+  }
+
+  function renderObjList(){
+    if(!objects.length){
+      objListEl.innerHTML = '<li class="obj-empty">Nada na mesa ainda. Escolha uma ferramenta ao lado.</li>';
+      return;
+    }
+    const typeCount = {};
+    objListEl.innerHTML = objects.map((obj)=>{
+      typeCount[obj.type] = (typeCount[obj.type]||0) + 1;
+      const detail = objLabel(obj).split('·')[1] || '';
+      return `<li class="obj-item${obj.id===selectedId?' selected':''}" data-type="${obj.type}" data-obj="${obj.id}">
+        <span class="obj-name">${LABEL[obj.type]} ${typeCount[obj.type]}</span>
+        <span class="obj-detail">${detail}</span>
+      </li>`;
+    }).join('');
+  }
+
+  function formulaFor(obj){
+    const accent = ACCENT[obj.type];
+    const t = tValue;
+    const p = pointAt(obj, t);
+    if(obj.type === 'segmento'){
+      return `<span class="f-main">γ(t) = (1−t)A + tB</span>\n`+
+             `<span class="f-sub">t = ${fmt(t)}   γ(t) = (${fmt(p.x)}, ${fmt(p.y)})</span>`;
+    }
+    if(obj.type === 'poligonal'){
+      const n = polylineSegCount(obj.points);
+      const T = t*n;
+      const i = Math.min(Math.floor(T), n-1);
+      return `<span class="f-main">γ(t), t·n = i + s</span>\n`+
+             `<span class="f-sub">n=${n} segmentos, t·n=${fmt(T)} → aresta P${i}P${i+1}, s=${fmt(T-i)}\n`+
+             `comprimento total L=${fmt(polylineLength(obj.points))}\n`+
+             `γ(t) = (${fmt(p.x)}, ${fmt(p.y)})</span>`;
+    }
+    if(obj.type === 'bezier'){
+      const n = obj.points.length-1;
+      return `<span class="f-main">B(t) = Σ C(n,i) tⁱ(1−t)ⁿ⁻ⁱ Pᵢ</span>\n`+
+             `<span class="f-sub">grau n=${n}, t=${fmt(t)}\n`+
+             `B(t) = (${fmt(p.x)}, ${fmt(p.y)})</span>`;
+    }
+    if(obj.type === 'circulo'){
+      const r = circleRadius(obj);
+      const theta = t*2*Math.PI;
+      return `<span class="f-main">γ(θ) = C + r(cos θ, sin θ)</span>\n`+
+             `<span class="f-sub">r=${fmt(r)}, θ=2πt=${fmt(theta)} rad (${fmt(theta*180/Math.PI)}°)\n`+
+             `γ(θ) = (${fmt(p.x)}, ${fmt(p.y)})</span>`;
+    }
+  }
+
+  function renderInspector(){
+    const obj = objects.find(o=>o.id===selectedId);
+    if(!obj){
+      inspectorBodyEl.innerHTML = '<p class="inspector-empty">Selecione um objeto na lista, ou clique sobre uma curva na mesa, para ver sua parametrização e movê-la com o parâmetro <em>t</em>.</p>';
+      return;
+    }
+    const accent = ACCENT[obj.type];
+    const canAddRemove = obj.type === 'poligonal' || obj.type === 'bezier';
+    const minPts = 2;
+    inspectorBodyEl.innerHTML = `
+      <div style="--sel-accent:${accent}">
+        <strong style="color:${accent}">${objLabel(obj)}</strong>
+        <div class="t-row" style="margin-top:0.5rem;">
+          <label for="tSlider" style="font-size:0.72rem;color:var(--ink-muted);">t</label>
+          <input type="range" id="tSlider" min="0" max="1" step="0.002" value="${tValue}">
+          <span class="t-readout">${fmt(tValue)}</span>
+        </div>
+        <div class="formula-box">${formulaFor(obj)}</div>
+        <div class="point-controls">
+          ${canAddRemove ? `<button type="button" class="ghost-btn" id="addPtBtn">+ Ponto</button>` : ''}
+          ${canAddRemove ? `<button type="button" class="ghost-btn" id="rmPtBtn" ${obj.points.length<=minPts?'disabled':''}>− Ponto</button>` : ''}
+          <button type="button" class="ghost-btn danger" id="delObjBtn">🗑 Excluir</button>
+        </div>
+      </div>`;
+
+    const slider = document.getElementById('tSlider');
+    slider.addEventListener('input', ()=>{
+      tValue = parseFloat(slider.value);
+      renderMovingPoint();
+      renderShapes();
+      const box = inspectorBodyEl.querySelector('.formula-box');
+      if(box) box.innerHTML = formulaFor(obj);
+      const readout = inspectorBodyEl.querySelector('.t-readout');
+      if(readout) readout.textContent = fmt(tValue);
+      save();
+    });
+    const addBtn = document.getElementById('addPtBtn');
+    if(addBtn) addBtn.addEventListener('click', ()=>{
+      const pts = obj.points;
+      const last = pts[pts.length-1], prev = pts[pts.length-2] || {x:last.x-1,y:last.y};
+      const newPt = { x: last.x + (last.x-prev.x)*0.6 + 0.6, y: last.y + (last.y-prev.y)*0.6 + 0.4 };
+      pts.push(newPt);
+      save(); render();
+    });
+    const rmBtn = document.getElementById('rmPtBtn');
+    if(rmBtn) rmBtn.addEventListener('click', ()=>{
+      if(obj.points.length > minPts){ obj.points.pop(); save(); render(); }
+    });
+    document.getElementById('delObjBtn').addEventListener('click', ()=>{
+      objects = objects.filter(o=>o.id!==obj.id);
+      if(selectedId === obj.id) selectedId = null;
+      save(); render();
+    });
+  }
+
+  function render(){
+    renderShapes();
+    renderHandles();
+    renderMovingPoint();
+    renderObjList();
+    renderInspector();
+  }
+
+  // ---------- tool / draft management ----------
+  function setTool(next){
+    tool = next;
+    draft = null;
+    Array.from(toolsEl.querySelectorAll('.tool-btn')).forEach(b=> b.classList.toggle('active', b.dataset.tool===tool));
+    draftHintEl.textContent = HINTS[tool];
+    draftActionsEl.hidden = true;
+    svg.classList.toggle('mode-mover', tool==='mover');
+    render();
+  }
+
+  function startOrExtendDraft(mathPt){
+    if(tool === 'mover') return;
+    if(!draft) draft = { type:tool, points:[] };
+    draft.points.push(mathPt);
+
+    if(tool === 'segmento' && draft.points.length === 2){ finalizeDraft(); return; }
+    if(tool === 'circulo' && draft.points.length === 2){ finalizeDraft(); return; }
+    if(tool === 'poligonal' || tool === 'bezier'){
+      draftActionsEl.hidden = draft.points.length < 2;
+      finishDraftBtn.disabled = draft.points.length < 2;
+    }
+    render();
+  }
+
+  function finalizeDraft(){
+    if(!draft) return;
+    if(draft.points.length < 2){ draft = null; render(); return; }
+    objects.push({ id:nextId++, type:draft.type, points:draft.points });
+    selectedId = nextId-1;
+    draft = null;
+    draftActionsEl.hidden = true;
+    save();
+    render();
+  }
+  function cancelDraft(){ draft = null; draftActionsEl.hidden = true; render(); }
+
+  // ---------- hit testing (click on a curve, not a handle) ----------
+  function hitTestCurve(mathPt){
+    const thresh = 0.35;
+    for(let i=objects.length-1;i>=0;i--){
+      const obj = objects[i];
+      let pts;
+      if(obj.type === 'bezier') pts = bezierSamples(obj.points, 40);
+      else if(obj.type === 'circulo'){
+        const r = circleRadius(obj);
+        if(Math.abs(dist(mathPt,obj.points[0]) - r) < thresh) return obj.id;
+        continue;
+      } else pts = obj.points;
+      for(let k=0;k<pts.length-1;k++){
+        if(distToSeg(mathPt, pts[k], pts[k+1]) < thresh) return obj.id;
+      }
+    }
+    return null;
+  }
+  function distToSeg(P, A, B){
+    const abx=B.x-A.x, aby=B.y-A.y;
+    const len2 = abx*abx+aby*aby;
+    let t = len2 ? ((P.x-A.x)*abx+(P.y-A.y)*aby)/len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    const proj = { x:A.x+t*abx, y:A.y+t*aby };
+    return dist(P, proj);
+  }
+
+  // ---------- pointer interaction ----------
+  let pointerDownWasHandle = false;
+
+  svg.addEventListener('pointerdown', (e)=>{
+    const mathPt = screenToMath(e.clientX, e.clientY);
+    const handleEl = e.target.closest('.handle');
+    pointerDownWasHandle = !!handleEl;
+
+    if(handleEl){
+      const objId = handleEl.dataset.obj;
+      const idx = parseInt(handleEl.dataset.idx, 10);
+      dragRef = { objId, idx };
+      svg.setPointerCapture(e.pointerId);
+      if(objId !== 'draft') selectedId = parseInt(objId, 10);
+      render();
+      return;
+    }
+
+    if(tool === 'mover'){
+      const curveEl = e.target.closest('[data-obj]');
+      if(curveEl && curveEl.dataset.obj){
+        selectedId = parseInt(curveEl.dataset.obj, 10);
+        render();
+        return;
+      }
+      const hit = hitTestCurve(mathPt);
+      if(hit){ selectedId = hit; render(); return; }
+      selectedId = null;
+      render();
+      return;
+    }
+
+    startOrExtendDraft(mathPt);
+  });
+
+  svg.addEventListener('pointermove', (e)=>{
+    if(!dragRef) return;
+    const mathPt = screenToMath(e.clientX, e.clientY);
+    if(dragRef.objId === 'draft'){
+      if(draft) draft.points[dragRef.idx] = mathPt;
+    } else {
+      const obj = objects.find(o=>o.id===parseInt(dragRef.objId,10));
+      if(obj) obj.points[dragRef.idx] = mathPt;
+    }
+    renderShapes();
+    renderHandles();
+    renderMovingPoint();
+  });
+
+  function endDrag(e){
+    if(!dragRef) return;
+    dragRef = null;
+    save();
+    render();
+  }
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', endDrag);
+
+  // ---------- keyboard ----------
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){
+      if(draft) cancelDraft(); else { selectedId = null; render(); }
+    } else if(e.key === 'Enter'){
+      if(draft && (draft.type==='poligonal'||draft.type==='bezier') && draft.points.length>=2) finalizeDraft();
+    } else if((e.key === 'Delete' || e.key === 'Backspace') && selectedId!=null && !draft){
+      const obj = objects.find(o=>o.id===selectedId);
+      if(obj){ objects = objects.filter(o=>o.id!==selectedId); selectedId=null; save(); render(); }
+    }
+  });
+
+  // ---------- toolbar / header events ----------
+  toolsEl.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.tool-btn');
+    if(btn) setTool(btn.dataset.tool);
+  });
+  finishDraftBtn.addEventListener('click', finalizeDraft);
+  cancelDraftBtn.addEventListener('click', cancelDraft);
+  demoBtn.addEventListener('click', loadDemo);
+  clearBtn.addEventListener('click', ()=>{
+    objects = []; selectedId = null; draft = null;
+    save(); render();
+  });
+  objListEl.addEventListener('click', (e)=>{
+    const li = e.target.closest('.obj-item');
+    if(li){ selectedId = parseInt(li.dataset.obj,10); render(); }
+  });
+
+  // ---------- init ----------
+  buildGrid();
+  if(!load()) loadDemo();
+  setTool('mover');
+  render();
+})();
+</script>
