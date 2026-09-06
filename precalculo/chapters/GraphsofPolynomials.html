@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-br"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funções Polinomiais — Exercícios de Pré-Cálculo</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+</head><body>
+<header class="site-head"><a href="../index.html" class="brand">Exercícios de Pré-Cálculo</a></header>
+<main class="chapter">
+<p class="crumb">Funções Polinomiais e Racionais</p>
+<h1><span class="chnum">12</span> Funções Polinomiais</h1>
+<div class="resumo"><h2>Resumo do capítulo</h2><p>O capítulo generaliza o que já foi visto para funções afins e quadráticas
+para polinômios de grau qualquer: comportamento nas extremidades do gráfico,
+zeros e suas multiplicidades, e o efeito de cada multiplicidade na forma do
+gráfico perto de cada zero.</p></div>
+<nav class="chapnav"><a href="Inequalities.html">&larr; Equações e Inequações Lineares, Quadráticas e Modulares</a><a href="../index.html">Sumário</a><a href="Polydivision.html">Divisão de Polinômios &rarr;</a></nav>
+<ol class="exlist toplevel"><li id="ex-1" value="1" class="has-answer"><div class="ex-row"><div class="ex-body">  $f(x) = 4-x-3x^2$ <a id="polyfactsfirst"></a>
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $f(x) = 4-x-3x^2$ <br>
+Grau 2 <br>
+Termo principal $-3x^{2}$<br>
+Coeficiente principal $-3$<br>
+Termo constante $4$<br>
+Quando $x \rightarrow -\infty, \; f(x) \rightarrow -\infty$<br>
+Quando $x \rightarrow \infty, \; f(x) \rightarrow -\infty$<br></p><p></div></li><li id="ex-2" value="2" class="has-answer"><div class="ex-row"><div class="ex-body">  $g(x) = 3x^5 - 2x^2 + x + 1$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop">  $g(x) = 3x^5 - 2x^2 + x + 1$ <br>
+Grau 5 <br>
+Termo principal $3x^5$<br>
+Coeficiente principal $3$<br>
+Termo constante $1$<br>
+Quando $x \rightarrow -\infty, \; g(x) \rightarrow -\infty$<br>
+Quando $x \rightarrow \infty, \; g(x) \rightarrow \infty$<br></p><p></div></li><li id="ex-3" value="3" class="has-answer"><div class="ex-row"><div class="ex-body"> $q(r) = 1 - 16r^{4}$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $q(r) = 1 - 16r^{4}$<br>
+Grau 4 <br>
+Termo principal $-16r^{4}$<br>
+Coeficiente principal $-16$<br>
+Termo constante $1$<br>
+Quando $r \rightarrow -\infty, \; q(r) \rightarrow -\infty$<br>
+Quando $r \rightarrow \infty, \; q(r) \rightarrow -\infty$<br></p><p></div></li><li id="ex-4" value="4" class="has-answer"><div class="ex-row"><div class="ex-body"> $Z(b) = 42b - b^{3}$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $Z(b) = 42b - b^{3}$<br>
+Grau 3 <br>
+Termo principal $-b^{3}$<br>
+Coeficiente principal $-1$<br>
+Termo constante $0$<br>
+Quando $b \rightarrow -\infty, \; Z(b) \rightarrow \infty$<br>
+Quando $b \rightarrow \infty, \; Z(b) \rightarrow -\infty$<br></p><p></div></li><li id="ex-5" value="5" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = \sqrt{3}x^{17} + 22.5x^{10} - \pi x^{7} + \frac{1}{3}$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $f(x) = \sqrt{3}x^{17} + 22.5x^{10} - \pi x^{7} + \frac{1}{3}$<br>
+Grau 17 <br>
+Termo principal $\sqrt{3}x^{17}$<br>
+Coeficiente principal $\sqrt{3}$<br>
+Termo constante $\frac{1}{3}$<br>
+Quando $x \rightarrow -\infty, \; f(x) \rightarrow -\infty$<br>
+Quando $x \rightarrow \infty, \; f(x) \rightarrow \infty$<br></p><p></div></li><li id="ex-6" value="6" class="has-answer"><div class="ex-row"><div class="ex-body"> $s(t) = -4.9t^{2} + v_{\mbox{ $0$}}t + s_{\mbox{ $0$}}$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $s(t) = -4.9t^{2} + v_{\mbox{ $0$}}t + s_{\mbox{ $0$}}$<br>
+Grau 2 <br>
+Termo principal $-4.9t^{2}$<br>
+Coeficiente principal $-4.9$<br>
+Termo constante $s_{\mbox{ $0$}}$<br>
+Quando $t \rightarrow -\infty, \; s(t) \rightarrow -\infty$<br>
+Quando $t \rightarrow \infty, \; s(t) \rightarrow -\infty$<br></p><p></div></li><li id="ex-7" value="7" class="has-answer"><div class="ex-row"><div class="ex-body"> $P(x) = (x - 1)(x - 2)(x - 3)(x - 4)$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $P(x) = (x - 1)(x - 2)(x - 3)(x - 4)$<br>
+Grau 4 <br>
+Termo principal $x^{4}$<br>
+Coeficiente principal $1$<br>
+Termo constante $24$<br>
+Quando $x \rightarrow -\infty, \; P(x) \rightarrow \infty$<br>
+Quando $x \rightarrow \infty, \; P(x) \rightarrow \infty$<br></p><p></div></li><li id="ex-8" value="8" class="has-answer"><div class="ex-row"><div class="ex-body"> $p(t) = -t^2(3 - 5t)(t^{2} + t + 4)$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $p(t) = -t^2(3 - 5t)(t^{2} + t + 4)$<br>
+Grau 5 <br>
+Termo principal $5t^{5}$<br>
+Coeficiente principal $5$<br>
+Termo constante $0$<br>
+Quando $t \rightarrow -\infty, \; p(t) \rightarrow -\infty$<br>
+Quando $t \rightarrow \infty, \; p(t) \rightarrow \infty$<br></p><p></div></li><li id="ex-9" value="9" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = -2x^3(x+1)(x+2)^2$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $f(x) = -2x^3(x+1)(x+2)^2$ <br>
+Grau 6 <br>
+Termo principal $-2x^{6}$<br>
+Coeficiente principal $-2$<br>
+Termo constante $0$<br>
+Quando $x \rightarrow -\infty, \; f(x) \rightarrow -\infty$<br>
+Quando $x \rightarrow \infty, \; f(x) \rightarrow -\infty$<br></p><p></div></li><li id="ex-10" value="10" class="has-answer"><div class="ex-row"><div class="ex-body"> $G(t) = 4(t-2)^2\left(t+\frac{1}{2}\right)$ <a id="polyfactslast"></a></p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $G(t) = 4(t-2)^2\left(t+\frac{1}{2}\right)$ <br>
+Grau 3 <br>
+Termo principal $4t^3$<br>
+Coeficiente principal $4$<br>
+Termo constante $8$<br>
+Quando $t \rightarrow -\infty, \; G(t) \rightarrow -\infty$<br>
+Quando $t \rightarrow \infty, \; G(t) \rightarrow \infty$<br></p><p></div></li><li id="ex-11" value="11" class="has-answer"><div class="ex-row"><div class="ex-body"> $a(x) = x(x + 2)^{2}$ <a id="zeromultgraphfirst"></a>
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $a(x) = x(x + 2)^{2}$<br>
+$x = 0$ multiplicidade 1<br>
+$x = -2$ multiplicidade 2<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-2.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-12" value="12" class="has-answer"><div class="ex-row"><div class="ex-body"> $g(x) = x(x + 2)^{3}$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = x(x + 2)^{3}$<br>
+$x = 0$ multiplicidade 1<br>
+$x = -2$ multiplicidade 3<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-3.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-13" value="13" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = -2(x-2)^2(x+1)$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $f(x) = -2(x-2)^2(x+1)$<br>
+$x=2$ multiplicidade 2 <br>
+$x=-1$ multiplicidade 1<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-4.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-14" value="14" class="has-answer"><div class="ex-row"><div class="ex-body"> $g(x) = (2x+1)^2(x-3)$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = (2x+1)^2(x-3)$<br>
+$x=-\frac{1}{2}$ multiplicidade 2 <br>
+$x=3$ multiplicidade 1<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-5.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-15" value="15" class="has-answer"><div class="ex-row"><div class="ex-body"> $F(x) = x^{3}(x + 2)^{2}$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $F(x) = x^{3}(x + 2)^{2}$<br>
+$x = 0$ multiplicidade 3<br>
+$x = -2$ multiplicidade 2<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-6.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-16" value="16" class="has-answer"><div class="ex-row"><div class="ex-body"> $P(x) = (x - 1)(x - 2)(x - 3)(x - 4)$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $P(x) = (x - 1)(x - 2)(x - 3)(x - 4)$<br>
+$x = 1$ multiplicidade 1<br>
+$x = 2$ multiplicidade 1<br>
+$x = 3$ multiplicidade 1<br>
+$x = 4$ multiplicidade 1<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-7.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-17" value="17" class="has-answer"><div class="ex-row"><div class="ex-body"> $Q(x) = (x + 5)^{2}(x - 3)^{4}$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $Q(x) = (x + 5)^{2}(x - 3)^{4}$<br>
+$x = -5$ multiplicidade 2<br>
+$x = 3$ multiplicidade 4<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-8.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-18" value="18" class="has-answer"><div class="ex-row"><div class="ex-body"> $h(x) = x^2(x-2)^2(x+2)^2$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $f(x) = x^2(x-2)^2(x+2)^2$<br>
+$x = -2$ multiplicidade 2<br>
+$x = 0$ multiplicidade 2<br>
+$x = 2$ multiplicidade 2<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-9.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-19" value="19" class="has-answer"><div class="ex-row"><div class="ex-body"> $H(t) = (3-t)(t^2+1)$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $H(t) = (3-t)\left(t^2+1\right)$<br>
+$x =3$ multiplicidade 1<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-10.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-20" value="20" class="has-answer"><div class="ex-row"><div class="ex-body"> $Z(b) = b(42 - b^{2})$ <a id="zeromultgraphlast"></a></p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $Z(b) = b(42 - b^{2})$<br>
+$b = -\sqrt{42}$ multiplicidade 1<br>
+$b = 0$ multiplicidade 1<br>
+$b = \sqrt{42}$ multiplicidade 1<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-11.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-21" value="21" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = x^3$,  $g(x) = (x + 2)^{3} + 1$ <a id="polytransfirst"></a>
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = (x + 2)^{3} + 1$ <br> 
+domínio: $(-\infty, \infty)$ <br> 
+imagem: $(-\infty, \infty)$ <br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-12.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-22" value="22" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = x^4$, $g(x) = (x + 2)^{4} + 1$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = (x + 2)^{4} + 1$<br>
+domínio: $(-\infty, \infty)$<br>
+imagem: $[1, \infty)$<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-13.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-23" value="23" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = x^4$, $g(x) = 2 - 3(x - 1)^{4}$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = 2 - 3(x - 1)^{4}$<br>
+domínio: $(-\infty, \infty)$<br>
+imagem: $(-\infty, 2]$<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-14.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-24" value="24" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = x^5$, $g(x) = -x^{5} - 3$</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = -x^{5} - 3$<br>
+domínio: $(-\infty, \infty)$<br>
+imagem: $(-\infty, \infty)$<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-15.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-25" value="25" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = x^5$, $g(x) = (x+1)^5+10$
+</div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = (x+1)^5+10$<br>
+domínio: $(-\infty, \infty)$<br>
+imagem: $(-\infty, \infty)$<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-16.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-26" value="26" class="has-answer"><div class="ex-row"><div class="ex-body"> $f(x) = x^6$, $g(x) = 8-x^6$ <a id="polytranslast"></a></p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $g(x) = 8-x^{6}$<br>
+domínio: $(-\infty, \infty)$<br>
+imagem: $(-\infty, 8]$<br></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-17.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></li><li id="ex-27" value="27" class="has-answer"><div class="ex-row"><div class="ex-body"> Use o Teorema do Valor Intermediário para provar que $f(x) = x^{3} - 9x + 5$ tem um zero real em cada um dos seguintes intervalos: $[-4, -3], [0, 1]$ e $[2, 3]$.</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> Temos que $f(-4)=-23,\; f(-3)=5,\; f(0)=5,\; f(1)=-3,\; f(2)=-5\;$ e $f(3)=5$ portanto o Teorema do Valor Intermediário diz que  $f(x) = x^{3} - 9x + 5$ tem zeros  reais nos intervalos $[-4, -3], [0, 1]$ e $[2, 3]$.</p><p></div></li><li id="ex-28" value="28" class="has-answer"><div class="ex-row"><div class="ex-body">  Queremos fazer uma caixa sem tampa
+removendo quadrados de lado $x$ dos cantos de
+uma folha de papel de 8.5 por 11 polegadas. 
+Expresse o volume $V$ em função de $x$. Use 
+o GeoGebra para encontrar o valor de $x$ onde
+o volume é máximo e as dimensões e o volume 
+da caixa de volume máximo.</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop">  $V(x) = x(8.5-2x)(11-2x) = 4x^3-39x^2+93.5x$, $0 < x < 4.25$.  O volume é maximizado quando $x \approx 1.58$, portanto as dimensões da caixa com volume máximo são: altura $\approx$ 1.58 polegadas, largura $\approx$ 5.34 polegadas, e profundidade $\approx$ 7.84 polegadas.  O volume máximo é $\approx$ 66.15 polegadas cúbicas.</p><p></div></li><li id="ex-29" value="29" class="has-answer"><div class="ex-row"><div class="ex-body">  Use o GeoGebra para traçar o gráfico de $y = R(x)$ e determine o número de TVs que devem ser vendidas para maximizar a receita. Qual é a receita máxima? <a id="lcdmaxprofitexerfirst"></a></p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> O máximo ocorre quando $x \approx 6.305$ e $y \approx 1115.417$.  Uma vez que  $x$ representa o número de TVs vendidas em centenas, $x = 6.305$ corresponde a $630.5$ TVs.  Como não se pode vender meia TV, comparamos $R(6.30) \approx 1115.415$ e $R(6.31) \approx 1115.416$, portanto $631$ TVs resulta em uma receita ligeiramente maior.  Como $y$ representa a receita em <em>milhares</em> de dólares, a receita máxima é $\$ 1,\!115,\!416$.</p><p></div></li><li id="ex-30" value="30" class="has-answer"><div class="ex-row"><div class="ex-body"> Assuma que o custo, em <em>milhares</em> de dólares, para produzir $x$ <em>centenas</em> de TVs de LED é dado por $C(x) = 200x + 25$ para $x \geq 0$. Encontre e simplifique  a expressão para a função lucro $P(x)$.  (Lembre-se: Lucro = Receita - Custo).</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> $P(x) = R(x) - C(x) = -5x^3+35x^2-45x-25$, $0 \leq x \leq 10.07$.</p><p></div></li><li id="ex-31" value="31" class="has-answer"><div class="ex-row"><div class="ex-body">  Use o GeoGebra para traçar o gráfico de $y = P(x)$ e determine o número de TVs que devem ser vendidas para maximizar o lucro. Qual é o lucro máximo? <a id="lcdmaxprofitexerlast"></a></p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> O máximo ocorre quando $x \approx 3.897$ e $y \approx 35.255$.  Uma vez que $x$ representa o número de TVs vendidas em centenas, $x = 3.897$ corresponde a  $389.7$ TVs.  Como não se pode vender $0.7$ de uma TV, comparamos $P(3.89) \approx 35.254$ e $P(3.90) \approx 35.255$, portanto $390$ TVs resulta em um lucro ligeiramente maior.  Como $y$ representa o lucro em <em>milhares</em> de dólares, o lucro máximo é  $\$ 35,\!255$.</p><p></div></li><li id="ex-32" value="32" class="has-answer"><div class="ex-row"><div class="ex-body"> <a id="newportaboycost"></a> O custo para se fabricar $x$ unidades de um console de jogos é dado por $C(x) = .03x^{3} - 4.5x^{2} + 225x + 250$, para $x \geq 0$. Pesquisas de mercado indicam que a função preço-demanda é dada por $p(x) = -1.5x + 250$. Use o GeoGebra para encontrar o nível de produção $x$ que maximiza o lucro.</p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> Vender 71 consoles resulta em um lucro maximizado de \$5910.67.</p><p></div></li><li id="ex-33" value="33" class="has-answer"><div class="ex-row"><div class="ex-body"> <a id="boxnotopex"></a>De acordo com um serviço postal, uma caixa
+retangular para encomendas deve satisfazer a desigualdade &ldquo;Comprimento + Perímetro $\leq$ 130 polegadas&rdquo; para serviço expresso e &ldquo;Comprimento + Perímetro $\leq$ 108 polegadas&rdquo; para outros serviços.  Vamos assumir que temos uma caixa de fundo quadrado de lado  $x$ como desenhado abaixo.  O comprimento é o maior lado e o perímetro é a distância em torno da caixa nas outras duas dimensões, de modo que no caso o perímetro é $4x$.  </p><p><ol class="exlist"></p><p><li value="1"> <a id="girthbox1"></a> Assumindo que vamos usar o serviço expresso, onde Comprimento  + Perímetro  $=$ 130 polegadas, expresse o comprimento da caixa em termos de $x$ e então expresse o volume  $V$ da caixa
+em termos de $x$.</p><p></li><li value="2"> <a id="girthbox2"></a> Encontre as dimensões da caixa de maior volume que pode ser enviada pelo serviço expresso.</p><p></li><li value="3"> Repita os itens <a class="xref" href="GraphsofPolynomials.html#ex-33">33</a> e <a class="xref" href="GraphsofPolynomials.html#ex-33">33</a> para o caso de se usar  &ldquo;outros serviços&rdquo;.</p><p></li></ol></p><p><div class="center"></p><p><figure class="mfpic"><img src="../assets/fig/GraphsofPolynomials-1.svg" loading="lazy" alt="Gráfico"></figure></p><p></div></p><p></div><span class="ans-badge" tabindex="0" role="button" aria-label="Mostrar resposta">resposta</span></div><div class="ans-pop"> <ol class="exlist"></p><p><li value="1">  $V(x) = x^{2}(130 - 4x) = -4x^{3} + 130x^{2}$.  </p><p></li><li value="2"> O máximo de  $y = V(x)$ em $[0, 33] \times [0, 21000]$ ocorre em $(21.67, 20342.59)$, portanto as dimensões da caixa de volume máximo são $21.67\mbox{in.} \times 21.67\mbox{in.} \times 43.32\mbox{in.}$ para um volume de $20342.59\mbox{in.}^{3}$.</p><p></li><li value="3"> $V(x) = -4x^{3} + 108x^{2}$.  O máximo ocorre em $(18.00, 11664.00)$, portanto as dimensões da caixa de volume máximo são  $18.00\mbox{in.} \times 18.00\mbox{in.} \times 36\mbox{in.}$ para um volume de $11664.00\mbox{in.}^{3}$.</p><p></li></ol></p><p></div></li></ol>
+<nav class="chapnav"><a href="Inequalities.html">&larr; Equações e Inequações Lineares, Quadráticas e Modulares</a><a href="../index.html">Sumário</a><a href="Polydivision.html">Divisão de Polinômios &rarr;</a></nav>
+</main>
+<script src="../assets/app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  renderMathInElement(document.body, {delimiters: [
+    {left:'$', right:'$', display:false},
+    {left:'\\[', right:'\\]', display:true}
+  ]});
+});
+</script>
+</body></html>
