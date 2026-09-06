@@ -3,7 +3,8 @@ document.addEventListener("DOMContentLoaded", function () {
     var li = badge.closest("li.has-answer");
     if (!li) return;
     function toggle() {
-      li.classList.toggle("open");
+      var open = li.classList.toggle("open");
+      badge.setAttribute("aria-pressed", open ? "true" : "false");
     }
     badge.addEventListener("click", toggle);
     badge.addEventListener("keydown", function (e) {
