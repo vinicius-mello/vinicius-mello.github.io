@@ -220,7 +220,7 @@ ol.exlist.toplevel { margin-left: 2.1rem; }
   color: var(--warm);
   font-weight: 700;
 }
-li.has-answer:hover .ans-pop,
+li.has-answer:has(.ans-badge:hover, .ans-badge:focus) .ans-pop,
 li.has-answer.open .ans-pop {
   max-height: 3000px;
   opacity: 1;
