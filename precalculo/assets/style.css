@@ -281,22 +281,3 @@ a.brand:visited { color: #fff; }
   .ans-badge { align-self: flex-start; }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e7ebf1;
-    --muted: #9aa5b4;
-    --paper: #1b2230;
-    --bg: #12161f;
-    --primary: #6fa8dc;
-    --primary-dark: #4c86bd;
-    --accent: #7fb2e5;
-    --warm: #e3a35b;
-    --warm-bg: #2a2115;
-    --warm-border: #4a3821;
-    --border: #2a3140;
-    --summary-bg: #1c2838;
-  }
-  .site-head { background: #0d2338; }
-  .chnum { color: #0d2338; }
-  table.tbl tr:first-child td { color: #0d2338; }
-}
