@@ -1,0 +1,1081 @@
+<title>Mesa de SDF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-disco:#B8791A;
+    --c-retangulo:#157F6E;
+    --c-semiplano:#6E4FC2;
+    --c-capsula:#B0417A;
+    --c-warning:#B4590E;
+    --c-success:#1F9254;
+    --fill-in:#2955C8;
+    --fill-out:#FFFFFF;
+    --lvl-in:#B9CCF0;
+    --lvl-out:#F4E7D2;
+    --probe:#16233A;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-disco:#F0A94E;
+      --c-retangulo:#4FD8BE;
+      --c-semiplano:#A78BFA;
+      --c-capsula:#E86FA6;
+      --c-warning:#FBBF74;
+      --c-success:#4ADE80;
+      --fill-in:#6C93FF;
+      --fill-out:#0B1730;
+      --lvl-in:#22407C;
+      --lvl-out:#3B2F1E;
+      --probe:#E7EEFA;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-disco:#F0A94E;
+    --c-retangulo:#4FD8BE;
+    --c-semiplano:#A78BFA;
+    --c-capsula:#E86FA6;
+    --c-warning:#FBBF74;
+    --c-success:#4ADE80;
+    --fill-in:#6C93FF;
+    --fill-out:#0B1730;
+    --lvl-in:#22407C;
+    --lvl-out:#3B2F1E;
+    --probe:#E7EEFA;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Public Sans','Segoe UI',system-ui,sans-serif;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2{
+    font-family:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1320px;
+    margin:0 auto;
+    padding-inline:1rem;
+    padding-block:0.85rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+  }
+
+  /* header */
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; }
+  .brand-mark{
+    font-family:'IBM Plex Mono',monospace; font-weight:600;
+    font-size:1.05rem; color:var(--brand); line-height:1;
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem;
+    white-space:nowrap;
+  }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:60ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  /* workspace */
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(270px,310px) 1fr;
+    gap:0.75rem;
+    align-items:start;
+  }
+  @media (max-width:880px){ .workspace{ grid-template-columns:1fr; } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+    min-width:0;
+  }
+  .panel h2{
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:0.45rem;
+  }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.45rem 0 0; }
+
+  /* add buttons */
+  .tools{ display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; }
+  .tool-btn{
+    display:flex; flex-direction:column; align-items:flex-start; gap:0.05rem;
+    border:1.5px solid var(--acc); background:var(--paper); border-radius:7px;
+    padding:0.38rem 0.5rem; cursor:pointer; text-align:left;
+  }
+  .tool-btn:hover{ box-shadow:0 0 0 1px var(--acc) inset; }
+  .tool-btn .sym{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:0.82rem; color:var(--acc); }
+  .tool-btn .nm{ font-size:0.68rem; font-weight:600; text-transform:uppercase; letter-spacing:0.03em; color:var(--ink-muted); }
+  [data-type="disco"]{ --acc:var(--c-disco); }
+  [data-type="retangulo"]{ --acc:var(--c-retangulo); }
+  [data-type="semiplano"]{ --acc:var(--c-semiplano); }
+  [data-type="capsula"]{ --acc:var(--c-capsula); }
+
+  /* composition list */
+  .comp-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:0.3rem; }
+  .comp-empty{ font-size:0.76rem; color:var(--ink-muted); border:1px dashed var(--border); border-radius:6px; padding:0.55rem; text-align:center; }
+  .comp-item{
+    border-left:4px solid var(--acc);
+    background:var(--paper);
+    border-radius:0 5px 5px 0;
+    padding:0.3rem 0.4rem;
+    display:flex; flex-direction:column; gap:0.25rem;
+    cursor:pointer;
+  }
+  .comp-item.selected{ background:var(--paper-sunken); box-shadow:0 0 0 1px var(--acc) inset; }
+  .comp-item.hidden-shape{ opacity:0.5; }
+  .comp-row{ display:flex; align-items:center; gap:0.35rem; }
+  .comp-row select{
+    font-size:0.72rem; padding:0.12rem 0.2rem; border:1px solid var(--border);
+    border-radius:4px; background:var(--paper-raised); width:6.6rem;
+  }
+  .comp-start{ font-size:0.68rem; color:var(--ink-muted); width:6.6rem; text-transform:uppercase; letter-spacing:0.04em; }
+  .comp-name{ flex:1; font-size:0.78rem; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .comp-name .idx{ font-family:'IBM Plex Mono',monospace; color:var(--acc); margin-right:0.25rem; }
+  .icon-btn{
+    border:1px solid transparent; background:transparent; border-radius:4px;
+    font-size:0.78rem; line-height:1; padding:0.2rem 0.28rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .icon-btn:hover{ border-color:var(--border); color:var(--ink); }
+  .icon-btn:disabled{ opacity:0.3; cursor:default; }
+  .k-row{ display:flex; align-items:center; gap:0.4rem; font-size:0.72rem; color:var(--ink-muted); padding-left:0.2rem; }
+  .k-row input{ flex:1; accent-color:var(--acc); }
+  .mono{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.74rem; line-height:1.55;
+    background:var(--paper-sunken);
+    border-radius:6px; padding:0.45rem 0.6rem;
+    overflow-x:auto; white-space:nowrap;
+  }
+  .formula-box .main{ color:var(--brand); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  /* selected inspector */
+  .param-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.35rem 0.5rem; }
+  .param-grid label{ display:flex; flex-direction:column; gap:0.1rem; font-size:0.68rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.03em; font-weight:600; }
+  .param-grid input{
+    font-family:'IBM Plex Mono',monospace; font-size:0.78rem;
+    border:1px solid var(--border); border-radius:4px; background:var(--paper);
+    padding:0.2rem 0.3rem; width:100%;
+  }
+
+  /* view options */
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .seg button{
+    flex:1; border:none; background:var(--paper); font-size:0.74rem; font-weight:600;
+    padding:0.35rem 0.4rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  /* buttons */
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); }
+
+  /* board */
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .board{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    height:min(72svh,720px);
+    min-height:340px;
+  }
+  .board canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #overlay{ touch-action:none; cursor:crosshair; }
+  #overlay.grab{ cursor:grab; }
+  #overlay.grabbing{ cursor:grabbing; }
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:0.4rem;
+  }
+  .ro{
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:7px;
+    padding:0.35rem 0.55rem; min-width:0;
+  }
+  .ro .k{ font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .pill{ display:inline-block; font-size:0.74rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; border:1.5px solid currentColor; }
+  .pill.dentro{ color:var(--brand); }
+  .pill.fora{ color:var(--c-disco); }
+  .pill.borda{ color:var(--c-success); }
+  .note{
+    font-size:0.78rem; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--border); border-left:4px solid var(--c-warning);
+    border-radius:0 7px 7px 0; padding:0.4rem 0.6rem;
+  }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; }
+  .footer-note a{ color:var(--brand); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">s&lt;0</span>
+      <div class="brand-text">
+        <h1>Mesa de SDF</h1>
+        <p>Funções de distância com sinal e operações de conjunto: monte figuras com mín e máx, como no Capítulo 3 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label for="presetSel">Exemplo</label>
+      <select id="presetSel" class="ghost-btn"></select>
+      <button type="button" class="ghost-btn" id="clearBtn">Limpar mesa</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Acrescentar peça</h2>
+        <div class="tools" id="tools">
+          <button type="button" class="tool-btn" data-type="disco"><span class="sym">‖P−C‖−r</span><span class="nm">Disco</span></button>
+          <button type="button" class="tool-btn" data-type="retangulo"><span class="sym">|x|≤a, |y|≤b</span><span class="nm">Retângulo</span></button>
+          <button type="button" class="tool-btn" data-type="semiplano"><span class="sym">⟨P−P₀,n⟩</span><span class="nm">Semiplano</span></button>
+          <button type="button" class="tool-btn" data-type="capsula"><span class="sym">d(P,AB)−ρ</span><span class="nm">Cápsula</span></button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Composição</h2>
+        <ul class="comp-list" id="compList"></ul>
+        <div class="formula-box" id="formulaBox"></div>
+        <p class="hint">As peças são combinadas de cima para baixo: cada linha aplica sua operação ao resultado acumulado das anteriores.</p>
+      </div>
+
+      <div class="panel" id="inspector">
+        <h2 id="inspTitle">Peça selecionada</h2>
+        <div id="inspBody"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Visualização</h2>
+        <div class="seg" role="group" aria-label="Modo de visualização">
+          <button type="button" id="modeLevels" aria-pressed="true">Curvas de nível</button>
+          <button type="button" id="modeRegion" aria-pressed="false">Região s&lt;0</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="chkOutlines" checked> Contornos das peças</label>
+          <label><input type="checkbox" id="chkSafe" checked> Disco seguro em P</label>
+          <label><input type="checkbox" id="chkTrue" checked> Distância real à fronteira</label>
+          <label><input type="checkbox" id="chkRay"> <span>Raio de luz (<em>sphere tracing</em>)</span></label>
+        </div>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="board" id="board">
+        <canvas id="field" aria-hidden="true"></canvas>
+        <canvas id="overlay" role="img" aria-label="Plano cartesiano com a figura descrita pela função de distância com sinal; arraste as alças para modificar as peças e o ponto P."></canvas>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="note" id="note" hidden></div>
+      <p class="footer-note">Clique em um ponto vazio para mover o ponto <strong>P</strong>; clique dentro de uma peça para arrastá-la; use as alças da peça selecionada para mudar seu tamanho. Companheira do Capítulo 3 (“Curvas II: Lugares Geométricos e Funções de Distância”) de <em>Geometria Analítica com Aplicações</em> — Vinícius Mello &amp; Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const board = $('#board'), field = $('#field'), over = $('#overlay');
+  const fctx = field.getContext('2d'), octx = over.getContext('2d');
+
+  const TYPES = {
+    disco:     { name:'Disco' },
+    retangulo: { name:'Retângulo' },
+    semiplano: { name:'Semiplano' },
+    capsula:   { name:'Cápsula' },
+  };
+  const OPS = {
+    uniao: '∪ união (mín)',
+    inter: '∩ interseção (máx)',
+    dif:   '− diferença',
+    suave: '∪ suave (smin)',
+  };
+
+  const state = {
+    shapes: [],
+    sel: null,
+    mode: 'niveis',
+    outlines: true, safe: true, truth: true, ray: false,
+    probe: { x: -0.6, y: 0.2 },
+    rayO: { x: -2.6, y: -1.3 },
+    rayD: { x: -1.7, y: -0.8 },
+    nextId: 1,
+  };
+
+  // ---------- geometry ----------
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function smin(a, b, k){
+    if (k <= 0) return Math.min(a, b);
+    const h = Math.max(k - Math.abs(a - b), 0) / k;
+    return Math.min(a, b) - h * h * k / 4;
+  }
+  function sd(s, x, y){
+    const p = s.p;
+    switch (s.type){
+      case 'disco': return Math.hypot(x - p.cx, y - p.cy) - p.r;
+      case 'retangulo': {
+        const q1 = Math.abs(x - p.cx) - p.a, q2 = Math.abs(y - p.cy) - p.b;
+        return Math.hypot(Math.max(q1, 0), Math.max(q2, 0)) + Math.min(Math.max(q1, q2), 0);
+      }
+      case 'semiplano': return (x - p.px) * Math.cos(p.ang) + (y - p.py) * Math.sin(p.ang);
+      case 'capsula': {
+        const ux = p.bx - p.ax, uy = p.by - p.ay, wx = x - p.ax, wy = y - p.ay;
+        const uu = ux * ux + uy * uy;
+        const t = uu > 0 ? clamp((wx * ux + wy * uy) / uu, 0, 1) : 0;
+        return Math.hypot(wx - t * ux, wy - t * uy) - p.rho;
+      }
+    }
+    return Infinity;
+  }
+  let active = [];
+  function refreshActive(){ active = state.shapes.filter(s => s.visible); }
+  function compose(x, y){
+    const n = active.length;
+    if (!n) return Infinity;
+    let acc = sd(active[0], x, y);
+    for (let i = 1; i < n; i++){
+      const s = active[i], v = sd(s, x, y);
+      switch (s.op){
+        case 'uniao': acc = acc < v ? acc : v; break;
+        case 'inter': acc = acc > v ? acc : v; break;
+        case 'dif':   acc = acc > -v ? acc : -v; break;
+        case 'suave': acc = smin(acc, v, s.k); break;
+      }
+    }
+    return acc;
+  }
+
+  // ---------- shapes ----------
+  function makeShape(type, p, op = 'uniao', k = 0.5){
+    return { id: state.nextId++, type, p: { ...p }, op, k, visible: true, hang: 0 };
+  }
+  function defaultParams(type){
+    const n = state.shapes.length, off = (n % 4) * 0.3 - 0.45;
+    switch (type){
+      case 'disco': return { cx: off, cy: 0.3 - off * 0.5, r: 0.8 };
+      case 'retangulo': return { cx: off, cy: -0.2, a: 0.9, b: 0.6 };
+      case 'semiplano': return { px: 0, py: off - 0.4, ang: -Math.PI / 2 };
+      case 'capsula': return { ax: -1 + off, ay: -0.6, bx: 1 + off, by: 0.5, rho: 0.35 };
+    }
+  }
+  function translateShape(s, dx, dy){
+    const p = s.p;
+    if ('cx' in p){ p.cx += dx; p.cy += dy; }
+    if ('px' in p){ p.px += dx; p.py += dy; }
+    if ('ax' in p){ p.ax += dx; p.ay += dy; p.bx += dx; p.by += dy; }
+  }
+  function capsNormal(p){
+    const ux = p.bx - p.ax, uy = p.by - p.ay, L = Math.hypot(ux, uy) || 1;
+    return { x: -uy / L, y: ux / L };
+  }
+  function handlesOf(s){
+    const p = s.p;
+    switch (s.type){
+      case 'disco': return [
+        { key: 'c', x: p.cx, y: p.cy, kind: 'move' },
+        { key: 'r', x: p.cx + p.r * Math.cos(s.hang), y: p.cy + p.r * Math.sin(s.hang), kind: 'size' } ];
+      case 'retangulo': return [
+        { key: 'c', x: p.cx, y: p.cy, kind: 'move' },
+        { key: 'corner', x: p.cx + p.a, y: p.cy + p.b, kind: 'size' } ];
+      case 'semiplano': return [
+        { key: 'p0', x: p.px, y: p.py, kind: 'move' },
+        { key: 'n', x: p.px + 0.8 * Math.cos(p.ang), y: p.py + 0.8 * Math.sin(p.ang), kind: 'size' } ];
+      case 'capsula': {
+        const n = capsNormal(p), mx = (p.ax + p.bx) / 2, my = (p.ay + p.by) / 2;
+        return [
+          { key: 'a', x: p.ax, y: p.ay, kind: 'move' },
+          { key: 'b', x: p.bx, y: p.by, kind: 'move' },
+          { key: 'rho', x: mx + n.x * p.rho, y: my + n.y * p.rho, kind: 'size' } ];
+      }
+    }
+    return [];
+  }
+  function dragHandle(s, key, x, y){
+    const p = s.p;
+    switch (s.type){
+      case 'disco':
+        if (key === 'c'){ p.cx = x; p.cy = y; }
+        else { p.r = Math.max(0.05, Math.hypot(x - p.cx, y - p.cy)); s.hang = Math.atan2(y - p.cy, x - p.cx); }
+        break;
+      case 'retangulo':
+        if (key === 'c'){ p.cx = x; p.cy = y; }
+        else { p.a = Math.max(0.05, Math.abs(x - p.cx)); p.b = Math.max(0.05, Math.abs(y - p.cy)); }
+        break;
+      case 'semiplano':
+        if (key === 'p0'){ p.px = x; p.py = y; }
+        else if (Math.hypot(x - p.px, y - p.py) > 1e-6){ p.ang = Math.atan2(y - p.py, x - p.px); }
+        break;
+      case 'capsula':
+        if (key === 'a'){ p.ax = x; p.ay = y; }
+        else if (key === 'b'){ p.bx = x; p.by = y; }
+        else {
+          const n = capsNormal(p), mx = (p.ax + p.bx) / 2, my = (p.ay + p.by) / 2;
+          p.rho = Math.max(0.03, Math.abs((x - mx) * n.x + (y - my) * n.y));
+        }
+        break;
+    }
+  }
+
+  // ---------- presets ----------
+  const DEG = Math.PI / 180;
+  const PRESETS = [
+    { name: 'Lua crescente (exemplo do livro)', mode: 'niveis', probe: { x: -0.55, y: -0.35 }, build: () => [
+      makeShape('disco', { cx: 0, cy: 0, r: 1 }),
+      makeShape('disco', { cx: 0.5, cy: 0.3, r: 0.85 }, 'dif') ] },
+    { name: 'Dois discos: o mín subestima', mode: 'niveis', probe: { x: 0, y: 0 }, build: () => [
+      makeShape('disco', { cx: -0.5, cy: 0, r: 1 }),
+      makeShape('disco', { cx: 0.5, cy: 0, r: 1 }, 'uniao') ] },
+    { name: 'Anel', mode: 'niveis', probe: { x: 1.5, y: 0.4 }, build: () => [
+      makeShape('disco', { cx: 0, cy: 0, r: 2 }),
+      makeShape('disco', { cx: 0, cy: 0, r: 1 }, 'dif') ] },
+    { name: 'Casa', mode: 'regiao', probe: { x: 1.8, y: 1.2 }, build: () => [
+      makeShape('semiplano', { px: 0, py: 0.4, ang: -90 * DEG }),
+      makeShape('semiplano', { px: -1.4, py: 0.4, ang: Math.atan2(1.4, -1.2) }, 'inter'),
+      makeShape('semiplano', { px: 1.4, py: 0.4, ang: Math.atan2(1.4, 1.2) }, 'inter'),
+      makeShape('retangulo', { cx: 0, cy: -0.5, a: 1, b: 0.9 }, 'uniao'),
+      makeShape('retangulo', { cx: 0.4, cy: -1.0, a: 0.25, b: 0.6 }, 'dif'),
+      makeShape('retangulo', { cx: -0.45, cy: -0.3, a: 0.25, b: 0.22 }, 'dif') ] },
+    { name: 'Buraco de fechadura', mode: 'regiao', probe: { x: 0.05, y: 0.3 }, build: () => [
+      makeShape('retangulo', { cx: 0, cy: 0, a: 1.4, b: 1.8 }),
+      makeShape('disco', { cx: 0, cy: 0.45, r: 0.45 }, 'dif'),
+      makeShape('retangulo', { cx: 0, cy: -0.4, a: 0.2, b: 0.6 }, 'dif') ] },
+    { name: 'União suave (smin)', mode: 'niveis', probe: { x: 0.05, y: 0.9 }, build: () => [
+      makeShape('disco', { cx: -0.9, cy: 0, r: 0.65 }),
+      makeShape('disco', { cx: 0.85, cy: 0.15, r: 0.75 }, 'suave', 0.8),
+      makeShape('capsula', { ax: -0.6, ay: -1.4, bx: 0.9, by: -1.2, rho: 0.25 }, 'suave', 0.8) ] },
+    { name: 'Raio de luz (sphere tracing)', mode: 'niveis', probe: { x: -2.2, y: 1.4 }, ray: true, build: () => [
+      makeShape('disco', { cx: 0.9, cy: 0.1, r: 0.8 }),
+      makeShape('retangulo', { cx: -0.7, cy: 1.3, a: 0.6, b: 0.35 }, 'uniao'),
+      makeShape('capsula', { ax: -1.2, ay: -1.6, bx: 0.2, by: -1.1, rho: 0.2 }, 'uniao') ] },
+  ];
+  function loadPreset(i){
+    const pr = PRESETS[i];
+    state.shapes = pr.build();
+    state.sel = state.shapes.length ? state.shapes[state.shapes.length - 1].id : null;
+    state.probe = { ...pr.probe };
+    setMode(pr.mode);
+    state.ray = !!pr.ray;
+    $('#chkRay').checked = state.ray;
+    if (pr.ray){ state.rayO = { x: -2.7, y: -0.9 }; state.rayD = { x: -1.8, y: -0.5 }; }
+    changed();
+  }
+
+  // ---------- view ----------
+  let W = 0, H = 0, ppu = 100, dpr = 1;
+  const toS = (x, y) => ({ x: W / 2 + x * ppu, y: H / 2 - y * ppu });
+  const toW = (sx, sy) => ({ x: (sx - W / 2) / ppu, y: (H / 2 - sy) / ppu });
+
+  function resize(){
+    const r = board.getBoundingClientRect();
+    W = Math.max(1, Math.round(r.width)); H = Math.max(1, Math.round(r.height));
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ppu = Math.min(W, H) / 6.4;
+    over.width = Math.round(W * dpr); over.height = Math.round(H * dpr);
+    requestField(false);
+  }
+
+  // ---------- colors ----------
+  let C = {};
+  function hex(v){
+    v = v.trim();
+    if (v[0] === '#'){
+      if (v.length === 4) v = '#' + v[1] + v[1] + v[2] + v[2] + v[3] + v[3];
+      return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+    }
+    const m = v.match(/\d+/g); return m ? m.slice(0, 3).map(Number) : [0, 0, 0];
+  }
+  function readColors(){
+    const cs = getComputedStyle(document.documentElement);
+    const g = n => cs.getPropertyValue(n).trim();
+    C = {
+      fillIn: hex(g('--fill-in')), fillOut: hex(g('--fill-out')),
+      lvlIn: hex(g('--lvl-in')), lvlOut: hex(g('--lvl-out')), ink: hex(g('--ink')),
+      inkCss: g('--ink'), muted: g('--ink-muted'), brand: g('--brand'), probe: g('--probe'),
+      warn: g('--c-warning'), ok: g('--c-success'),
+      type: { disco: g('--c-disco'), retangulo: g('--c-retangulo'), semiplano: g('--c-semiplano'), capsula: g('--c-capsula') },
+    };
+  }
+
+  // ---------- field rendering ----------
+  let boundary = [];  // flat [x0,y0,x1,y1,...] zero crossings in world coords
+  let pending = 0, pendingLow = false;
+  function requestField(low){
+    pendingLow = low;
+    if (!pending) pending = requestAnimationFrame(() => { pending = 0; renderField(pendingLow ? 0.5 : Math.min(dpr, 1.25)); drawOverlay(); });
+  }
+  function renderField(rs){
+    const w = Math.max(1, Math.round(W * rs)), h = Math.max(1, Math.round(H * rs));
+    if (field.width !== w || field.height !== h){ field.width = w; field.height = h; }
+    const img = fctx.createImageData(w, h), d = img.data;
+    const pix = 1 / (ppu * rs);            // world units per field pixel
+    const aa = 1 / ppu;                    // world units per screen pixel
+    const x0 = -W / 2 / ppu, y0 = H / 2 / ppu;
+    const prevRow = new Float64Array(w);
+    const bnd = [];
+    const levels = state.mode === 'niveis';
+    const fi = C.fillIn, fo = C.fillOut, li = C.lvlIn, lo = C.lvlOut, ink = C.ink;
+    const TWO_PI_OVER = 2 * Math.PI / 0.25;
+    let k = 0;
+    for (let j = 0; j < h; j++){
+      const wy = y0 - (j + 0.5) * pix;
+      let prev = 0;
+      for (let i = 0; i < w; i++){
+        const wx = x0 + (i + 0.5) * pix;
+        const s = compose(wx, wy);
+        let r, g, b;
+        if (!isFinite(s)){ r = fo[0]; g = fo[1]; b = fo[2]; }
+        else if (levels){
+          const base = s < 0 ? li : lo;
+          const shade = 0.87 + 0.13 * Math.cos(TWO_PI_OVER * s);
+          const e = 1 - clamp(Math.abs(s) / (1.6 * aa), 0, 1);
+          r = base[0] * shade * (1 - e) + ink[0] * e;
+          g = base[1] * shade * (1 - e) + ink[1] * e;
+          b = base[2] * shade * (1 - e) + ink[2] * e;
+        } else {
+          const a = clamp(0.5 - s / aa, 0, 1);
+          r = fo[0] + (fi[0] - fo[0]) * a; g = fo[1] + (fi[1] - fo[1]) * a; b = fo[2] + (fi[2] - fo[2]) * a;
+        }
+        d[k++] = r; d[k++] = g; d[k++] = b; d[k++] = 255;
+        if (isFinite(s)){
+          if (i > 0 && (s < 0) !== (prev < 0) && isFinite(prev)){
+            const t = prev / (prev - s); bnd.push(wx - pix + t * pix, wy);
+          }
+          const up = prevRow[i];
+          if (j > 0 && (s < 0) !== (up < 0) && isFinite(up)){
+            const t = up / (up - s); bnd.push(wx, wy + pix - t * pix);
+          }
+        }
+        prevRow[i] = s; prev = s;
+      }
+    }
+    fctx.putImageData(img, 0, 0);
+    boundary = bnd;
+  }
+
+  function nearestBoundary(px, py){
+    let best = Infinity, bx = 0, by = 0;
+    for (let i = 0; i < boundary.length; i += 2){
+      const dx = boundary[i] - px, dy = boundary[i + 1] - py, dd = dx * dx + dy * dy;
+      if (dd < best){ best = dd; bx = boundary[i]; by = boundary[i + 1]; }
+    }
+    return isFinite(best) ? { d: Math.sqrt(best), x: bx, y: by } : null;
+  }
+
+  // ---------- overlay ----------
+  function drawGrid(){
+    const c = octx;
+    const xm = Math.ceil(W / 2 / ppu), ym = Math.ceil(H / 2 / ppu);
+    c.lineWidth = 1;
+    c.strokeStyle = C.inkCss; c.globalAlpha = 0.1;
+    c.beginPath();
+    for (let x = -xm; x <= xm; x++){ const s = toS(x, 0).x; c.moveTo(s, 0); c.lineTo(s, H); }
+    for (let y = -ym; y <= ym; y++){ const s = toS(0, y).y; c.moveTo(0, s); c.lineTo(W, s); }
+    c.stroke();
+    c.globalAlpha = 0.35;
+    c.beginPath();
+    const o = toS(0, 0);
+    c.moveTo(0, o.y); c.lineTo(W, o.y); c.moveTo(o.x, 0); c.lineTo(o.x, H);
+    c.stroke();
+    c.globalAlpha = 0.6;
+    c.fillStyle = C.inkCss; c.font = '10px "IBM Plex Mono", monospace';
+    c.textAlign = 'center'; c.textBaseline = 'top';
+    for (let x = -xm; x <= xm; x++){ if (x) { const s = toS(x, 0); c.fillText(x < 0 ? '−' + (-x) : x, s.x, s.y + 3); } }
+    c.textAlign = 'right'; c.textBaseline = 'middle';
+    for (let y = -ym; y <= ym; y++){ if (y) { const s = toS(0, y); c.fillText(y < 0 ? '−' + (-y) : y, s.x - 4, s.y); } }
+    c.globalAlpha = 1;
+  }
+  function outlinePath(s){
+    const c = octx, p = s.p;
+    c.beginPath();
+    switch (s.type){
+      case 'disco': { const o = toS(p.cx, p.cy); c.arc(o.x, o.y, p.r * ppu, 0, 2 * Math.PI); break; }
+      case 'retangulo': { const o = toS(p.cx - p.a, p.cy + p.b); c.rect(o.x, o.y, 2 * p.a * ppu, 2 * p.b * ppu); break; }
+      case 'semiplano': {
+        const vx = -Math.sin(p.ang), vy = Math.cos(p.ang), L = 50;
+        const a = toS(p.px - L * vx, p.py - L * vy), b = toS(p.px + L * vx, p.py + L * vy);
+        c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); break;
+      }
+      case 'capsula': {
+        const A = toS(p.ax, p.ay), B = toS(p.bx, p.by), R = p.rho * ppu;
+        const ux = B.x - A.x, uy = B.y - A.y, L = Math.hypot(ux, uy);
+        if (L < 1e-6){ c.arc(A.x, A.y, R, 0, 2 * Math.PI); break; }
+        const nx = -uy / L, ny = ux / L, ang = Math.atan2(ny, nx);
+        c.moveTo(A.x + nx * R, A.y + ny * R);
+        c.lineTo(B.x + nx * R, B.y + ny * R);
+        c.arc(B.x, B.y, R, ang, ang - Math.PI, true);
+        c.lineTo(A.x - nx * R, A.y - ny * R);
+        c.arc(A.x, A.y, R, ang - Math.PI, ang - 2 * Math.PI, true);
+        c.closePath(); break;
+      }
+    }
+  }
+  function drawShapes(){
+    const c = octx;
+    for (const s of state.shapes){
+      if (!s.visible) continue;
+      const isSel = s.id === state.sel;
+      if (!state.outlines && !isSel) continue;
+      c.strokeStyle = C.type[s.type];
+      c.lineWidth = isSel ? 2 : 1.4;
+      c.setLineDash(isSel ? [] : [5, 4]);
+      outlinePath(s); c.stroke();
+      c.setLineDash([]);
+      if (s.type === 'semiplano'){
+        const p = s.p, a = toS(p.px, p.py), b = toS(p.px + 0.8 * Math.cos(p.ang), p.py + 0.8 * Math.sin(p.ang));
+        arrow(a, b, C.type[s.type], isSel ? 1.8 : 1.2);
+      }
+      if (s.type === 'capsula' && isSel){
+        const a = toS(s.p.ax, s.p.ay), b = toS(s.p.bx, s.p.by);
+        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.lineWidth = 1.2; c.stroke();
+      }
+    }
+    const sel = selected();
+    if (sel && sel.visible){
+      for (const h of handlesOf(sel)){
+        const o = toS(h.x, h.y);
+        c.beginPath();
+        if (h.kind === 'move') c.arc(o.x, o.y, 5.5, 0, 2 * Math.PI);
+        else c.rect(o.x - 5, o.y - 5, 10, 10);
+        c.fillStyle = C.type[sel.type]; c.fill();
+        c.lineWidth = 1.5; c.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--paper-raised'); c.stroke();
+      }
+    }
+  }
+  function arrow(a, b, color, lw){
+    const c = octx, ang = Math.atan2(b.y - a.y, b.x - a.x);
+    c.strokeStyle = color; c.fillStyle = color; c.lineWidth = lw;
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+    c.beginPath(); c.moveTo(b.x, b.y);
+    c.lineTo(b.x - 9 * Math.cos(ang - 0.4), b.y - 9 * Math.sin(ang - 0.4));
+    c.lineTo(b.x - 9 * Math.cos(ang + 0.4), b.y - 9 * Math.sin(ang + 0.4));
+    c.closePath(); c.fill();
+  }
+  function dot(pt, r, fill, stroke){
+    const c = octx, o = toS(pt.x, pt.y);
+    c.beginPath(); c.arc(o.x, o.y, r, 0, 2 * Math.PI);
+    c.fillStyle = fill; c.fill();
+    if (stroke){ c.lineWidth = 1.5; c.strokeStyle = stroke; c.stroke(); }
+  }
+  function label(pt, text, dx, dy, color){
+    const c = octx, o = toS(pt.x, pt.y);
+    c.font = '600 12px "Public Sans", sans-serif';
+    c.fillStyle = color; c.textAlign = 'left'; c.textBaseline = 'middle';
+    c.fillText(text, o.x + dx, o.y + dy);
+  }
+
+  let rayInfo = null;
+  function drawRay(){
+    rayInfo = null;
+    if (!state.ray) return;
+    const c = octx, O = state.rayO;
+    let dx = state.rayD.x - O.x, dy = state.rayD.y - O.y;
+    const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+    const tMax = 14, eps = 0.004;
+    const a = toS(O.x, O.y), far = toS(O.x + dx * tMax, O.y + dy * tMax);
+    c.strokeStyle = C.muted; c.lineWidth = 1; c.setLineDash([2, 4]);
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(far.x, far.y); c.stroke(); c.setLineDash([]);
+    let t = 0, steps = 0, hit = null;
+    const s0 = compose(O.x, O.y);
+    if (s0 < 0){ rayInfo = { inside: true }; }
+    else {
+      for (; steps < 80; steps++){
+        const px = O.x + dx * t, py = O.y + dy * t;
+        const s = compose(px, py);
+        if (!isFinite(s)) { t = tMax + 1; break; }
+        const o = toS(px, py);
+        c.globalAlpha = 0.55; c.strokeStyle = C.brand; c.lineWidth = 1;
+        c.beginPath(); c.arc(o.x, o.y, Math.abs(s) * ppu, 0, 2 * Math.PI); c.stroke();
+        c.globalAlpha = 1;
+        dot({ x: px, y: py }, 2.5, C.brand);
+        if (s < eps){ hit = { x: px, y: py }; break; }
+        t += s;
+        if (t > tMax) break;
+      }
+      rayInfo = { steps: hit ? steps + 1 : steps, hit, t };
+      if (hit) dot(hit, 5, C.warn, C.inkCss);
+    }
+    arrow(toS(O.x, O.y), toS(state.rayD.x, state.rayD.y), C.inkCss, 1.6);
+    dot(O, 5.5, C.inkCss);
+    label(O, 'O', -16, -10, C.inkCss);
+  }
+
+  let probeInfo = null;
+  function drawProbe(){
+    const c = octx, P = state.probe, s = compose(P.x, P.y);
+    const nb = nearestBoundary(P.x, P.y);
+    probeInfo = { s, nb };
+    const o = toS(P.x, P.y);
+    if (isFinite(s)){
+      if (state.truth && nb){
+        const q = toS(nb.x, nb.y);
+        c.strokeStyle = C.warn; c.lineWidth = 1.4; c.setLineDash([]);
+        c.beginPath(); c.moveTo(o.x, o.y); c.lineTo(q.x, q.y); c.stroke();
+        dot(nb, 3.5, C.warn);
+        if (Math.abs(nb.d - Math.abs(s)) > 2.5 / ppu){
+          c.globalAlpha = 0.8; c.setLineDash([2, 3]);
+          c.beginPath(); c.arc(o.x, o.y, nb.d * ppu, 0, 2 * Math.PI); c.stroke();
+          c.setLineDash([]); c.globalAlpha = 1;
+        }
+      }
+      if (state.safe){
+        c.strokeStyle = C.probe; c.lineWidth = 1.6; c.setLineDash([6, 4]);
+        c.beginPath(); c.arc(o.x, o.y, Math.abs(s) * ppu, 0, 2 * Math.PI); c.stroke();
+        c.setLineDash([]);
+      }
+    }
+    dot(P, 5.5, C.probe, getComputedStyle(document.documentElement).getPropertyValue('--paper-raised'));
+    label(P, 'P', 9, -11, C.probe);
+  }
+
+  function drawOverlay(){
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    octx.clearRect(0, 0, W, H);
+    drawGrid();
+    drawShapes();
+    drawRay();
+    drawProbe();
+    updateReadout();
+  }
+
+  // ---------- text ----------
+  const SUB = '₀₁₂₃₄₅₆₇₈₉';
+  const sub = n => String(n).split('').map(ch => SUB[+ch]).join('');
+  const f = v => (Math.abs(v) < 0.005 ? '0.00' : (v < 0 ? '−' + (-v).toFixed(2) : v.toFixed(2)));
+  const pt = (x, y) => `(${f(x)}, ${f(y)})`;
+  function indexOf(s){ return state.shapes.indexOf(s) + 1; }
+  function shapeFormula(s){
+    const p = s.p, i = sub(indexOf(s));
+    switch (s.type){
+      case 'disco': return `s${i}(P) = ‖P − ${pt(p.cx, p.cy)}‖ − ${f(p.r)}`;
+      case 'retangulo': return `s${i}: retângulo, centro ${pt(p.cx, p.cy)}, a = ${f(p.a)}, b = ${f(p.b)}`;
+      case 'semiplano': return `s${i}(P) = ⟨P − ${pt(p.px, p.py)}, ${pt(Math.cos(p.ang), Math.sin(p.ang))}⟩`;
+      case 'capsula': return `s${i}(P) = d(P, AB) − ${f(p.rho)},  A = ${pt(p.ax, p.ay)}, B = ${pt(p.bx, p.by)}`;
+    }
+  }
+  function composedFormula(){
+    if (!active.length) return 's(P) = +∞  (mesa vazia)';
+    let e = 's' + sub(indexOf(active[0]));
+    for (let i = 1; i < active.length; i++){
+      const s = active[i], v = 's' + sub(indexOf(s));
+      switch (s.op){
+        case 'uniao': e = `min(${e}, ${v})`; break;
+        case 'inter': e = `max(${e}, ${v})`; break;
+        case 'dif':   e = `max(${e}, −${v})`; break;
+        case 'suave': e = `smin(${e}, ${v}; k=${f(s.k)})`; break;
+      }
+    }
+    return 's = ' + e;
+  }
+
+  function updateReadout(){
+    const P = state.probe, info = probeInfo || { s: Infinity, nb: null };
+    const s = info.s;
+    let status = '<span class="pill fora">fora</span>';
+    if (isFinite(s)){
+      if (Math.abs(s) < 0.01) status = '<span class="pill borda">na fronteira</span>';
+      else if (s < 0) status = '<span class="pill dentro">dentro</span>';
+    }
+    const cards = [
+      ['Ponto P', pt(P.x, P.y)],
+      ['s(P)', isFinite(s) ? f(s) : '+∞'],
+      ['Situação', status],
+      ['Disco seguro |s(P)|', isFinite(s) ? f(Math.abs(s)) : '—'],
+      ['Distância real à fronteira', info.nb && isFinite(s) ? '≈ ' + f(info.nb.d) : '—'],
+    ];
+    if (state.ray && rayInfo){
+      cards.push(['Raio a partir de O', rayInfo.inside ? 'O está dentro da figura'
+        : rayInfo.hit ? `atinge em ${rayInfo.steps} passos, t ≈ ${f(rayInfo.t)}` : `não atinge (${rayInfo.steps} passos)`]);
+    }
+    $('#readout').innerHTML = cards.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+    const note = $('#note');
+    if (isFinite(s) && info.nb && state.truth && Math.abs(info.nb.d - Math.abs(s)) > 2.5 / ppu){
+      note.hidden = false;
+      note.innerHTML = `Aqui |s(P)| = ${f(Math.abs(s))}, mas a fronteira mais próxima está a ≈ ${f(info.nb.d)}. ` +
+        `A função composta tem o sinal certo, mas <strong>subestima</strong> a distância: é um limitante de distância, não uma SDF exata (Capítulo 3, Seção 6). O disco seguro continua seguro, só que menor.`;
+    } else note.hidden = true;
+
+    // live formulas
+    const fb = $('#formulaBox');
+    fb.innerHTML = `<div class="main">${composedFormula()}</div>` +
+      state.shapes.filter(x => x.visible).map(x => {
+        const v = sd(x, P.x, P.y);
+        return `<div class="sub">${shapeFormula(x)}  →  ${f(v)}</div>`;
+      }).join('');
+  }
+
+  // ---------- sidebar ----------
+  function selected(){ return state.shapes.find(s => s.id === state.sel) || null; }
+  function renderList(){
+    const ul = $('#compList');
+    if (!state.shapes.length){
+      ul.innerHTML = '<li class="comp-empty">Mesa vazia. Acrescente uma peça acima ou escolha um exemplo.</li>';
+      return;
+    }
+    const firstVisible = state.shapes.find(s => s.visible);
+    ul.innerHTML = state.shapes.map((s, i) => {
+      const isFirst = s === firstVisible;
+      const opCtl = isFirst
+        ? '<span class="comp-start">início</span>'
+        : `<select data-act="op" data-id="${s.id}" aria-label="Operação da peça ${i + 1}">${Object.entries(OPS).map(([k, v]) => `<option value="${k}"${k === s.op ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
+      const kRow = (!isFirst && s.op === 'suave')
+        ? `<div class="k-row"><span class="mono">k</span><input type="range" min="0.05" max="1.5" step="0.05" value="${s.k}" data-act="k" data-id="${s.id}" aria-label="Parâmetro k da união suave"><span class="mono">${f(s.k)}</span></div>` : '';
+      return `<li class="comp-item${s.id === state.sel ? ' selected' : ''}${s.visible ? '' : ' hidden-shape'}" data-type="${s.type}" data-id="${s.id}">
+        <div class="comp-row">
+          ${opCtl}
+          <span class="comp-name"><span class="idx">s${sub(i + 1)}</span>${TYPES[s.type].name}</span>
+          <button type="button" class="icon-btn" data-act="up" data-id="${s.id}" ${i === 0 ? 'disabled' : ''} aria-label="Subir">↑</button>
+          <button type="button" class="icon-btn" data-act="down" data-id="${s.id}" ${i === state.shapes.length - 1 ? 'disabled' : ''} aria-label="Descer">↓</button>
+          <button type="button" class="icon-btn" data-act="vis" data-id="${s.id}" aria-label="${s.visible ? 'Ocultar' : 'Mostrar'}">${s.visible ? '◉' : '○'}</button>
+          <button type="button" class="icon-btn" data-act="del" data-id="${s.id}" aria-label="Remover">✕</button>
+        </div>${kRow}</li>`;
+    }).join('');
+  }
+
+  const PARAMS = {
+    disco: [['cx', 'centro x'], ['cy', 'centro y'], ['r', 'raio r']],
+    retangulo: [['cx', 'centro x'], ['cy', 'centro y'], ['a', 'semilado a'], ['b', 'semilado b']],
+    semiplano: [['px', 'P₀ x'], ['py', 'P₀ y'], ['ang', 'normal (graus)']],
+    capsula: [['ax', 'A x'], ['ay', 'A y'], ['bx', 'B x'], ['by', 'B y'], ['rho', 'raio ρ']],
+  };
+  function renderInspector(){
+    const s = selected(), body = $('#inspBody');
+    if (!s){
+      $('#inspTitle').textContent = 'Peça selecionada';
+      body.innerHTML = '<p class="hint" style="margin:0">Selecione uma peça na lista ou clique dentro dela na mesa.</p>';
+      return;
+    }
+    $('#inspTitle').textContent = `s${sub(indexOf(s))} · ${TYPES[s.type].name}`;
+    body.innerHTML = `<div class="param-grid">${PARAMS[s.type].map(([k, lbl]) => {
+      const v = k === 'ang' ? s.p.ang / DEG : s.p[k];
+      return `<label>${lbl}<input type="number" step="${k === 'ang' ? 5 : 0.05}" id="prm-${k}" data-k="${k}" value="${(+v).toFixed(2)}"></label>`;
+    }).join('')}</div>`;
+  }
+  function syncInspectorValues(){
+    const s = selected(); if (!s) return;
+    for (const [k] of PARAMS[s.type]){
+      const el = document.getElementById('prm-' + k);
+      if (el && document.activeElement !== el){
+        const v = k === 'ang' ? s.p.ang / DEG : s.p[k];
+        el.value = (+v).toFixed(2);
+      }
+    }
+  }
+
+  function changed(full = true){
+    refreshActive();
+    if (full){ renderList(); renderInspector(); }
+    else syncInspectorValues();
+    requestField(!full);
+  }
+
+  // ---------- events: sidebar ----------
+  $('#tools').addEventListener('click', e => {
+    const b = e.target.closest('.tool-btn'); if (!b) return;
+    const s = makeShape(b.dataset.type, defaultParams(b.dataset.type), state.shapes.length ? 'uniao' : 'uniao');
+    state.shapes.push(s); state.sel = s.id;
+    changed();
+  });
+  $('#compList').addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]');
+    const li = e.target.closest('.comp-item');
+    if (btn && btn.tagName === 'BUTTON'){
+      const id = +btn.dataset.id, i = state.shapes.findIndex(s => s.id === id), s = state.shapes[i];
+      switch (btn.dataset.act){
+        case 'up': if (i > 0) [state.shapes[i - 1], state.shapes[i]] = [state.shapes[i], state.shapes[i - 1]]; break;
+        case 'down': if (i < state.shapes.length - 1) [state.shapes[i + 1], state.shapes[i]] = [state.shapes[i], state.shapes[i + 1]]; break;
+        case 'vis': s.visible = !s.visible; break;
+        case 'del': state.shapes.splice(i, 1); if (state.sel === id) state.sel = null; break;
+      }
+      changed(); return;
+    }
+    if (li && !e.target.closest('select,input')){ state.sel = +li.dataset.id; changed(); }
+  });
+  $('#compList').addEventListener('change', e => {
+    const el = e.target;
+    if (el.dataset.act === 'op'){
+      const s = state.shapes.find(x => x.id === +el.dataset.id); s.op = el.value; changed();
+    }
+  });
+  $('#compList').addEventListener('input', e => {
+    const el = e.target;
+    if (el.dataset.act === 'k'){
+      const s = state.shapes.find(x => x.id === +el.dataset.id); s.k = +el.value;
+      el.nextElementSibling.textContent = f(s.k);
+      changed(false);
+    }
+  });
+  $('#inspBody').addEventListener('input', e => {
+    const el = e.target, s = selected(); if (!s || !el.dataset.k) return;
+    let v = parseFloat(el.value); if (!isFinite(v)) return;
+    const k = el.dataset.k;
+    if (k === 'ang') v *= DEG;
+    if (['r', 'a', 'b', 'rho'].includes(k)) v = Math.max(0.03, v);
+    s.p[k] = v;
+    changed(false);
+  });
+
+  function setMode(m){
+    state.mode = m;
+    $('#modeLevels').setAttribute('aria-pressed', m === 'niveis');
+    $('#modeRegion').setAttribute('aria-pressed', m === 'regiao');
+  }
+  $('#modeLevels').addEventListener('click', () => { setMode('niveis'); requestField(false); });
+  $('#modeRegion').addEventListener('click', () => { setMode('regiao'); requestField(false); });
+  $('#chkOutlines').addEventListener('change', e => { state.outlines = e.target.checked; drawOverlay(); });
+  $('#chkSafe').addEventListener('change', e => { state.safe = e.target.checked; drawOverlay(); });
+  $('#chkTrue').addEventListener('change', e => { state.truth = e.target.checked; drawOverlay(); });
+  $('#chkRay').addEventListener('change', e => { state.ray = e.target.checked; drawOverlay(); });
+
+  const presetSel = $('#presetSel');
+  presetSel.innerHTML = PRESETS.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+  presetSel.addEventListener('change', () => loadPreset(+presetSel.value));
+  $('#clearBtn').addEventListener('click', () => { state.shapes = []; state.sel = null; state.ray = false; $('#chkRay').checked = false; changed(); });
+
+  // ---------- events: board ----------
+  let drag = null;
+  function evWorld(e){
+    const r = over.getBoundingClientRect();
+    return { sx: e.clientX - r.left, sy: e.clientY - r.top, ...toW(e.clientX - r.left, e.clientY - r.top) };
+  }
+  function near(sx, sy, pt, tol = 11){ const o = toS(pt.x, pt.y); return Math.hypot(o.x - sx, o.y - sy) <= tol; }
+  function hitTest(w){
+    if (near(w.sx, w.sy, state.probe)) return { kind: 'probe' };
+    if (state.ray){
+      if (near(w.sx, w.sy, state.rayO)) return { kind: 'rayO' };
+      if (near(w.sx, w.sy, state.rayD)) return { kind: 'rayD' };
+    }
+    const sel = selected();
+    if (sel && sel.visible){
+      for (const h of handlesOf(sel)) if (near(w.sx, w.sy, h)) return { kind: 'handle', shape: sel, key: h.key };
+    }
+    for (const s of state.shapes){
+      if (!s.visible || s === sel) continue;
+      for (const h of handlesOf(s)) if (h.kind === 'move' && near(w.sx, w.sy, h, 8)) return { kind: 'handle', shape: s, key: h.key };
+    }
+    for (let i = state.shapes.length - 1; i >= 0; i--){
+      const s = state.shapes[i];
+      if (!s.visible || s.type === 'semiplano') continue;
+      if (sd(s, w.x, w.y) < 0) return { kind: 'body', shape: s };
+    }
+    return { kind: 'empty' };
+  }
+  over.addEventListener('pointerdown', e => {
+    const w = evWorld(e), h = hitTest(w);
+    over.setPointerCapture(e.pointerId);
+    over.classList.add('grabbing');
+    if (h.kind === 'empty'){ state.probe = { x: w.x, y: w.y }; drag = { kind: 'probe' }; drawOverlay(); return; }
+    if (h.kind === 'handle' || h.kind === 'body'){
+      if (state.sel !== h.shape.id){ state.sel = h.shape.id; renderList(); renderInspector(); }
+    }
+    drag = { ...h, last: w };
+    drawOverlay();
+  });
+  over.addEventListener('pointermove', e => {
+    const w = evWorld(e);
+    if (!drag){
+      const h = hitTest(w);
+      over.classList.toggle('grab', h.kind !== 'empty');
+      return;
+    }
+    switch (drag.kind){
+      case 'probe': state.probe = { x: w.x, y: w.y }; drawOverlay(); return;
+      case 'rayO': state.rayO = { x: w.x, y: w.y }; drawOverlay(); return;
+      case 'rayD': state.rayD = { x: w.x, y: w.y }; drawOverlay(); return;
+      case 'handle': dragHandle(drag.shape, drag.key, w.x, w.y); break;
+      case 'body': translateShape(drag.shape, w.x - drag.last.x, w.y - drag.last.y); drag.last = w; break;
+    }
+    changed(false);
+  });
+  function endDrag(){
+    if (!drag) return;
+    const wasShape = drag.kind === 'handle' || drag.kind === 'body';
+    drag = null;
+    over.classList.remove('grabbing');
+    if (wasShape) requestField(false);
+  }
+  over.addEventListener('pointerup', endDrag);
+  over.addEventListener('pointercancel', endDrag);
+  window.addEventListener('keydown', e => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && state.sel && !e.target.closest('input,select,textarea')){
+      state.shapes = state.shapes.filter(s => s.id !== state.sel); state.sel = null; changed();
+    }
+  });
+
+  // ---------- theme & size ----------
+  const onTheme = () => { readColors(); requestField(false); };
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onTheme); } catch (_) {}
+  new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+  new ResizeObserver(resize).observe(board);
+
+  readColors();
+  resize();
+  loadPreset(0);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => drawOverlay());
+})();
+</script>
