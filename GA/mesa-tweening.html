@@ -1,0 +1,624 @@
+<title>Mesa de Tweening</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-a:#2955C8;
+    --c-b:#B8791A;
+    --c-tween:#6E4FC2;
+    --c-tween-fill:rgba(110,79,194,0.22);
+    --c-warning:#B4590E;
+    --c-success:#1F9254;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-a:#6C93FF;
+      --c-b:#F0A94E;
+      --c-tween:#A78BFA;
+      --c-tween-fill:rgba(167,139,250,0.25);
+      --c-warning:#FBBF74;
+      --c-success:#4ADE80;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-a:#6C93FF;
+    --c-b:#F0A94E;
+    --c-tween:#A78BFA;
+    --c-tween-fill:rgba(167,139,250,0.25);
+    --c-warning:#FBBF74;
+    --c-success:#4ADE80;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Public Sans','Segoe UI',system-ui,sans-serif;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2{
+    font-family:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    font-weight:800; letter-spacing:0.01em; text-wrap:balance; margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1320px; margin:0 auto;
+    padding-inline:1rem; padding-block:0.85rem 1.1rem;
+    display:flex; flex-direction:column; gap:0.7rem;
+  }
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem; border-bottom:1.5px solid var(--line-major); padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; }
+  .brand-mark{
+    font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:0.95rem; color:var(--brand);
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem; white-space:nowrap;
+  }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:62ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  .workspace{ display:grid; grid-template-columns:minmax(270px,320px) 1fr; gap:0.75rem; align-items:start; }
+  @media (max-width:880px){ .workspace{ grid-template-columns:1fr; } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{ background:var(--paper-raised); border:1px solid var(--border); border-radius:8px; padding:0.6rem 0.7rem 0.65rem; min-width:0; }
+  .panel h2{ font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.45rem; }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.4rem 0 0; }
+
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .seg button{ flex:1; border:none; background:var(--paper); font-size:0.74rem; font-weight:600; padding:0.35rem 0.4rem; cursor:pointer; color:var(--ink-muted); }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+  .seg button:disabled{ opacity:0.4; cursor:not-allowed; }
+  .field-row{ display:flex; align-items:center; gap:0.5rem; margin-top:0.45rem; font-size:0.76rem; }
+  .field-row > span:first-child{ min-width:4.8rem; color:var(--ink-muted); font-weight:600; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.03em; }
+  .field-row input[type="range"]{ flex:1; accent-color:var(--brand); min-width:0; }
+  .mono{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+  .readv{ min-width:3.6em; text-align:right; font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-size:0.78rem; }
+  select.sel{ flex:1; font-size:0.78rem; padding:0.25rem 0.3rem; border:1px solid var(--border); border-radius:5px; background:var(--paper); min-width:0; }
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  .ease-graph{ width:100%; aspect-ratio:1.25; display:block; margin-top:0.45rem; background:var(--paper-sunken); border-radius:6px; touch-action:none; }
+  .formula-box{
+    margin-top:0.5rem; font-family:'IBM Plex Mono',monospace; font-size:0.74rem; line-height:1.55;
+    background:var(--paper-sunken); border-radius:6px; padding:0.45rem 0.6rem; overflow-x:auto; white-space:nowrap;
+  }
+  .formula-box .main{ color:var(--c-tween); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  .ghost-btn{ background:transparent; border:1px solid var(--border); color:var(--ink-muted); font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer; }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); }
+  .primary-btn{ background:var(--brand); color:var(--brand-ink); border:none; font-weight:700; font-size:0.82rem; padding:0.4rem 0.8rem; border-radius:6px; cursor:pointer; min-width:6.2rem; }
+
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .transport{
+    display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:8px; padding:0.45rem 0.6rem;
+  }
+  .transport .t-slider{ flex:1; min-width:160px; display:flex; align-items:center; gap:0.5rem; }
+  .transport input[type="range"]{ flex:1; accent-color:var(--c-tween); min-width:0; }
+  .transport .t-read{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-size:0.84rem; color:var(--c-tween); font-weight:600; min-width:9.5em; }
+  .board{ background:var(--paper-sunken); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  #canvas{ width:100%; display:block; aspect-ratio:10/6.4; max-height:68svh; touch-action:none; cursor:default; }
+  .grid-line{ stroke:var(--line-minor); stroke-width:1; vector-effect:non-scaling-stroke; }
+  .axis-line{ stroke:var(--line-major); stroke-width:1.4; vector-effect:non-scaling-stroke; }
+  .axis-label{ fill:var(--ink-muted); font-family:'IBM Plex Mono',monospace; font-size:0.17px; }
+
+  .readout{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0.4rem; }
+  .ro{ background:var(--paper-raised); border:1px solid var(--border); border-radius:7px; padding:0.35rem 0.55rem; min-width:0; }
+  .ro .k{ font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .note{ font-size:0.78rem; background:var(--paper-raised); border:1px solid var(--border); border-left:4px solid var(--c-warning); border-radius:0 7px 7px 0; padding:0.4rem 0.6rem; }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; }
+  .legend{ display:flex; gap:0.9rem; flex-wrap:wrap; font-size:0.74rem; color:var(--ink-muted); }
+  .legend span::before{ content:""; display:inline-block; width:0.9em; height:0.25em; margin-right:0.35em; vertical-align:middle; background:var(--sw); border-radius:2px; }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">(1−t)A+tB</span>
+      <div class="brand-text">
+        <h1>Mesa de Tweening</h1>
+        <p>Quadros intermediários de uma animação: cada vértice percorre um segmento, e o <em>easing</em> é uma reparametrização. Companheira do Capítulo 2 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label for="presetSel">Exemplo</label>
+      <select id="presetSel" class="ghost-btn"></select>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Quadro final B</h2>
+        <div class="seg" role="group" aria-label="Como B é definido">
+          <button type="button" id="bRigid" aria-pressed="true">Cópia rígida de A</button>
+          <button type="button" id="bFree" aria-pressed="false">Vértices livres</button>
+        </div>
+        <div id="rigidCtl">
+          <div class="field-row"><span>Giro θ</span><input type="range" id="theta" min="-360" max="360" step="5" value="0" aria-label="Ângulo de rotação em graus"><span class="readv" id="thetaV">0°</span></div>
+          <p class="hint">B = A girado de θ em torno do seu centro e transladado. Arraste o centro de B para transladar.</p>
+        </div>
+        <p class="hint" id="freeHint" hidden>Arraste cada vértice de B. O vértice <span class="mono">B<sub>i</sub></span> é o destino de <span class="mono">A<sub>i</sub></span>.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Interpolação</h2>
+        <div class="seg" role="group" aria-label="Tipo de interpolação">
+          <button type="button" id="iLinear" aria-pressed="true">Vértice a vértice</button>
+          <button type="button" id="iRigid" aria-pressed="false">Girar e transladar</button>
+        </div>
+        <p class="hint" id="interpHint"></p>
+        <div class="formula-box" id="formulaBox"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Easing e(t)</h2>
+        <div class="field-row"><span>Função</span><select id="easeSel" class="sel" aria-label="Função de easing"></select></div>
+        <svg class="ease-graph" id="easeGraph" viewBox="-0.22 -1.42 1.36 1.75" role="img" aria-label="Gráfico da função de easing"></svg>
+        <p class="hint" id="easeHint"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Visualização</h2>
+        <div class="field-row"><span>Quadros</span><input type="range" id="ghosts" min="0" max="20" step="1" value="8" aria-label="Número de quadros fantasmas"><span class="readv" id="ghostsV">8</span></div>
+        <div class="checks">
+          <label><input type="checkbox" id="chkTraj" checked> Trajetórias dos vértices</label>
+          <label><input type="checkbox" id="chkKeys" checked> Quadros-chave A e B</label>
+        </div>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="transport">
+        <button type="button" class="primary-btn" id="playBtn">▶ Animar</button>
+        <div class="t-slider">
+          <span class="mono" style="font-size:0.78rem;color:var(--ink-muted)">t</span>
+          <input type="range" id="tSlider" min="0" max="1" step="0.001" value="0.5" aria-label="Parâmetro t">
+        </div>
+        <span class="t-read" id="tRead"></span>
+        <select id="loopSel" class="ghost-btn" aria-label="Modo de repetição">
+          <option value="vaivem">vai e volta</option>
+          <option value="repetir">repetir</option>
+          <option value="uma">uma vez</option>
+        </select>
+        <select id="durSel" class="ghost-btn" aria-label="Duração">
+          <option value="1">1 s</option>
+          <option value="2" selected>2 s</option>
+          <option value="4">4 s</option>
+        </select>
+      </div>
+      <div class="board">
+        <svg id="canvas" viewBox="-5 -3.2 10 6.4" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Plano cartesiano com os quadros-chave A e B, as trajetórias dos vértices e os quadros intermediários">
+          <g id="world" transform="scale(1,-1)">
+            <g id="gridLayer"></g>
+            <g id="ghostLayer"></g>
+            <g id="trajLayer"></g>
+            <g id="keyLayer"></g>
+            <g id="tweenLayer"></g>
+            <g id="handleLayer"></g>
+          </g>
+        </svg>
+      </div>
+      <div class="legend">
+        <span style="--sw:var(--c-a)">quadro-chave A (t = 0)</span>
+        <span style="--sw:var(--c-b)">quadro-chave B (t = 1)</span>
+        <span style="--sw:var(--c-tween)">quadro intermediário</span>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="note" id="note" hidden></div>
+      <p class="footer-note">Arraste os vértices de A (e de B, no modo livre); clique num vértice para acompanhar sua fórmula. Os quadros fantasmas são desenhados em tempos igualmente espaçados: a distância entre eles mostra a velocidade que o easing impõe. Vinícius Mello &amp; Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = $('#canvas'), world = $('#world');
+  const DEG = Math.PI / 180;
+
+  // ---------- easing ----------
+  const C1 = 1.70158, C3 = C1 + 1;
+  function bezierEase(t, x1, y1, x2, y2){
+    const bx = u => 3 * (1 - u) * (1 - u) * u * x1 + 3 * (1 - u) * u * u * x2 + u * u * u;
+    const by = u => 3 * (1 - u) * (1 - u) * u * y1 + 3 * (1 - u) * u * u * y2 + u * u * u;
+    let lo = 0, hi = 1, u = t;
+    for (let i = 0; i < 40; i++){ u = (lo + hi) / 2; if (bx(u) < t) lo = u; else hi = u; }
+    return by(u);
+  }
+  const EASES = {
+    linear:   { name:'linear', f: t => t, tex: 'e(t) = t',
+                hint: 'Sem reparametrização: cada vértice anda com velocidade constante, como γ(t) = (1−t)A + tB.' },
+    quad:     { name:'acelera (t²)', f: t => t * t, tex: 'e(t) = t²',
+                hint: 'É a reparametrização δ(t) = A + t²(B−A) da Seção 1 do Capítulo 2: começa devagar e termina rápido.' },
+    out:      { name:'desacelera', f: t => 1 - (1 - t) * (1 - t), tex: 'e(t) = 1 − (1−t)²',
+                hint: 'Começa rápido e chega suavemente ao destino.' },
+    smooth:   { name:'suave (smoothstep)', f: t => t * t * (3 - 2 * t), tex: 'e(t) = 3t² − 2t³',
+                hint: 'Sai e chega devagar: e′(0) = e′(1) = 0. É o easing mais comum em interfaces.' },
+    back:     { name:'ultrapassa e volta', f: t => 1 + C3 * Math.pow(t - 1, 3) + C1 * Math.pow(t - 1, 2), tex: 'e(t) = 1 + 2.70(t−1)³ + 1.70(t−1)²',
+                hint: 'e(t) passa de 1: os vértices saem do segmento AB e andam um pouco além de B, sobre a reta (Exercício 1 da Seção 1).' },
+    bezier:   { name:'Bézier cúbica (CSS)', f: null, tex: '',
+                hint: 'Como a função cubic-bezier() do CSS: (x(u), y(u)) é uma Bézier cúbica de (0,0) a (1,1). Para achar e(t) é preciso resolver x(u) = t, e aqui isso é feito por bissecção.' },
+  };
+
+  // ---------- state ----------
+  const state = {
+    A: [], Bfree: [],
+    rigid: { theta: 0, tx: 4, ty: 0 },
+    bMode: 'rigido', interp: 'linear',
+    ease: 'smooth', bez: [0.25, 0.1, 0.25, 1],
+    t: 0.5, playing: false, dir: 1, ghosts: 8,
+    traj: true, keys: true, sel: 0,
+  };
+  const ease = t => state.ease === 'bezier' ? bezierEase(t, ...state.bez) : EASES[state.ease].f(t);
+
+  // ---------- geometry ----------
+  const centroid = P => { let x = 0, y = 0; for (const p of P){ x += p.x; y += p.y; } return { x: x / P.length, y: y / P.length }; };
+  const rot = (p, a) => ({ x: p.x * Math.cos(a) - p.y * Math.sin(a), y: p.x * Math.sin(a) + p.y * Math.cos(a) });
+  const area = P => { let s = 0; for (let i = 0; i < P.length; i++){ const a = P[i], b = P[(i + 1) % P.length]; s += a.x * b.y - b.x * a.y; } return Math.abs(s) / 2; };
+  function Bpts(){
+    if (state.bMode === 'livre') return state.Bfree;
+    const c = centroid(state.A), th = state.rigid.theta * DEG;
+    return state.A.map(p => { const r = rot({ x: p.x - c.x, y: p.y - c.y }, th); return { x: c.x + r.x + state.rigid.tx, y: c.y + r.y + state.rigid.ty }; });
+  }
+  function tweenAt(e){
+    const A = state.A;
+    if (state.interp === 'rigido' && state.bMode === 'rigido'){
+      const c = centroid(A), th = e * state.rigid.theta * DEG;
+      return A.map(p => { const r = rot({ x: p.x - c.x, y: p.y - c.y }, th); return { x: c.x + r.x + e * state.rigid.tx, y: c.y + r.y + e * state.rigid.ty }; });
+    }
+    const B = Bpts();
+    return A.map((a, i) => ({ x: (1 - e) * a.x + e * B[i].x, y: (1 - e) * a.y + e * B[i].y }));
+  }
+
+  // ---------- presets ----------
+  const reg = (n, r, cx, cy, a0 = Math.PI / 2, r2 = null) => Array.from({ length: n }, (_, i) => {
+    const rr = r2 !== null && i % 2 ? r2 : r, a = a0 + 2 * Math.PI * i / n;
+    return { x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a) };
+  });
+  const PRESETS = [
+    { name: 'Quadrado → losango', set: () => {
+      state.A = [{ x: -3.4, y: -0.9 }, { x: -1.6, y: -0.9 }, { x: -1.6, y: 0.9 }, { x: -3.4, y: 0.9 }];
+      state.Bfree = [{ x: 2.4, y: -1.5 }, { x: 3.9, y: 0 }, { x: 2.4, y: 1.5 }, { x: 0.9, y: 0 }];
+      state.bMode = 'livre'; state.interp = 'linear'; state.ease = 'smooth'; state.t = 0.5; } },
+    { name: 'Seta girando 180°', set: () => {
+      state.A = [{ x: -1.6, y: -0.3 }, { x: 0.4, y: -0.3 }, { x: 0.4, y: -0.8 }, { x: 1.6, y: 0 }, { x: 0.4, y: 0.8 }, { x: 0.4, y: 0.3 }, { x: -1.6, y: 0.3 }].map(p => ({ x: 1.7 * p.x, y: 1.7 * p.y + 0.4 }));
+      state.bMode = 'rigido'; state.rigid = { theta: 180, tx: 0, ty: 0 }; state.interp = 'linear'; state.ease = 'linear'; state.t = 0.5; } },
+    { name: 'Casinha com recuo', set: () => {
+      state.A = [{ x: -4, y: -1 }, { x: -2.6, y: -1 }, { x: -2.6, y: 0.2 }, { x: -3.3, y: 1 }, { x: -4, y: 0.2 }];
+      state.bMode = 'rigido'; state.rigid = { theta: 0, tx: 5.6, ty: 0.6 }; state.interp = 'linear'; state.ease = 'back'; state.t = 0.75; } },
+    { name: 'Estrela → decágono', set: () => {
+      state.A = reg(10, 1.5, -2.5, 0, Math.PI / 2, 0.6);
+      state.Bfree = reg(10, 1.1, 2.5, 0, Math.PI / 2);
+      state.bMode = 'livre'; state.interp = 'linear'; state.ease = 'bezier'; state.bez = [0.25, 0.1, 0.25, 1]; state.t = 0.5; } },
+    { name: 'Giro de 90° com translação', set: () => {
+      state.A = [{ x: -3.6, y: -1.6 }, { x: -1.6, y: -1.6 }, { x: -1.6, y: -0.6 }, { x: -3.6, y: -0.6 }];
+      state.bMode = 'rigido'; state.rigid = { theta: 90, tx: 4.6, ty: 2.2 }; state.interp = 'rigido'; state.ease = 'smooth'; state.t = 0.5; } },
+  ];
+  function loadPreset(i){
+    state.playing = false;
+    PRESETS[i].set();
+    if (state.bMode === 'rigido' && !state.Bfree.length) state.Bfree = Bpts().map(p => ({ ...p }));
+    state.sel = 0;
+    syncControls(); render();
+  }
+
+  // ---------- svg helpers ----------
+  function el(tag, attrs, parent){
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  const ptsAttr = P => P.map(p => `${p.x.toFixed(4)},${p.y.toFixed(4)}`).join(' ');
+  function drawGrid(){
+    const g = $('#gridLayer'); g.innerHTML = '';
+    for (let x = -5; x <= 5; x++) el('line', { x1: x, y1: -3.2, x2: x, y2: 3.2, class: x ? 'grid-line' : 'axis-line' }, g);
+    for (let y = -3; y <= 3; y++) el('line', { x1: -5, y1: y, x2: 5, y2: y, class: y ? 'grid-line' : 'axis-line' }, g);
+    for (let x = -4; x <= 4; x++) if (x){ const t = el('text', { x: x - 0.04, y: 0.27, class: 'axis-label', transform: 'scale(1,-1)', 'text-anchor': 'end' }, g); t.textContent = x; }
+    for (let y = -3; y <= 3; y++) if (y){ const t = el('text', { x: -0.08, y: -y + 0.07, class: 'axis-label', transform: 'scale(1,-1)', 'text-anchor': 'end' }, g); t.textContent = y; }
+  }
+
+  function render(){
+    const A = state.A, B = Bpts(), e = ease(state.t), T = tweenAt(e);
+    const ns = 'vector-effect:non-scaling-stroke';
+
+    // ghosts
+    const gL = $('#ghostLayer'); gL.innerHTML = '';
+    const n = state.ghosts;
+    for (let k = 1; k < n; k++){
+      el('polygon', { points: ptsAttr(tweenAt(ease(k / n))), fill: 'none', stroke: 'var(--c-tween)', 'stroke-width': 1, opacity: 0.35, style: ns }, gL);
+    }
+
+    // trajectories
+    const tL = $('#trajLayer'); tL.innerHTML = '';
+    if (state.traj){
+      const samples = 48;
+      const rigidPath = state.interp === 'rigido' && state.bMode === 'rigido';
+      const overshoot = state.ease === 'back';
+      A.forEach((a, i) => {
+        if (!rigidPath && !overshoot){
+          el('line', { x1: a.x, y1: a.y, x2: B[i].x, y2: B[i].y, stroke: 'var(--ink-muted)', 'stroke-width': 1, 'stroke-dasharray': '4 3', opacity: i === state.sel ? 0.95 : 0.5, style: ns }, tL);
+        } else {
+          const P = [];
+          for (let s = 0; s <= samples; s++) P.push(tweenAt(ease(s / samples))[i]);
+          el('polyline', { points: ptsAttr(P), fill: 'none', stroke: 'var(--ink-muted)', 'stroke-width': 1, 'stroke-dasharray': '4 3', opacity: i === state.sel ? 0.95 : 0.5, style: ns }, tL);
+        }
+      });
+    }
+
+    // keyframes
+    const kL = $('#keyLayer'); kL.innerHTML = '';
+    if (state.keys){
+      el('polygon', { points: ptsAttr(A), fill: 'none', stroke: 'var(--c-a)', 'stroke-width': 2, style: ns }, kL);
+      el('polygon', { points: ptsAttr(B), fill: 'none', stroke: 'var(--c-b)', 'stroke-width': 2, style: ns }, kL);
+    }
+
+    // tween
+    const twL = $('#tweenLayer'); twL.innerHTML = '';
+    el('polygon', { points: ptsAttr(T), fill: 'var(--c-tween-fill)', stroke: 'var(--c-tween)', 'stroke-width': 2.4, 'stroke-linejoin': 'round', style: ns }, twL);
+    el('circle', { cx: T[state.sel].x, cy: T[state.sel].y, r: 0.075, fill: 'var(--c-tween)' }, twL);
+
+    // handles
+    const hL = $('#handleLayer'); hL.innerHTML = '';
+    A.forEach((a, i) => el('circle', { cx: a.x, cy: a.y, r: i === state.sel ? 0.11 : 0.085, fill: 'var(--c-a)', stroke: 'var(--paper-raised)', 'stroke-width': 1.5, style: ns + ';cursor:grab', 'data-h': 'A', 'data-i': i }, hL));
+    if (state.bMode === 'livre'){
+      B.forEach((b, i) => el('circle', { cx: b.x, cy: b.y, r: i === state.sel ? 0.11 : 0.085, fill: 'var(--c-b)', stroke: 'var(--paper-raised)', 'stroke-width': 1.5, style: ns + ';cursor:grab', 'data-h': 'B', 'data-i': i }, hL));
+    } else {
+      const cB = centroid(B);
+      el('rect', { x: cB.x - 0.1, y: cB.y - 0.1, width: 0.2, height: 0.2, fill: 'var(--c-b)', stroke: 'var(--paper-raised)', 'stroke-width': 1.5, style: ns + ';cursor:move', 'data-h': 'Bc' }, hL);
+      B.forEach((b, i) => el('circle', { cx: b.x, cy: b.y, r: 0.05, fill: 'var(--c-b)' }, hL));
+    }
+    // vertex labels for the selected index
+    const lab = (p, txt, color, dx, dy) => { const t = el('text', { x: p.x + dx, y: -(p.y + dy), transform: 'scale(1,-1)', fill: color, 'font-size': 0.24, 'font-family': 'IBM Plex Mono, monospace', 'font-weight': 600 }, hL); t.textContent = txt; };
+    const si = state.sel, sub = '₀₁₂₃₄₅₆₇₈₉'[si] || si;
+    lab(A[si], 'A' + sub, 'var(--c-a)', 0.13, 0.13);
+    lab(B[si], 'B' + sub, 'var(--c-b)', 0.13, 0.13);
+
+    renderEaseGraph(e);
+    renderInfo(A, B, T, e);
+  }
+
+  // ---------- easing graph ----------
+  let easeDrag = null;
+  function renderEaseGraph(e){
+    const g = $('#easeGraph'); g.innerHTML = '';
+    const G = el('g', { transform: 'scale(1,-1)' }, g);
+    const ns = 'vector-effect:non-scaling-stroke';
+    el('rect', { x: 0, y: 0, width: 1, height: 1, fill: 'none', stroke: 'var(--line-major)', 'stroke-width': 1, style: ns }, G);
+    for (const v of [0.25, 0.5, 0.75]){
+      el('line', { x1: v, y1: -0.35, x2: v, y2: 1.38, stroke: 'var(--line-minor)', 'stroke-width': 1, style: ns }, G);
+      el('line', { x1: 0, y1: v, x2: 1, y2: v, stroke: 'var(--line-minor)', 'stroke-width': 1, style: ns }, G);
+    }
+    el('line', { x1: 0, y1: 0, x2: 1, y2: 1, stroke: 'var(--ink-muted)', 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: 0.6, style: ns }, G);
+    if (state.ease === 'bezier'){
+      const [x1, y1, x2, y2] = state.bez;
+      el('line', { x1: 0, y1: 0, x2: x1, y2: y1, stroke: 'var(--c-b)', 'stroke-width': 1.2, style: ns }, G);
+      el('line', { x1: 1, y1: 1, x2: x2, y2: y2, stroke: 'var(--c-b)', 'stroke-width': 1.2, style: ns }, G);
+    }
+    const P = [];
+    for (let s = 0; s <= 100; s++){ const t = s / 100; P.push({ x: t, y: ease(t) }); }
+    el('polyline', { points: ptsAttr(P), fill: 'none', stroke: 'var(--c-tween)', 'stroke-width': 2.2, style: ns }, G);
+    el('line', { x1: state.t, y1: -0.35, x2: state.t, y2: e, stroke: 'var(--c-tween)', 'stroke-width': 1, 'stroke-dasharray': '2 2', style: ns }, G);
+    el('line', { x1: 0, y1: e, x2: state.t, y2: e, stroke: 'var(--c-tween)', 'stroke-width': 1, 'stroke-dasharray': '2 2', style: ns }, G);
+    el('circle', { cx: state.t, cy: e, r: 0.03, fill: 'var(--c-tween)' }, G);
+    if (state.ease === 'bezier'){
+      const [x1, y1, x2, y2] = state.bez;
+      el('circle', { cx: x1, cy: y1, r: 0.04, fill: 'var(--c-b)', stroke: 'var(--paper-raised)', 'stroke-width': 1.5, style: ns + ';cursor:grab', 'data-b': 0 }, G);
+      el('circle', { cx: x2, cy: y2, r: 0.04, fill: 'var(--c-b)', stroke: 'var(--paper-raised)', 'stroke-width': 1.5, style: ns + ';cursor:grab', 'data-b': 1 }, G);
+    }
+    const txt = (x, y, s, anchor = 'middle') => { const t = el('text', { x, y, 'text-anchor': anchor, fill: 'var(--ink-muted)', 'font-size': 0.07, 'font-family': 'IBM Plex Mono, monospace' }, g); t.textContent = s; };
+    txt(0, 0.1, '0'); txt(1, 0.1, '1'); txt(1.06, 0.15, 't', 'start');
+    txt(-0.04, 0.02, '0', 'end'); txt(-0.04, -0.98, '1', 'end'); txt(-0.04, -1.3, 'e(t)', 'end');
+  }
+  const graph = $('#easeGraph');
+  function graphPt(ev){
+    const m = graph.getScreenCTM().inverse(), p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m);
+    return { x: p.x, y: -p.y };
+  }
+  graph.addEventListener('pointerdown', ev => {
+    const h = ev.target.closest('[data-b]');
+    if (h){ easeDrag = +h.dataset.b; graph.setPointerCapture(ev.pointerId); return; }
+    const p = graphPt(ev);
+    if (p.x >= 0 && p.x <= 1){ state.playing = false; setT(p.x); }
+  });
+  graph.addEventListener('pointermove', ev => {
+    if (easeDrag === null) return;
+    const p = graphPt(ev);
+    state.bez[2 * easeDrag] = Math.max(0, Math.min(1, p.x));
+    state.bez[2 * easeDrag + 1] = Math.max(-0.4, Math.min(1.4, p.y));
+    updateEaseHint(); render();
+  });
+  graph.addEventListener('pointerup', () => { easeDrag = null; });
+
+  // ---------- info ----------
+  const f = v => (Math.abs(v) < 0.005 ? '0.00' : (v < 0 ? '−' + (-v).toFixed(2) : v.toFixed(2)));
+  const pt = p => `(${f(p.x)}, ${f(p.y)})`;
+  function renderInfo(A, B, T, e){
+    const i = state.sel, sub = '₀₁₂₃₄₅₆₇₈₉'[i] || i;
+    $('#tRead').textContent = `t = ${state.t.toFixed(2)}   e(t) = ${f(e)}`;
+    const rigidI = state.interp === 'rigido' && state.bMode === 'rigido';
+    const ratio = area(T) / (area(A) || 1);
+    const outside = e < -1e-9 || e > 1 + 1e-9;
+    const cards = [
+      [`Vértice P${sub}(t)`, pt(T[i])],
+      ['e(t)', f(e) + (outside ? '  (fora de [0, 1])' : '')],
+      ['Área do quadro / área de A', (100 * ratio).toFixed(0) + '%'],
+      [`Distância P${sub} a A${sub}`, f(Math.hypot(T[i].x - A[i].x, T[i].y - A[i].y))],
+    ];
+    $('#readout').innerHTML = cards.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+    const E = state.ease === 'bezier' ? `e(t) = y(u), com x(u) = t  [cubic-bezier(${state.bez.map(f).join(', ')})]` : EASES[state.ease].tex;
+    let html = `<div class="main">${E}</div>`;
+    if (rigidI){
+      const c = centroid(A);
+      html += `<div class="main">P${sub}(t) = C + e(t)·v + R<sub>e(t)·θ</sub>(A${sub} − C)</div>` +
+        `<div class="sub">C = ${pt(c)}, v = ${pt({ x: state.rigid.tx, y: state.rigid.ty })}, θ = ${state.rigid.theta}°</div>` +
+        `<div class="sub">ângulo atual e(t)·θ = ${f(e * state.rigid.theta)}°</div>`;
+    } else {
+      html += `<div class="main">P${sub}(t) = (1 − e(t))·A${sub} + e(t)·B${sub}</div>` +
+        `<div class="sub">A${sub} = ${pt(A[i])}, B${sub} = ${pt(B[i])}</div>` +
+        `<div class="sub">= ${f(1 - e)}·${pt(A[i])} + ${f(e)}·${pt(B[i])} = ${pt(T[i])}</div>`;
+    }
+    $('#formulaBox').innerHTML = html;
+
+    const note = $('#note');
+    const msgs = [];
+    if (!rigidI && state.bMode === 'rigido' && Math.abs(state.rigid.theta) % 360 !== 0 && ratio < 0.97){
+      msgs.push(`Com interpolação vértice a vértice, um movimento rígido de A até B não é rígido no caminho: aqui o quadro intermediário tem só ${(100 * ratio).toFixed(0)}% da área de A. Com θ = 180°, em e(t) = ½ cada vértice está no ponto médio entre A<sub>i</sub> e sua imagem simétrica, que é o centro, e a figura inteira colapsa num ponto. Experimente “Girar e transladar”.`);
+    }
+    if (outside){
+      msgs.push(`e(t) = ${f(e)} está fora de [0, 1]: o vértice P${sub} saiu do segmento A${sub}B${sub} e está sobre a reta que passa por A${sub} e B${sub}, além ${e > 1 ? 'de B' : 'de A'}.`);
+    }
+    note.hidden = !msgs.length;
+    note.innerHTML = msgs.join('<br>');
+  }
+
+  // ---------- controls ----------
+  function setT(t){ state.t = Math.max(0, Math.min(1, t)); $('#tSlider').value = state.t; render(); }
+  function updateEaseHint(){ $('#easeHint').textContent = EASES[state.ease].hint; }
+  function syncControls(){
+    $('#bRigid').setAttribute('aria-pressed', state.bMode === 'rigido');
+    $('#bFree').setAttribute('aria-pressed', state.bMode === 'livre');
+    $('#rigidCtl').hidden = state.bMode !== 'rigido';
+    $('#freeHint').hidden = state.bMode !== 'livre';
+    if (state.bMode === 'livre' && state.interp === 'rigido') state.interp = 'linear';
+    $('#iRigid').disabled = state.bMode !== 'rigido';
+    $('#iLinear').setAttribute('aria-pressed', state.interp === 'linear');
+    $('#iRigid').setAttribute('aria-pressed', state.interp === 'rigido');
+    $('#interpHint').innerHTML = state.interp === 'linear'
+      ? 'Cada vértice anda em linha reta de A<sub>i</sub> até B<sub>i</sub>: P<sub>i</sub>(t) = (1 − e)A<sub>i</sub> + e B<sub>i</sub>.'
+      : 'Interpola o ângulo e o deslocamento da isometria: todo quadro intermediário é congruente a A, e os vértices andam em arcos.';
+    $('#theta').value = state.rigid.theta; $('#thetaV').textContent = state.rigid.theta + '°';
+    $('#easeSel').value = state.ease; updateEaseHint();
+    $('#tSlider').value = state.t;
+    $('#ghosts').value = state.ghosts; $('#ghostsV').textContent = state.ghosts;
+    $('#playBtn').textContent = state.playing ? '❚❚ Pausar' : '▶ Animar';
+  }
+  $('#easeSel').innerHTML = Object.entries(EASES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
+  $('#easeSel').addEventListener('change', e => { state.ease = e.target.value; updateEaseHint(); render(); });
+  $('#bRigid').addEventListener('click', () => { state.bMode = 'rigido'; syncControls(); render(); });
+  $('#bFree').addEventListener('click', () => {
+    if (state.bMode === 'rigido') state.Bfree = Bpts().map(p => ({ ...p }));
+    state.bMode = 'livre'; syncControls(); render();
+  });
+  $('#iLinear').addEventListener('click', () => { state.interp = 'linear'; syncControls(); render(); });
+  $('#iRigid').addEventListener('click', () => { if (state.bMode === 'rigido'){ state.interp = 'rigido'; syncControls(); render(); } });
+  $('#theta').addEventListener('input', e => { state.rigid.theta = +e.target.value; $('#thetaV').textContent = state.rigid.theta + '°'; render(); });
+  $('#ghosts').addEventListener('input', e => { state.ghosts = +e.target.value; $('#ghostsV').textContent = state.ghosts; render(); });
+  $('#chkTraj').addEventListener('change', e => { state.traj = e.target.checked; render(); });
+  $('#chkKeys').addEventListener('change', e => { state.keys = e.target.checked; render(); });
+  $('#tSlider').addEventListener('input', e => { state.playing = false; syncControls(); setT(+e.target.value); });
+
+  // ---------- animation ----------
+  let last = 0;
+  function frame(ts){
+    if (!state.playing){ last = 0; return; }
+    if (last){
+      const dt = (ts - last) / 1000 / (+$('#durSel').value);
+      let t = state.t + state.dir * dt;
+      const mode = $('#loopSel').value;
+      if (t > 1){
+        if (mode === 'vaivem'){ t = 2 - t; state.dir = -1; }
+        else if (mode === 'repetir'){ t -= 1; }
+        else { t = 1; state.playing = false; syncControls(); }
+      } else if (t < 0){
+        if (mode === 'vaivem'){ t = -t; state.dir = 1; } else t = 0;
+      }
+      setT(t);
+    }
+    last = ts;
+    requestAnimationFrame(frame);
+  }
+  $('#playBtn').addEventListener('click', () => {
+    state.playing = !state.playing;
+    if (state.playing){
+      if (state.t >= 1 && $('#loopSel').value !== 'vaivem') state.t = 0;
+      if ($('#loopSel').value !== 'vaivem') state.dir = 1;
+      last = 0; requestAnimationFrame(frame);
+    }
+    syncControls();
+  });
+
+  // ---------- board dragging ----------
+  let drag = null;
+  function worldPt(ev){
+    const m = world.getScreenCTM().inverse();
+    const p = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m);
+    return { x: Math.max(-4.9, Math.min(4.9, p.x)), y: Math.max(-3.1, Math.min(3.1, p.y)) };
+  }
+  svg.addEventListener('pointerdown', ev => {
+    const h = ev.target.closest('[data-h]');
+    if (!h) return;
+    const p = worldPt(ev);
+    drag = { kind: h.dataset.h, i: +h.dataset.i, last: p };
+    if (drag.kind !== 'Bc') state.sel = drag.i;
+    svg.setPointerCapture(ev.pointerId);
+    render();
+  });
+  svg.addEventListener('pointermove', ev => {
+    if (!drag) return;
+    const p = worldPt(ev);
+    if (drag.kind === 'A') state.A[drag.i] = p;
+    else if (drag.kind === 'B') state.Bfree[drag.i] = p;
+    else if (drag.kind === 'Bc'){ state.rigid.tx += p.x - drag.last.x; state.rigid.ty += p.y - drag.last.y; }
+    drag.last = p;
+    render();
+  });
+  const end = () => { drag = null; };
+  svg.addEventListener('pointerup', end);
+  svg.addEventListener('pointercancel', end);
+
+  const presetSel = $('#presetSel');
+  presetSel.innerHTML = PRESETS.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+  presetSel.addEventListener('change', () => loadPreset(+presetSel.value));
+
+  drawGrid();
+  loadPreset(0);
+})();
+</script>
