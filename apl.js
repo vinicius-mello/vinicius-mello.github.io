@@ -3625,5 +3625,6 @@ export {
   G,
   global_category,
   AplJS,
-  roundValue
+  roundValue,
+  formatNum
 };
