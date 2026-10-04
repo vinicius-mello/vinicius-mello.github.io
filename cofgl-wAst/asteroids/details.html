@@ -125,6 +125,16 @@
 	q_x' &= q_x+\Delta q_x, \qquad q_y' = q_y+\Delta q_y\\
 	p_x' &= \frac{8\Delta q_x}{h(1+K|q|^2)^2}, \qquad p_y' = \frac{8\Delta q_y}{h(1+K|q|^2)^2}
 	\end{aligned}$$
+	<p>The ship's heading is not tied to its velocity: it is parallel transported
+	along the geodesic. The model is conformal, so this means keeping its angle
+	with the velocity. After each step, the heading turns by the same angle as \(p\).</p>
+
+	<h2>Aiming</h2>
+	<p>The saucer shoots along the shortest geodesic to the ship. Over the glued
+	copies \(b'\) of the ship's position, it takes the one nearest to its own position
+	\(a\). The translation \(T_a\) takes \(a\) to 0, where geodesics are straight
+	lines, and \(T_a'(a)=1/(1+K|a|^2)\) is a positive real, so the direction is
+	$$\frac{T_a(b')}{|T_a(b')|}.$$</p>
 </main>
 </body>
 </html>

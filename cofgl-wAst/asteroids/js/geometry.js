@@ -78,15 +78,24 @@ function solveSystem(a, b, c, d, f) {
   return [a / b, (p2 - f * sqdelta) / den];
 }
 
-// One step of the variational integrator for curvature k = +-1.
-function curvedStep(q, p, h, k) {
+// One step of the variational integrator for curvature k = +-1. The heading
+// dir is parallel transported: along a geodesic it keeps its angle with the
+// velocity, and the model is conformal, so it turns with p.
+function curvedStep(q, p, dir, h, k) {
   const D = 1 + k * (q.x * q.x + q.y * q.y);
   const D2h = D * D * h;
   const [dqx, dqy] = solveSystem(D * D2h * p.x, 8 * D, -16 * k * q.x, D * D2h * p.y, -16 * k * q.y);
+  const p0 = new Complex(p.x, p.y);
   q.x += dqx;
   q.y += dqy;
   p.x = 8 * dqx / D2h;
   p.y = 8 * dqy / D2h;
+  const turn = p.times(p0.conjugate());
+  if (turn.magnitude > 0) {
+    turn.normalize();
+    return dir.times(turn);
+  }
+  return dir;
 }
 
 // Each step takes and returns [q, p, dir, inv]; inv is -1 while the object is
@@ -103,7 +112,7 @@ function torusStep(q, p, dir, h, inv) {
 }
 
 function projectiveStep(q, p, dir, h, inv) {
-  curvedStep(q, p, h, 1);
+  dir = curvedStep(q, p, dir, h, 1);
   const n = q.x * q.x + q.y * q.y;
   if (n > 1) {
     // crossed the boundary: jump to the antipode, z -> -z/|z|^2
@@ -119,7 +128,7 @@ function projectiveStep(q, p, dir, h, inv) {
 }
 
 function bitorusStep(q, p, dir, h, inv) {
-  curvedStep(q, p, h, -1);
+  dir = curvedStep(q, p, dir, h, -1);
   for (let i = 0; i < 8; i++) {
     if (Math.hypot(q.x - octagon[i].x, q.y - octagon[i].y) < R) {
       // crossed side i: glue to side i+4
@@ -146,34 +155,63 @@ function diskDistance(z1, z2, k) {
   return 2 * Math.atan(r);
 }
 
-// Distances on the closed surfaces take the glued copies into account,
-// otherwise objects touching across an edge would not collide.
-function torusDistance(z1, z2) {
-  let d = Infinity;
+// The points glued to z that are near the fundamental domain (z included).
+// Distances and aiming use them, otherwise objects across an edge from each
+// other would not see each other.
+function torusCopies(z) {
+  const copies = [];
   for (const ox of [-2, 0, 2]) {
-    for (const oy of [-2, 0, 2]) {
-      d = Math.min(d, diskDistance(z1, new Complex(z2.x + ox, z2.y + oy), 0));
-    }
+    for (const oy of [-2, 0, 2]) copies.push(new Complex(z.x + ox, z.y + oy));
   }
-  return d;
+  return copies;
 }
 
-// projective plane = sphere / antipodal map, and the antipode is at distance pi
-function projectiveDistance(z1, z2) {
-  const d = diskDistance(z1, z2, 1);
-  return Math.min(d, Math.PI - d);
+// projective plane = sphere / antipodal map, z ~ -1/conj(z)
+function projectiveCopies(z) {
+  const n = z.magnitude;
+  return n > 1e-12 ? [z, new Complex(-z.x / n, -z.y / n)] : [z];
 }
 
-function bitorusDistance(z1, z2) {
-  let d = diskDistance(z1, z2, -1);
-  octagonReflection.forEach((refl, i) => {
-    d = Math.min(d, diskDistance(z1, octagonInversion[i].F(refl.F(z2)), -1));
-  });
-  return d;
+function bitorusCopies(z) {
+  return [z, ...octagonReflection.map((refl, i) => octagonInversion[i].F(refl.F(z)))];
+}
+
+function makeGeometry(name, k, step, copies, bulletSpeed, spawnRadius) {
+  // the copy of `to` nearest to `from`, and its distance
+  const nearest = (from, to) => {
+    let best = null;
+    let d = Infinity;
+    for (const c of copies(to)) {
+      const dc = diskDistance(from, c, k);
+      if (dc < d) {
+        d = dc;
+        best = c;
+      }
+    }
+    return [best, d];
+  };
+  return {
+    name,
+    k,
+    step,
+    bulletSpeed,
+    spawnRadius,   // random spawns stay this close to the center
+    distance: (z1, z2) => nearest(z1, z2)[1],
+    // Unit vector at `from` along the shortest geodesic to `to`: the
+    // isometry T(z) = (z - from)/(1 + k conj(from) z) takes `from` to 0, where
+    // geodesics are straight, and its derivative there is a positive real.
+    directionTo(from, to) {
+      const [target] = nearest(from, to);
+      const t = target.minus(from).divide(new Complex(1, 0).plus(from.conjugate().times(target).scale(k)));
+      if (!(t.magnitude > 0)) return new Complex(1, 0);
+      t.normalize();
+      return t;
+    },
+  };
 }
 
 export const geometries = {
-  euclidean: { name: 'euclidean', k: 0, step: torusStep, distance: torusDistance, bulletSpeed: 4 },
-  elliptic: { name: 'elliptic', k: 1, step: projectiveStep, distance: projectiveDistance, bulletSpeed: 15 },
-  hyperbolic: { name: 'hyperbolic', k: -1, step: bitorusStep, distance: bitorusDistance, bulletSpeed: 20 },
+  euclidean: makeGeometry('euclidean', 0, torusStep, torusCopies, 4, 0.95),
+  elliptic: makeGeometry('elliptic', 1, projectiveStep, projectiveCopies, 15, 0.9),
+  hyperbolic: makeGeometry('hyperbolic', -1, bitorusStep, bitorusCopies, 20, 0.6),
 };

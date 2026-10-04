@@ -10,8 +10,9 @@ Plain ES modules, no build step; serve the repository with any static server
 
     python -m http.server   # then open /cofgl-wAst/asteroids/index.html
 
-- `asteroids/js/geometry.js`: geodesic integrator, gluing maps, distances
-- `asteroids/js/entities.js`: ship, asteroids, bullets
+- `asteroids/js/geometry.js`: geodesic integrator, gluing maps, distances, aiming
+- `asteroids/js/entities.js`: ship, asteroids, bullets, the enemy saucer
+- `asteroids/js/sprites.js`: saucer and enemy shot, drawn on a canvas
 - `asteroids/js/game.js`: game state, input, HUD, main loop (entry point)
 - `asteroids/js/renderer.js`: WebGL; each sprite is a full-screen quad whose
   fragment shader (`asteroids/assets/shaders/`) applies the isometry and the

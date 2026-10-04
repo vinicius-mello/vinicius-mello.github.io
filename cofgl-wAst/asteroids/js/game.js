@@ -1,12 +1,13 @@
 import { Complex } from './complex.js';
 import { geometries } from './geometry.js';
-import { SpaceShip, Asteroid, Bullet } from './entities.js';
+import { SpaceShip, Asteroid, Bullet, Saucer } from './entities.js';
 import { Renderer } from './renderer.js';
 import { drawGluing } from './gluing.js';
+import { drawSaucer, drawEnemyLaser } from './sprites.js';
 
 const KEY_ACTIONS = {
   ArrowUp: 'thrust', KeyW: 'thrust',
-  ArrowDown: 'brake', KeyS: 'brake',
+  ArrowDown: 'reverse', KeyS: 'reverse',
   ArrowLeft: 'rotateLeft', KeyA: 'rotateLeft',
   ArrowRight: 'rotateRight', KeyD: 'rotateRight',
   Space: 'fire',
@@ -16,6 +17,8 @@ const TICK = 1 / 60;          // longest physics step (s)
 const MAX_FRAME = 0.25;       // longest frame simulated at once (e.g. after a hiccup)
 const FIRE_COOLDOWN = 0.12;   // s between shots while fire is held
 const SHIELD_TIME = 1.5;      // s of invulnerability after a hit or a new wave
+const SAUCER_SCORE = 50;
+const SAUCER_MIN_DISTANCE = 1;  // saucers appear at least this far from the ship
 const TOUCH_DEADZONE = 20;    // CSS px a steering touch must move before it acts
 const LAYOUT_SIZE = 768;      // HUD sizes are given for a canvas this wide
 const MAX_PIXELS = 1536;      // cap on the drawing buffer size (hi-dpi)
@@ -60,7 +63,11 @@ function removeWhere(array, pred) {
 class Game {
   constructor(renderer, hud, ui) {
     this.renderer = renderer;
-    this.textures = renderer.textures;
+    this.textures = {
+      ...renderer.textures,
+      saucer: renderer.createSpriteTexture(drawSaucer()),
+      enemyLaser: renderer.createSpriteTexture(drawEnemyLaser()),
+    };
     this.hud = hud;
     this.ui = ui;
     this.keys = {};      // action -> held, from the keyboard
@@ -74,6 +81,9 @@ class Game {
     this.geometry = geometries[geometry] ?? geometries.euclidean;
     this.spaceShip = new SpaceShip(this);
     this.bullets = [];
+    this.enemyBullets = [];
+    this.saucer = null;
+    this.saucerTimer = 15;   // s of game time until the first saucer
     this.asteroids = [];
     this.time = 0;
     this.lastFireTime = -Infinity;
@@ -134,7 +144,7 @@ class Game {
   }
 
   // Left half of the screen is a virtual joystick (drag from where the finger
-  // landed: sideways to turn, up to thrust, down to brake); right half fires.
+  // landed: sideways to turn, up to thrust, down to reverse); right half fires.
   // A tap also resumes a paused game and restarts after game over.
   onPointerDown(event) {
     if (event.pointerType === 'mouse') {
@@ -189,7 +199,7 @@ class Game {
       if (dx < -TOUCH_DEADZONE) actions.rotateLeft = true;
       if (dx > TOUCH_DEADZONE) actions.rotateRight = true;
       if (dy < -TOUCH_DEADZONE) actions.thrust = true;
-      if (dy > TOUCH_DEADZONE) actions.brake = true;
+      if (dy > TOUCH_DEADZONE) actions.reverse = true;
     }
     return actions;
   }
@@ -213,6 +223,7 @@ class Game {
     for (const bullet of this.bullets) bullet.update(h);
     removeWhere(this.bullets, (b) => b.faded);
     this.spaceShip.update(h);
+    this.updateSaucer(h);
     this.checkCollisions();
   }
 
@@ -221,7 +232,7 @@ class Game {
     const ship = this.spaceShip;
     ship.steer((actions.rotateLeft ? 1 : 0) - (actions.rotateRight ? 1 : 0), h);
     if (actions.thrust) ship.thrust(h);
-    if (actions.brake) ship.brake(h);
+    if (actions.reverse) ship.reverse(h);
     if (actions.fire) this.fire();
   }
 
@@ -229,6 +240,38 @@ class Game {
     if (this.time - this.lastFireTime < FIRE_COOLDOWN) return;
     this.bullets.push(new Bullet(this, this.spaceShip.q, this.spaceShip.dir));
     this.lastFireTime = this.time;
+  }
+
+  updateSaucer(h) {
+    for (const bullet of this.enemyBullets) bullet.update(h);
+    removeWhere(this.enemyBullets, (b) => b.faded);
+    if (this.saucer) {
+      const shot = this.saucer.update(h, this.spaceShip.q);
+      if (shot) this.enemyBullets.push(shot);
+      if (this.saucer.gone) {
+        this.saucer = null;
+        // they come back sooner in later waves
+        this.saucerTimer = 10 + Math.random() * 10 - Math.min(this.spaceShip.wave, 6);
+      }
+    } else {
+      this.saucerTimer -= h;
+      if (this.saucerTimer <= 0) this.spawnSaucer();
+    }
+  }
+
+  // somewhere random, but not on top of the ship
+  spawnSaucer() {
+    const { distance, spawnRadius, name } = this.geometry;
+    for (let tries = 0; tries < 30; tries++) {
+      const q = name === 'euclidean'
+        ? new Complex((Math.random() * 2 - 1) * spawnRadius, (Math.random() * 2 - 1) * spawnRadius)
+        : Complex.polar(spawnRadius * Math.sqrt(Math.random()), Math.random() * 2 * Math.PI);
+      if (distance(q, this.spaceShip.q) > SAUCER_MIN_DISTANCE) {
+        this.saucer = new Saucer(this, q, this.spaceShip.wave);
+        return;
+      }
+    }
+    this.saucerTimer = 1;   // try again soon
   }
 
   checkCollisions() {
@@ -258,8 +301,24 @@ class Game {
     }
     if (this.asteroids.length === 0) this.newWave();
 
+    const { saucer } = this;
+    if (saucer) {
+      for (const bullet of this.bullets) {
+        if (saucer.hp > 0 && distance(saucer.q, bullet.q) < saucer.radius) {
+          bullet.faded = true;
+          saucer.hp -= 1;
+          if (saucer.hp <= 0) ship.score += SAUCER_SCORE;
+        }
+      }
+      removeWhere(this.bullets, (b) => b.faded);
+    }
+
     if (ship.shield > 0) return;
-    if (this.asteroids.some((a) => distance(a.q, ship.q) < a.radius + ship.radius)) {
+    const shot = this.enemyBullets.find((b) => distance(b.q, ship.q) < ship.radius);
+    if (shot) shot.faded = true;
+    const rammed = saucer && saucer.hp > 0 && distance(saucer.q, ship.q) < saucer.radius + ship.radius;
+    if (rammed) saucer.hp = 0;
+    if (shot || rammed || this.asteroids.some((a) => distance(a.q, ship.q) < a.radius + ship.radius)) {
       this.shipHit();
     }
   }
@@ -274,6 +333,8 @@ class Game {
   gameOver() {
     this.state = 'gameover';
     this.bullets.length = 0;
+    this.enemyBullets.length = 0;
+    this.saucer = null;
     if (this.spaceShip.score > this.best) {
       this.best = this.spaceShip.score;
       this.newRecord = true;
@@ -312,7 +373,8 @@ class Game {
 
   render() {
     const ship = this.spaceShip;
-    const bodies = [...this.asteroids, ...this.bullets];
+    const bodies = [...this.asteroids, ...this.bullets, ...this.enemyBullets];
+    if (this.saucer) bodies.push(this.saucer);
     // the ship is hidden after game over and blinks while the shield is up
     if (this.state !== 'gameover' && Math.floor(ship.shield * 8) % 2 === 0) bodies.push(ship);
     this.renderer.render({ time: this.time, geometry: this.geometry.name, bodies });
