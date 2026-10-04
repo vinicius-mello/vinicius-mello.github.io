@@ -1,5 +1,5 @@
-#include "../../../assets/shaders/common.glsl"
-#include "../../../assets/shaders/complex.glsl"
+#include "common.glsl"
+#include "complex.glsl"
 
 uniform vec2 uq;
 uniform vec2 up;
@@ -25,42 +25,38 @@ vec2 inv_trans(vec2 z, vec2 a, vec2 d) {
     return z;
 }
 
+// antipodal map: identifies the boundary circle into a projective plane
 vec2 glue(vec2 z, float l) {
     return -z/(l*l);
 }
 
-bool inside_tex(vec2 zn, vec2 a, vec2 d, sampler2D tex, bool glued) {
-    zn=inv_trans(zn,a,d);
-    float m=max(abs(zn.x),abs(zn.y));
-    if(m<=1.0) {
-        vec2 texCoord = 0.5*(zn+1.0);
-        // if (!glued) texCoord.t *= -1.0;
-         texCoord.t *= inverted;
-        gl_FragColor = texture2D(tex, texCoord);
-        return true;
-    }
-    return false;
+bool inside(vec2 zn) {
+    return max(abs(zn.x),abs(zn.y))<=1.0;
 }
 
-bool tex_glue(vec2 z, vec2 a, vec2 d, sampler2D tex) {
-    float l=length(z);
-    if(inside_tex(glue(z,l), a, d, tex, true)) return true;
-    if(inside_tex(z, a, d, tex, false)) return true;
-    return false;
+// crossing the boundary reverses orientation: mirror the sprite
+vec2 tex_coord(vec2 zn) {
+    vec2 t=0.5*(zn+1.0);
+    t.t=0.5+inverted*(t.t-0.5);
+    return t;
 }
 
 void main(void)
 {
     vec2 z=vCoord;
-    vec2 d=udir;
-    vec2 a=uq;
     float l=length(z);
+    vec2 zg=inv_trans(glue(z,l), uq, udir);
+    vec2 zn=inv_trans(z, uq, udir);
+    // sample before branching, so mipmap derivatives are well defined
+    vec4 cg=texture2D(uTexture, tex_coord(zg));
+    vec4 cn=texture2D(uTexture, tex_coord(zn));
     if(l>=1.0) {
         gl_FragColor = vec4(0.09,0.09,0.09,0.5);
         return;
     }
-    if(!tex_glue(z, a, d, uTexture)) discard;
+    if(inside(zg)) gl_FragColor=cg;
+    else if(inside(zn)) gl_FragColor=cn;
+    else discard;
 }
 
 #endif
-

@@ -1,5 +1,5 @@
-#include "../../../assets/shaders/common.glsl"
-#include "../../../assets/shaders/complex.glsl"
+#include "common.glsl"
+#include "complex.glsl"
 
 uniform vec2 uq;
 uniform vec2 up;
@@ -28,31 +28,26 @@ vec2 glue(vec2 z, vec2 v) {
     return z+v;
 }
 
-bool inside_tex(vec2 zn, vec2 a, vec2 d, sampler2D tex) {
-    zn=inv_trans(zn,a,d);
-    float m=max(abs(zn.x),abs(zn.y));
-    if(m<=1.0) {
-        gl_FragColor = texture2D(tex,0.5*(zn+1.0));
-        return true;
-    }
-    return false;
-}
-
-bool tex_glue(vec2 z, vec2 a, vec2 d, sampler2D tex) {
-    for(int i=-1;i<=1;++i) {
-        for(int j=-1;j<=1;++j) {
-            if(inside_tex(glue(z,vec2(2.0*float(i),2.0*float(j))), a, d, tex)) return true;
-        }
-    }
-    return false;
-}
-
 void main(void)
 {
     vec2 z=vCoord;
-    vec2 d=udir;
-    vec2 a=uq;
-    if(!tex_glue(z,a,d,uTexture)) discard;
+    vec4 color=vec4(0.0);
+    bool found=false;
+    // The sprite and its 8 translated copies (torus). Every copy is sampled,
+    // so texture2D runs in uniform control flow and the mipmap level stays
+    // well defined at the sprite's edge.
+    for(int i=-1;i<=1;++i) {
+        for(int j=-1;j<=1;++j) {
+            vec2 zn=inv_trans(glue(z,vec2(2.0*float(i),2.0*float(j))), uq, udir);
+            vec4 c=texture2D(uTexture,0.5*(zn+1.0));
+            if(!found && max(abs(zn.x),abs(zn.y))<=1.0) {
+                color=c;
+                found=true;
+            }
+        }
+    }
+    if(!found) discard;
+    gl_FragColor=color;
 }
 
 #endif

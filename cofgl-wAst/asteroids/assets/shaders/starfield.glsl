@@ -1,5 +1,5 @@
-#include "../../../assets/shaders/common.glsl"
-#include "../../../assets/shaders/complex.glsl"
+#include "common.glsl"
+#include "complex.glsl"
 
 uniform float time;
 uniform vec2 resolution;
