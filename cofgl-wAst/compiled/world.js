@@ -3,104 +3,48 @@
   var World, root;
 
   World = (function() {
-    function World(spaceShip, asteroids, bullets, c) {
-      var now, _i, _j, _len, _len1, _ref, _ref1;
-      this.spaceShip = spaceShip;
-      this.asteroids = asteroids;
-      this.bullets = bullets;
-      this.c = c;
-      this.shader = cofgl.game.geometry.shader;
-      this.bgColor = cofgl.floatColorFromHex('#F2F3DC');
+    function World(game) {
+      this.game = game;
       this.vbo = cofgl.makeQuadVBO();
-      this.spaceShip.world = this;
-      now = new Date();
-      this.startTime = now.getTime();
-      _ref = this.asteroids;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        this.asteroid = _ref[_i];
-        this.asteroid.world = this;
-      }
-      _ref1 = this.bullets;
-      for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-        this.bullet = _ref1[_j];
-        this.bullet.world = this;
-      }
       this.backgroundShader = cofgl.resmgr.resources['shaders/starfield'];
     }
 
-    World.prototype.update = function(dt) {};
-
     World.prototype.draw = function() {
-      var cSides, dir, inverted, now, p, q, time, ts, _i, _j, _len, _len1, _ref, _ref1;
+      var asteroid, bullet, ship, _i, _j, _len, _len1, _ref, _ref1;
       cofgl.clear('#fff');
-      now = new Date();
-      time = now.getTime() - this.startTime;
       cofgl.withContext([this.backgroundShader], (function(_this) {
         return function() {
-          _this.backgroundShader.uniform1f("time", time / 1000);
+          _this.backgroundShader.uniform1f("time", _this.game.time);
           _this.backgroundShader.uniform2f("resolution", cofgl.engine.width, cofgl.engine.height);
           return _this.vbo.draw();
         };
       })(this));
-      _ref = this.asteroids;
+      _ref = this.game.asteroids;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        this.asteroid = _ref[_i];
-        q = this.asteroid.q;
-        p = this.asteroid.p;
-        dir = this.asteroid.dir;
-        ts = this.asteroid.ts;
-        inverted = this.asteroid.inv;
-        cSides = this.asteroid.cSides;
-        cofgl.withContext([this.shader, this.asteroid.texture], (function(_this) {
-          return function() {
-            _this.shader.uniform2f("uq", q.x, q.y);
-            _this.shader.uniform2f("up", p.x, p.y);
-            _this.shader.uniform2f("udir", dir.x, dir.y);
-            _this.shader.uniform1f("texSize", ts);
-            _this.shader.uniform1f("inverted", inverted);
-            _this.shader.uniform1f("glueSide1", cSides[1]);
-            _this.shader.uniform2f("glueSide2", cSides[0]);
-            return _this.vbo.draw();
-          };
-        })(this));
+        asteroid = _ref[_i];
+        this.drawObject(asteroid);
       }
-      _ref1 = this.bullets;
+      _ref1 = this.game.bullets;
       for (_j = 0, _len1 = _ref1.length; _j < _len1; _j++) {
-        this.bullet = _ref1[_j];
-        q = this.bullet.q;
-        p = this.bullet.p;
-        dir = this.bullet.dir;
-        ts = this.bullet.ts;
-        inverted = this.bullet.inv;
-        cSides = this.bullet.cSides;
-        cofgl.withContext([this.shader, this.bullet.texture], (function(_this) {
-          return function() {
-            _this.shader.uniform2f("uq", q.x, q.y);
-            _this.shader.uniform2f("up", p.x, p.y);
-            _this.shader.uniform2f("udir", dir.x, dir.y);
-            _this.shader.uniform1f("texSize", ts);
-            _this.shader.uniform1f("inverted", inverted);
-            _this.shader.uniform1f("glueSide1", cSides[1]);
-            _this.shader.uniform2f("glueSide2", cSides[0]);
-            return _this.vbo.draw();
-          };
-        })(this));
+        bullet = _ref1[_j];
+        this.drawObject(bullet);
       }
-      q = this.spaceShip.q;
-      p = this.spaceShip.p;
-      dir = this.spaceShip.dir;
-      ts = this.spaceShip.ts;
-      inverted = this.spaceShip.inv;
-      cSides = this.spaceShip.cSides;
-      return cofgl.withContext([this.shader, this.spaceShip.texture], (function(_this) {
+      ship = this.game.spaceShip;
+      if (this.game.state !== 'gameover' && Math.floor(ship.shield * 8) % 2 === 0) {
+        return this.drawObject(ship);
+      }
+    };
+
+    World.prototype.drawObject = function(obj) {
+      var shader;
+      shader = this.game.geometry.shader;
+      return cofgl.withContext([shader, obj.texture], (function(_this) {
         return function() {
-          _this.shader.uniform2f("uq", q.x, q.y);
-          _this.shader.uniform2f("up", p.x, p.y);
-          _this.shader.uniform2f("udir", dir.x, dir.y);
-          _this.shader.uniform1f("texSize", ts);
-          _this.shader.uniform1f("inverted", inverted);
-          _this.shader.uniform1f("glueSide1", cSides[1]);
-          _this.shader.uniform2f("glueSide2", cSides[0]);
+          shader.uniform2f("uq", obj.q.x, obj.q.y);
+          shader.uniform2f("up", obj.p.x, obj.p.y);
+          shader.uniform2f("udir", obj.dir.x, obj.dir.y);
+          shader.uniform1f("texSize", obj.ts);
+          shader.uniform1f("inverted", obj.inv);
           return _this.vbo.draw();
         };
       })(this));

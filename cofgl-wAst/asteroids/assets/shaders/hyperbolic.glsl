@@ -5,10 +5,6 @@ uniform vec2 uq;
 uniform vec2 up;
 uniform vec2 udir;
 uniform float texSize;
-uniform float glueSide1;
-uniform float glueSide2;
-
-uniform sampler2D uBackground;
 
 varying vec2 vCoord;
 
@@ -66,14 +62,10 @@ bool inside_tex(vec2 zn, vec2 a, vec2 d, sampler2D tex) {
 }
 
 bool tex_glue(vec2 z, vec2 a, vec2 d, sampler2D tex) {
-    float nearestSide = float(glueSide1);
     if(inside_tex(z, a, d, tex)) return true;
-    if(inside_tex(glue(z,octagon(nearestSide)), a, d, tex)) return true;
-    nearestSide = float(glueSide2);
-    if(inside_tex(glue(z,octagon(nearestSide)), a, d, tex)) return true;
-    // for(int i=0;i<8;++i) {
-    //     if(inside_tex(glue(z,octagon(float(i))), a, d, tex)) return true;
-    // }
+    for(int i=0;i<8;++i) {
+        if(inside_tex(glue(z,octagon(float(i))), a, d, tex)) return true;
+    }
     return false;
 }
 

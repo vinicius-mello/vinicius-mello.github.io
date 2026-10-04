@@ -28,6 +28,8 @@ octagonReflection = [
 
 octagonGluing = [4, 5, 6, 7, 0, 1, 2, 3]
 
+octagonInversion = (new cofgl.Inversion(octagon[j], R) for j in octagonGluing)
+
 
 ###
 octagonReflection = [
@@ -84,7 +86,7 @@ euclidStep = (q, p, dir, h) ->
   [q, p, dir]
 
 
-euclidTorusStep = (q, p, dir, h, glued, cSides) ->
+euclidTorusStep = (q, p, dir, h, glued) ->
   [q, p, dir] = euclidStep(q, p, dir, h)
   if q.x > 1.0
     q.x = q.x - 2.0
@@ -94,7 +96,7 @@ euclidTorusStep = (q, p, dir, h, glued, cSides) ->
     q.y = q.y - 2.0
   if q.y < -1.0
     q.y = q.y + 2.0
-  [q, p, dir, glued, cSides]
+  [q, p, dir, glued]
 
 poincareStep = (q, p, dir, h) ->
   #console.debug "Step In: #{q},#{p},#{dir},#{h}"
@@ -114,7 +116,7 @@ poincareStep = (q, p, dir, h) ->
   #console.debug "Step Out: #{q},#{p},#{dir},#{h}"
   [q, p, dir]
 
-kleinStep = (q, p, dir, h, glued, cSides) ->
+kleinStep = (q, p, dir, h, glued) ->
   # console.debug "q = #{q}"
   # console.debug "p = #{p}"
   # console.debug "dir = #{dir}"
@@ -152,38 +154,56 @@ kleinStep = (q, p, dir, h, glued, cSides) ->
   # console.debug "fq = #{q}"
   # console.debug "fp = #{p}"
   # console.debug "fdir = #{dir}"
-  [q, p, dir, glued, cSides]
+  [q, p, dir, glued]
 
 dist = (a, b) -> Math.sqrt((a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y))
 
-poincareBitorusStep = (q, p, dir, h, glued, cSides) ->
+poincareBitorusStep = (q, p, dir, h, glued) ->
   [q, p, dir] = poincareStep(q, p, dir, h)
-  d0 = d1 = 10.0
   for c,i in octagon
-    d = dist(q,c)
-    if d<d0
-      d0 = d
-      cSides[0] = octagonGluing[i] 
-      if d0<d1
-        td = d1
-        ts = cSides[1]
-        d1 = d0
-        cSides[1] = cSides[0]
-        d0 = td
-        cSides[0] = ts
-    if d<R
+    if dist(q,c)<R
       #console.debug "Disk In: #{q},#{p}"
       refl = octagonReflection[i]
       p = refl.D(q, p)
       dir = refl.D(q, dir)
       q = refl.F(q)
-      inv = new cofgl.Inversion(octagon[octagonGluing[i]], R)
+      inv = octagonInversion[i]
       p = inv.D(q, p)
       dir = inv.D(q, dir)
       q = inv.F(q)
       #console.debug "Disk Out: #{q},#{p}"
       break
-  [q, p, dir, glued, cSides]
+  [q, p, dir, glued]
+
+# Geodesic distance in the disk model of curvature k (see details.md):
+# d(z1,z2) = 2 arctan_k |(z1-z2)/(1+k z1 conj(z2))|
+diskDistance = (z1, z2, k) ->
+  den = new cofgl.Complex(1.0 + k*(z1.x*z2.x + z1.y*z2.y), k*(z1.y*z2.x - z1.x*z2.y))
+  r = Math.sqrt(z1.minus(z2).divide(den).magnitude)
+  switch k
+    when -1 then 2.0*Math.atanh(Math.min(r, 1.0 - 1e-12))
+    when 0 then 2.0*r
+    else 2.0*Math.atan(r)
+
+# Distances on the closed surfaces take the glued copies into account,
+# otherwise objects touching across an edge would not collide.
+torusDistance = (z1, z2) ->
+  d = Infinity
+  for ox in [-2.0, 0.0, 2.0]
+    for oy in [-2.0, 0.0, 2.0]
+      d = Math.min(d, diskDistance(z1, new cofgl.Complex(z2.x + ox, z2.y + oy), 0))
+  d
+
+# Projective plane = sphere / antipodal map, and the antipode is at distance pi.
+projectiveDistance = (z1, z2) ->
+  d = diskDistance(z1, z2, 1)
+  Math.min(d, Math.PI - d)
+
+bitorusDistance = (z1, z2) ->
+  d = diskDistance(z1, z2, -1)
+  for refl, i in octagonReflection
+    d = Math.min(d, diskDistance(z1, octagonInversion[i].F(refl.F(z2)), -1))
+  d
 
 root = self.cofgl ?= {}
 root.poincareStep = poincareStep
@@ -191,3 +211,7 @@ root.kleinStep = kleinStep
 root.euclidStep = euclidStep
 root.euclidTorusStep = euclidTorusStep
 root.poincareBitorusStep = poincareBitorusStep
+root.octagonGeometry = {C: C, R: R}
+root.torusDistance = torusDistance
+root.projectiveDistance = projectiveDistance
+root.bitorusDistance = bitorusDistance

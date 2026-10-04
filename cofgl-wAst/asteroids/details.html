@@ -1,61 +1,130 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <meta http-equiv="Content-Style-Type" content="text/css" />
-  <meta name="generator" content="pandoc" />
-  <title></title>
-  <style type="text/css">code{white-space: pre;}</style>
-  <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Games in 2-Manifolds</title>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css">
+	<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js"></script>
+	<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/contrib/auto-render.min.js"
+		onload="renderMathInElement(document.body, {delimiters: [
+			{left: '$$', right: '$$', display: true},
+			{left: '\\(', right: '\\)', display: false}]})"></script>
+	<style>
+		body {
+			background: #222;
+			color: #ddd;
+			font-family: 'Helvetica Neue', 'Helvetica', sans-serif;
+			margin: 0;
+			padding: 40px 16px;
+		}
+		main {
+			max-width: 760px;
+			margin: 0 auto;
+			line-height: 1.6;
+			font-size: 15px;
+		}
+		a { color: #e0a458; text-decoration: none; }
+		a:hover { text-decoration: underline; }
+		.back-link { font-size: 13px; color: #bbb; }
+		h1 { font-weight: normal; font-size: 30px; letter-spacing: 0.03em; margin: 14px 0 6px; }
+		h2 { font-weight: normal; font-size: 21px; color: #e0a458; margin-top: 2.2em;
+		     border-bottom: 1px solid #444; padding-bottom: 4px; }
+		h3 { font-weight: normal; font-size: 16px; color: #eee; margin-bottom: 0.3em; }
+		.lead { color: #bbb; }
+		.katex-display { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+		code { background: rgba(255,255,255,0.07); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+	</style>
 </head>
 <body>
-<!-- pandoc -s --mathjax details.md -o details.html -->
+<main>
+	<a href="index.html" class="back-link">&larr; Back to the game</a>
+	<h1>Games in 2-Manifolds</h1>
+	<p class="lead">The math behind the Non-Euclidean Spaceship: one formula for the
+	three geometries, with the curvature \(K\in\{0,1,-1\}\) as a parameter, and
+	a closed surface for each, so nothing ever flies off to infinity.</p>
 
-<h1 id="games-in-2-manifolds">Games in 2-manifolds</h1>
-<h2 id="metric">Metric</h2>
-<p><span class="math">\[ds^2=\frac{4(dx^2+dy^2)}{(1+K(x^2+y^2))^2}=\frac{4dz\overline{dz}}{(1+K|z|^2)^2}\]</span></p>
-<p><span class="math">\[\begin{align*}
-\text{arctan}_K(z) &amp;=\sum_{n=0}^\infty \frac{K^nz^{2n+1}}{2n+1} \\
-  &amp;=\left\{
-    \begin{array}{cc}
-    \text{arctanh(z)}, &amp; \text{ if }K=-1\\
-    \text{z}, &amp; \text{ if }K=0\\
-    \text{arctan(z)}, &amp; \text{ if }K=1
-    \end{array}
-    \right.
-\end{align*}\]</span></p>
-<p><span class="math">\[d(z_1,z_2)=2\text{arctan}_K\left|\frac{z_1-z_2}{1+Kz_1\overline{z_2}}\right|\]</span></p>
-<h2 id="isometries">Isometries</h2>
-<p>Translation (<span class="math">\(a\rightarrow 0\)</span>) <span class="math">\[T_a(z)=\frac{z-a}{1+Kz\overline{a}}\]</span></p>
-<p>Rotation 0 <span class="math">\[R_\theta(z)=e^{i\theta}z\]</span></p>
-<p>Reflection 0 <span class="math">\[R(z)=-z\]</span></p>
-<p>Mirror (<span class="math">\(a\leftrightarrow0\)</span>) <span class="math">\[M(z)=\frac{a^2}{|a|^2}\frac{\overline{a-z}}{1+Ka\overline{z}}\]</span></p>
-<p>Perpendicular Bisector (<span class="math">\(\overline{0a}\)</span>) <span class="math">\[K|a|^2(x^2+y^2)+2a_xx+2a_yy=|a|^2\]</span></p>
-<p>If <span class="math">\(K\neq 0\)</span>, <span class="math">\[\left(x+K\frac{a_x}{|a|^2}\right)^2+
-\left(y+K\frac{a_y}{|a|^2}\right)^2=\frac{1}{|a|^2}+K\]</span></p>
-<p>Midpoint (<span class="math">\(\overline{0a}\)</span>) <span class="math">\[m=\left\{\begin{array}{cc}
-  \frac{1}{2}a, \text{ if }K=0\\
-  K\frac{\sqrt{1+K|a|^2}-1}{|a|^2}a
-\end{array}\right.\]</span></p>
-<h2 id="geodesic-circle-or">Geodesic Circle <span class="math">\((O,R)\)</span></h2>
-<p><span class="math">\[p=\text{tan}_K\left(\frac{R}{2}\right)\]</span></p>
-<p><span class="math">\[\left(x-\frac{O_x(1+Kp^2)}{1-p^2K^2|O|^2}\right)^2+
-\left(y-\frac{O_y(1+Kp^2)}{1-p^2K^2|O|^2}\right)^2=
-\left(\frac{p(1+K|O|^2)}{1-p^2K^2|O|^2}\right)^2\]</span></p>
-<h2 id="geodesic-update-rule">Geodesic Update Rule</h2>
-<p><span class="math">\[L(q_x,q_y,p_x,p_y)=\frac{4(p_x^2+p_y^2)}{(1+K(q_x^2+q_y^2))^2}\]</span> <span class="math">\[L_d(q_x,q_y,q_x&#39;,q_y&#39;,h)=
-hL\left(q_x,q_y,\frac{q_x&#39;-q_x}{h},\frac{q_y&#39;-q_y}{h}\right)\]</span></p>
-<p><span class="math">\[\begin{align*}
-p_x &amp;= \frac{8}{h(1+K|q|^2)^2}
-\left(\Delta q_x +
-2 K q_x\left((\Delta q_x)^2+(\Delta q_y)^2\right) \right) \\
-p_y &amp;= \frac{8}{h(1+K|q|^2)^2}
-\left(\Delta q_y +
-2 K q_y\left((\Delta q_x)^2+(\Delta q_y)^2\right) \right) \\
-q_x&#39;&amp;=q_x+\Delta q_x \\
-q_y&#39;&amp;=q_y+\Delta q_y \\
-p_x&#39;&amp;=\frac{8\Delta q_x}{h(1+K|q|^2)^2}\\
-p_y&#39;&amp;=\frac{8\Delta q_y}{h(1+K|q|^2)^2}\\
-\end{align*}\]</span></p>
+	<h2>The three surfaces</h2>
+	<p>Each surface is drawn as a <em>fundamental domain</em>: a polygon whose edges
+	are glued in pairs. Leaving through an edge means coming back through the edge
+	it is glued to. In the game, glued edges are drawn in the same color.</p>
+
+	<h3>Euclidean (\(K=0\)): flat torus</h3>
+	<p>The square \([-1,1]^2\) with opposite sides glued by the translations
+	\(z\mapsto z\pm 2\) and \(z\mapsto z\pm 2i\).</p>
+
+	<h3>Elliptic (\(K=1\)): projective plane</h3>
+	<p>The unit disk is the upper hemisphere of the sphere, under stereographic
+	projection. Its boundary circle is the equator, and each point is glued to its
+	antipode
+	$$z\mapsto -\frac{1}{\overline z}=-\frac{z}{|z|^2}.$$
+	This map reverses orientation, so the surface is non-orientable: an object that
+	crosses the circle comes back mirrored.</p>
+
+	<h3>Hyperbolic (\(K=-1\)): genus-2 surface</h3>
+	<p>A regular octagon in the Poincaré disk with interior angles \(\pi/4\), so
+	that eight copies meet at each vertex. Its sides are arcs of circles orthogonal
+	to the unit circle, centered at \(C e^{ik\pi/4}\) with radius \(R\):
+	$$\ell=\tfrac12\left(2^{1/4}+2^{-1/4}\right),\qquad C=\frac{\ell}{\cos(\pi/8)},\qquad R=C\tan(\pi/8),\qquad C^2=1+R^2.$$
+	Side \(k\) is glued to side \(k+4\) by a reflection across a line through the
+	origin, followed by the inversion in the circle of side \(k+4\).</p>
+
+	<h2>Metric</h2>
+	$$ds^2=\frac{4(dx^2+dy^2)}{(1+K(x^2+y^2))^2}=\frac{4\,dz\,\overline{dz}}{(1+K|z|^2)^2}$$
+	$$\arctan_K(z)=\sum_{n=0}^\infty \frac{K^n z^{2n+1}}{2n+1}=
+	\begin{cases}
+	\operatorname{arctanh}(z), & K=-1\\
+	z, & K=0\\
+	\arctan(z), & K=1
+	\end{cases}$$
+	$$d(z_1,z_2)=2\arctan_K\left|\frac{z_1-z_2}{1+Kz_1\overline{z_2}}\right|$$
+	<p>Collisions use this distance, minimized over the glued copies of the second
+	point. On the projective plane, the antipode is at distance \(\pi\), so the
+	distance there is \(\min(d,\pi-d)\).</p>
+
+	<h2>Isometries</h2>
+	<p>Translation (\(a\to 0\))</p>
+	$$T_a(z)=\frac{z-a}{1+Kz\overline{a}}$$
+	<p>Rotation around 0</p>
+	$$R_\theta(z)=e^{i\theta}z$$
+	<p>Reflection through 0</p>
+	$$R(z)=-z$$
+	<p>Mirror (\(a\leftrightarrow0\))</p>
+	$$M(z)=\frac{a^2}{|a|^2}\frac{\overline{a-z}}{1+Ka\overline{z}}$$
+	<p>Perpendicular bisector of \(\overline{0a}\)</p>
+	$$K|a|^2(x^2+y^2)+2a_xx+2a_yy=|a|^2$$
+	<p>If \(K\neq 0\),</p>
+	$$\left(x+K\frac{a_x}{|a|^2}\right)^2+\left(y+K\frac{a_y}{|a|^2}\right)^2=\frac{1}{|a|^2}+K$$
+	<p>Midpoint of \(\overline{0a}\)</p>
+	$$m=\begin{cases}
+	\frac{1}{2}a, & K=0\\
+	K\dfrac{\sqrt{1+K|a|^2}-1}{|a|^2}\,a, & K\neq0
+	\end{cases}$$
+	<p>Each sprite is drawn by pulling every pixel \(z\) back with \(T_a\) (with
+	\(a\) the object's position), then dividing by its direction \(e^{i\theta}\),
+	and reading the texture there.</p>
+
+	<h2>Geodesic circle \((O,R)\)</h2>
+	$$p=\tan_K\left(\frac{R}{2}\right)$$
+	$$\left(x-\frac{O_x(1+Kp^2)}{1-p^2K^2|O|^2}\right)^2+
+	\left(y-\frac{O_y(1+Kp^2)}{1-p^2K^2|O|^2}\right)^2=
+	\left(\frac{p(1+K|O|^2)}{1-p^2K^2|O|^2}\right)^2$$
+
+	<h2>Geodesic update rule</h2>
+	<p>Objects move along geodesics, integrated with a variational integrator: the
+	Lagrangian is discretized, and the discrete Euler–Lagrange equations are solved
+	for the next position.</p>
+	$$L(q_x,q_y,p_x,p_y)=\frac{4(p_x^2+p_y^2)}{(1+K(q_x^2+q_y^2))^2}$$
+	$$L_d(q_x,q_y,q_x',q_y',h)=hL\left(q_x,q_y,\frac{q_x'-q_x}{h},\frac{q_y'-q_y}{h}\right)$$
+	<p>Given \((q,p)\), the step \(\Delta q\) solves \(p=-\partial L_d/\partial q\)
+	(a quadratic system, solved in closed form in <code>solveSystem</code>), and the new
+	momentum is \(p'=\partial L_d/\partial q'\):</p>
+	$$\begin{aligned}
+	p_x &= \frac{8}{h(1+K|q|^2)^2}\left(\Delta q_x+\frac{2Kq_x\left((\Delta q_x)^2+(\Delta q_y)^2\right)}{1+K|q|^2}\right)\\
+	p_y &= \frac{8}{h(1+K|q|^2)^2}\left(\Delta q_y+\frac{2Kq_y\left((\Delta q_x)^2+(\Delta q_y)^2\right)}{1+K|q|^2}\right)\\
+	q_x' &= q_x+\Delta q_x, \qquad q_y' = q_y+\Delta q_y\\
+	p_x' &= \frac{8\Delta q_x}{h(1+K|q|^2)^2}, \qquad p_y' = \frac{8\Delta q_y}{h(1+K|q|^2)^2}
+	\end{aligned}$$
+</main>
 </body>
 </html>

@@ -1,4 +1,4 @@
-<!-- pandoc -s --mathjax details.md -o details.html -->
+<!-- Notes; the page shown in the game is details.html (KaTeX), edited by hand. -->
 
 Games in 2-manifolds
 ====================
@@ -68,10 +68,10 @@ hL\left(q_x,q_y,\frac{q_x'-q_x}{h},\frac{q_y'-q_y}{h}\right)$$
 $$\begin{align*}
 p_x &= \frac{8}{h(1+K|q|^2)^2}
 \left(\Delta q_x +
-2 K q_x\left((\Delta q_x)^2+(\Delta q_y)^2\right) \right) \\
+\frac{2 K q_x\left((\Delta q_x)^2+(\Delta q_y)^2\right)}{1+K|q|^2} \right) \\
 p_y &= \frac{8}{h(1+K|q|^2)^2}
 \left(\Delta q_y +
-2 K q_y\left((\Delta q_x)^2+(\Delta q_y)^2\right) \right) \\
+\frac{2 K q_y\left((\Delta q_x)^2+(\Delta q_y)^2\right)}{1+K|q|^2} \right) \\
 q_x'&=q_x+\Delta q_x \\
 q_y'&=q_y+\Delta q_y \\
 p_x'&=\frac{8\Delta q_x}{h(1+K|q|^2)^2}\\

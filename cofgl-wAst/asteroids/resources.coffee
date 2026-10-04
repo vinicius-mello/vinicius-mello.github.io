@@ -11,7 +11,6 @@ RESOURCES = [
   ['space/laser', 'assets/textures/laser.png'],
   ['space/spaceship', 'assets/textures/spaceship.png'],
   ['space/2spaceship', 'assets/textures/2spaceship.png'],
-  ['space/spaceship', 'assets/textures/spaceship.png'],
 ]
 
 

@@ -66,6 +66,39 @@
 			accent-color: #e0a458;
 			margin-right: 4px;
 		}
+		.sidebar p.hint {
+			margin-top: 8px;
+			font-size: 12px;
+			color: #999;
+		}
+		.sidebar p.caption {
+			margin-top: 14px;
+			font-size: 13px;
+			line-height: 1.45;
+			color: #ccc;
+			min-height: 5.8em;
+		}
+		.toggle {
+			display: block;
+			margin-top: 10px;
+			font-size: 13px;
+			color: #ddd;
+			cursor: pointer;
+		}
+		.toggle input {
+			accent-color: #e0a458;
+			margin-right: 4px;
+		}
+		.math-link {
+			display: inline-block;
+			margin-top: 14px;
+			font-size: 13px;
+			color: #e0a458;
+			text-decoration: none;
+		}
+		.math-link:hover {
+			text-decoration: underline;
+		}
 		.container {
 			flex: 1;
 			display: flex;
@@ -78,6 +111,7 @@
 			   for the page's own top/bottom margin) */
 			width: min(768px, calc(100vw - 320px), calc(100vh - 80px));
 			height: min(768px, calc(100vw - 320px), calc(100vh - 80px));
+			touch-action: none;
 		}
 		/* the FPS/debug table is appended straight to <body> by the game
 		   engine, as a sibling after .game-layout - match it to the
@@ -92,11 +126,9 @@
 	<script type=text/javascript src=../lib/jquery.js></script>
 	<script type=text/javascript src=../lib/gl-matrix.js></script>
 	<script type=text/javascript src=../lib/webgl-debug.js></script>
-	<script type=text/javascript src=../lib/hammer.js></script>
 	<script type=text/javascript src=../compiled/engine.js></script>
 	<script type=text/javascript src=../compiled/contextobj.js></script>
 	<script type=text/javascript src=../compiled/process.js></script>
-	<script type=text/javascript src=../compiled/world.js></script>
 	<script type=text/javascript src=../compiled/resmgr.js></script>
 	<script type=text/javascript src=../compiled/resources.js></script>
 	<script type=text/javascript src=../compiled/texture.js></script>
@@ -105,6 +137,7 @@
 	<script type=text/javascript src=../compiled/complex.js></script>
 	<script type=text/javascript src=../compiled/transformations.js></script>
 	<script type=text/javascript src=../compiled/step.js></script>
+	<script type=text/javascript src=../compiled/gluing.js></script>
 	<script type=text/javascript src=../compiled/game.js></script>
 	<script type=text/javascript src=../compiled/spaceship.js></script>
 	<script type=text/javascript src=../compiled/asteroid.js></script>
@@ -117,39 +150,21 @@
 	<script type=text/javascript src=../compiled/helpers.js></script>
 </head>
 
-<script>
-function pageLoad() {
-  if (!window.WebGLRenderingContext) {
-     // Browser has no idea what WebGL is. Suggest they
-     // get a new browser by presenting the user with link to
-     // http://get.webgl.org
-     //location.href = "http://get.webgl.org";
-     document.getElementById("gameCanvas").innerHTML="<p></br> You browser don't support WebGL. </br> Please verify on <a href='http://get.webgl.org'> http://get.webgl.org </a></p></br>";
-     return;
-  }
-
-  gl = viewport.getContext("webgl");
-  if (!gl) {
-    // Browser could not initialize WebGL. User probably needs to
-    // update their drivers or get a new browser. Present a link to
-    // http://get.webgl.org/troubleshooting
-    document.getElementById("gameCanvas").innerHTML="<p></br> Browser could not initialize WebGL. </br> Please verify on <a href='http://get.webgl.org/troubleshooting'> http://get.webgl.org/troubleshooting </a></p></br>";
-    return;
-  }
-}
-window.onload = pageLoad;
-</script>
 
 <div class="game-layout">
 	<div class="sidebar">
 		<a href="../../index.html" class="back-link">&larr; Prof. Vinícius</a>
 		<h1>Non-Euclidean Spaceship</h1>
-		<p>Use arrow/WASD keys for navigation and SPACE for shooting.</p>
+		<p>Arrow/WASD keys to fly, SPACE to shoot, P to pause.</p>
+		<p class="hint">On touch screens, drag on the left half to steer and hold the right half to shoot.</p>
 		<div id="geoselector">
 		    <label><input type="radio" name="geometry" value="euclidean" checked="checked" /> Euclidean</label>
 		    <label><input type="radio" name="geometry" value="elliptic" /> Elliptic</label>
 		    <label><input type="radio" name="geometry" value="hyperbolic" /> Hyperbolic</label>
 		</div>
+		<p id="geocaption" class="caption"></p>
+		<label class="toggle"><input type="checkbox" id="showgluing" checked> Show gluing</label>
+		<a href="details.html" class="math-link">The math behind it &rarr;</a>
 	</div>
 	<div class="container" >
 		<canvas id="composite" width="768" height="768" style="display: block; margin: 0;"></canvas>

@@ -39,11 +39,11 @@ bool inside_tex(vec2 zn, vec2 a, vec2 d, sampler2D tex) {
 }
 
 bool tex_glue(vec2 z, vec2 a, vec2 d, sampler2D tex) {
-    if(inside_tex(glue(z,vec2(2.0,0.0)), a, d, tex)) return true;
-    if(inside_tex(glue(z,-vec2(2.0,0.0)), a, d, tex)) return true;
-    if(inside_tex(glue(z,vec2(0.0,2.0)), a, d, tex)) return true;
-    if(inside_tex(glue(z,-vec2(0.0,2.0)), a, d, tex)) return true;
-    if(inside_tex(z, a, d, tex)) return true;
+    for(int i=-1;i<=1;++i) {
+        for(int j=-1;j<=1;++j) {
+            if(inside_tex(glue(z,vec2(2.0*float(i),2.0*float(j))), a, d, tex)) return true;
+        }
+    }
     return false;
 }
 

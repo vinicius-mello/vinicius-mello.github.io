@@ -1,151 +1,197 @@
 keyMapping =
-  40:     'break'        # Arrow Down
-  38:     'thurst'       # Arrow Up
+  40:     'brake'        # Arrow Down
+  38:     'thrust'       # Arrow Up
   37:     'rotateLeft'   # Arrow Left
   39:     'rotateRight'  # Arrow Right
-  83:     'break'        # S
-  87:     'thurst'       # W
+  83:     'brake'        # S
+  87:     'thrust'       # W
   65:     'rotateLeft'   # A
   68:     'rotateRight'  # D
   32:     'fire'         # Spacebar
 
-swipedir = undefined
-x = undefined
-startX = undefined
-startY = undefined
-distX = undefined
-distY = undefined
-threshold = 150
-restraint = 140
-allowedTime = 500
-elapsedTime = undefined
-startTime = undefined
+TICK = 1/60            # longest physics step (s)
+MAX_FRAME = 0.25       # longest frame simulated at once (e.g. after a hiccup)
+FIRE_COOLDOWN = 0.12   # s between shots while fire is held
+SHIELD_TIME = 1.5      # s of invulnerability after a hit or a new wave
+TOUCH_DEADZONE = 20    # px a steering touch must move before it acts
 
 #coffee -cwo compiled src/. asteroids/.
 
+# In-place, so arrays shared with other objects stay valid.
+removeWhere = (array, pred) ->
+  i = array.length
+  while i--
+    array.splice(i, 1) if pred array[i]
+  array
+
+randomVelocity = (min, max) ->
+  speed = min + Math.random()*(max - min)
+  ang = Math.random()*2*Math.PI
+  {x: speed*Math.cos(ang), y: speed*Math.sin(ang)}
+
+captions =
+  euclidean: "Flat torus. Leave through one edge and you come back through the
+    opposite one: edges of the same color are glued."
+  elliptic: "Projective plane, curvature +1. Antipodal points of the circle are
+    glued (same colors). Crossing it mirrors you: the surface is non-orientable."
+  hyperbolic: "Genus-2 surface, curvature &minus;1. Opposite sides of the octagon
+    (same colors) are glued; eight octagons meet at each corner."
+
+# localStorage may be unavailable (private mode, blocked storage)
+loadBest = (geometry) ->
+  try
+    parseInt(window.localStorage.getItem('nes-best-' + geometry), 10) || 0
+  catch e
+    0
+
+saveBest = (geometry, score) ->
+  try
+    window.localStorage.setItem('nes-best-' + geometry, score)
+  catch e
+
+
 class Game
   constructor: ->
-    @actions = {}
-    for code, action of keyMapping
-      @actions[action] = false
-
-  restart: (geometry) ->
-    @geometry = @geometries[geometry]
-    @spaceShip = new cofgl.SpaceShip()
-    @bullets = []
-    @asteroids = []    
-    @newWave()
-    @world = new cofgl.World(@spaceShip, @asteroids, @bullets)
+    @keys = {}      # action -> held, from the keyboard
+    @touches = {}   # touch identifier -> {fire, x0, y0, x, y}
 
   initGame: ->
-    #@processor = new cofgl.Processor cofgl.resmgr.resources['shaders/nothing']
-    @processor = new cofgl.Processor cofgl.resmgr.resources['shaders/postprocess']
+    {resources} = cofgl.resmgr
+    #@processor = new cofgl.Processor resources['shaders/nothing']
+    @processor = new cofgl.Processor resources['shaders/postprocess']
+    texture = (name) ->
+      cofgl.Texture.fromImage resources[name], {mipmaps: true, filtering: 'LINEAR'}
+    @textures =
+      spaceship: texture 'space/spaceship'
+      asteroid: texture 'space/asteroid'
+      bigAsteroid: texture 'space/asteroid1'
+      laser: texture 'space/laser'
     @geometries =
       euclidean:
         name: "euclidean"
         k: 0
-        shader: cofgl.resmgr.resources['shaders/euclidean']
+        shader: resources['shaders/euclidean']
         step: cofgl.euclidTorusStep
+        distance: cofgl.torusDistance
       elliptic:
         name: "elliptic"
         k: 1
-        shader: cofgl.resmgr.resources['shaders/elliptic']
+        shader: resources['shaders/elliptic']
         step: cofgl.kleinStep
+        distance: cofgl.projectiveDistance
       hyperbolic:
         name: "hyperbolic"
         k: -1
-        shader: cofgl.resmgr.resources['shaders/hyperbolic']
+        shader: resources['shaders/hyperbolic']
         step: cofgl.poincareBitorusStep
-    @geometry = @geometries.euclidean
-    # @geometry = @geometries.elliptic
-    # @geometry = @geometries.hyperbolic
+        distance: cofgl.bitorusDistance
+    {gl} = cofgl.engine
+    gl.disable gl.DEPTH_TEST
+    @world = new cofgl.World this
+    # the browser may restore a previously checked radio button on reload
+    @restart $("input[name='geometry']:checked").val()
+
+  restart: (geometry) ->
+    @geometry = @geometries[geometry] ? @geometries.euclidean
     @spaceShip = new cofgl.SpaceShip()
     @bullets = []
-    @asteroids = []    
+    @asteroids = []
+    @time = 0
+    @lastFireTime = -Infinity
+    @best = loadBest @geometry.name
+    @newRecord = false
+    @state = 'playing'
     @newWave()
-    @world = new cofgl.World(@spaceShip, @asteroids, @bullets, @c)
-    {gl} = cofgl.engine
-    gl.disable gl.DEPTH_TEST    
+    $('#geocaption').html captions[@geometry.name]
 
   initEventHandlers: ->
     $(window)
-      .bind 'keydown', (event) =>
-        this.onKeyDown event
-      .bind 'keyup', (event) =>
-        this.onKeyUp event
-      .bind 'touchstart', (event) =>
-        this.onTouchStart event
-      .bind 'touchend', (event) =>
-        this.onTouchEnd event
-      .bind 'touchcancel', (event) =>
-        this.onTouchCancel event
-      .bind 'touchleave', (event) =>
-        this.onTouchLeave event
-      .bind 'touchendMove', (event) =>
-        this.onTouchMove event
+      .on 'keydown', (event) => this.onKeyDown event
+      .on 'keyup', (event) => this.onKeyUp event
+      .on 'blur', => this.pause()
+    $('#composite')
+      .on 'touchstart touchmove', (event) => this.onTouch event
+      .on 'touchend touchcancel', (event) => this.onTouchEnd event
+    $("input[name='geometry']").on 'change', ->
+      cofgl.game.restart this.value
+      this.blur()   # so the arrow keys steer the ship, not the radio group
+    @showGluing = $('#showgluing').prop('checked')
+    $('#showgluing').on 'change', ->
+      cofgl.game.showGluing = this.checked
+      this.blur()
 
   onKeyDown: (event) ->
+    switch event.which
+      when 80, 27   # P, Esc
+        this.togglePause()
+        return false
+      when 13       # Enter
+        @restart @geometry.name if @state == 'gameover'
+        return false
     action = keyMapping[event.which]
     if action?
-      @actions[action] = true
+      @keys[action] = true
       false
 
   onKeyUp: (event) ->
     action = keyMapping[event.which]
-    if action == 'fire' then @resetBulletCooldown()
     if action?
-      @actions[action] = false
+      @keys[action] = false
       false
 
-  onTouchStart: (event) ->
+  # Left half of the screen is a virtual joystick (drag from where the finger
+  # landed: sideways to turn, up to thrust, down to brake); right half fires.
+  onTouch: (event) ->
     event.preventDefault()
-    touchobj = event.originalEvent.touches[0] or event.originalEvent.changedTouches[0]
-    x = touchobj.pageX - event.target.offsetLeft
-    # y = touchobj.pageY - event.target.offsetTop
-    # console.log "ponto: " + x + "x"
-    # console.log "ponto: " + y + "y"
-    if x > $('#composite')[0].width /2 
-      @fire(@spaceShip, @bullets)
-    else
-      swipedir = 'none'
-      dist = 0
-      startX = touchobj.pageX
-      startY = touchobj.pageY
-      now = new Date
-      startTime = now.getTime() 
+    rect = event.currentTarget.getBoundingClientRect()
+    for t in event.originalEvent.changedTouches
+      x = t.clientX - rect.left
+      y = t.clientY - rect.top
+      touch = @touches[t.identifier]
+      if touch?
+        touch.x = x
+        touch.y = y
+      else if event.type == 'touchstart'
+        if @state == 'gameover'
+          @restart @geometry.name
+        else if @state == 'paused'
+          @state = 'playing'
+        else
+          @touches[t.identifier] = {fire: x > rect.width/2, x0: x, y0: y, x: x, y: y}
+    false
 
   onTouchEnd: (event) ->
-    event.preventDefault()     
-    if x < $('#composite')[0].width /2 
-      touchobj = event.originalEvent.changedTouches[0] or event.originalEvent.touches[0]
-      distX = touchobj.pageX - startX
-      # get horizontal distance
-      distY = touchobj.pageY - startY
-      # get vertical distance
-      now = new Date
-      elapsedTime = now.getTime() - startTime
-      if elapsedTime <= allowedTime
-        #condition for horizontal swipe
-        if Math.abs(distX) >= threshold and Math.abs(distY) <= restraint
-          swipedir = if distX < 0 then 'left' else 'right'
-        # condition for vertical swipe 
-        else if Math.abs(distY) >= threshold and Math.abs(distX) <= restraint
-          # if negative, up swipe
-          swipedir = if distY < 0 then 'up' else 'down'
-      switch swipedir
-        when 'up' then @spaceShip.swipeThurst()
-        when 'down' then @spaceShip.swipeBreak()
-        when 'left' then @spaceShip.swipeLeft()
-        when 'right' then @spaceShip.swipeRight() 
+    event.preventDefault()
+    for t in event.originalEvent.changedTouches
+      delete @touches[t.identifier]
+    false
 
-  onTouchCancel: (event) ->
-    event.preventDefault()  
+  pause: ->
+    @state = 'paused' if @state == 'playing'
+    # key/touch releases are lost while the window is unfocused
+    @keys = {}
+    @touches = {}
 
-  onTouchLeave: (event) ->
-    event.preventDefault()   
+  togglePause: ->
+    if @state == 'paused'
+      @state = 'playing'
+    else
+      this.pause()
 
-  onTouchMove: (event) ->
-    event.preventDefault()   
+  currentActions: ->
+    actions = {}
+    actions[action] = held for action, held of @keys
+    for id, t of @touches
+      if t.fire
+        actions.fire = true
+      else
+        dx = t.x - t.x0
+        dy = t.y - t.y0
+        actions.rotateLeft = true if dx < -TOUCH_DEADZONE
+        actions.rotateRight = true if dx > TOUCH_DEADZONE
+        actions.thrust = true if dy < -TOUCH_DEADZONE
+        actions.brake = true if dy > TOUCH_DEADZONE
+    actions
 
   run: ->
     cofgl.resmgr.wait =>
@@ -155,171 +201,97 @@ class Game
 
   mainloop: ->
     cofgl.engine.mainloop (dt) =>
-      @updateGame dt
+      @advance Math.min(dt, MAX_FRAME)
       @render()
-      @updateUI dt
-      @compose() 
+      @updateUI()
+      @compose()
 
-  updateGame: (dt) ->
-    @checkCollision @spaceShip, @asteroids, @bullets
-    @handleInput()
+  # Each frame is split into equal substeps of at most TICK, so motion
+  # advances by exactly the frame time (no jitter from a fixed-step
+  # accumulator running 0 or 2 steps in some frames).
+  advance: (dt) ->
+    return if @state == 'paused'
+    n = Math.ceil(dt/TICK)
+    @tick dt/n for i in [0...n]
+
+  tick: (h) ->
+    @time += h
+    asteroid.update h for asteroid in @asteroids
+    # after game over the asteroids keep drifting behind the message
+    return if @state == 'gameover'
+    @handleInput h
+    bullet.update h for bullet in @bullets
+    removeWhere @bullets, (b) -> b.faded
+    @spaceShip.update h
+    @checkCollisions()
+
+  handleInput: (h) ->
+    actions = @currentActions()
+    @spaceShip.steer (if actions.rotateLeft then 1 else 0) - (if actions.rotateRight then 1 else 0), h
+    @spaceShip.thrust h if actions.thrust
+    @spaceShip.brake h if actions.brake
+    @fire() if actions.fire
+
+  fire: ->
+    return if @time - @lastFireTime < FIRE_COOLDOWN
+    @bullets.push new cofgl.Bullet(@spaceShip.q, @spaceShip.dir)
+    @lastFireTime = @time
+
+  checkCollisions: ->
+    {distance} = @geometry
+
+    #asteroid/bullet
     for asteroid in @asteroids
-      asteroid.update dt      
-    for b, @bullet of @bullets 
-      if @bullet.faded
-        @bullets.splice(b, 1)
-      else
-        @bullet.update dt
-    @spaceShip.update dt
-    @world.update dt
+      for bullet in @bullets when not bullet.faded
+        if distance(asteroid.q, bullet.q) < asteroid.radius
+          bullet.faded = true
+          asteroid.hp -= 1
+          @spaceShip.score += 1
+          if asteroid.hp <= 0
+            @spaceShip.score += 10
+            break
+    removeWhere @bullets, (b) -> b.faded
+    destroyed = (a for a in @asteroids when a.hp <= 0)
+    removeWhere @asteroids, (a) -> a.hp <= 0
+    for old in destroyed when old.initial
+      for i in [1..2]
+        @asteroids.push new cofgl.Asteroid(old.q, randomVelocity(0.2, 0.45), false)
+    @newWave() if @asteroids.length == 0
 
-  handleInput: ->
-    if @actions.rotateRight
-      #console.debug "rotateRight"
-      @spaceShip.rotateRight()
-    if @actions.rotateLeft
-      #console.debug "rotateLeft"
-      @spaceShip.rotateLeft()
-    if @actions.thurst
-      #console.debug "thurst"
-      @spaceShip.thurst()
-    if @actions.break
-      #console.debug "break"
-      @spaceShip.break()
-    if @actions.fire
-      @fire(@spaceShip, @bullets)
+    #asteroid/spaceShip
+    return if @spaceShip.shield > 0
+    for asteroid in @asteroids
+      if distance(asteroid.q, @spaceShip.q) < asteroid.radius + @spaceShip.radius
+        @shipHit()
+        break
 
-  checkCollision: (@sp, @as, @blt) ->
-    geo = $("input[name='geometry']:checked").val()
-    k = @geometries[geo].k
-    # console.debug "k: "+k
-
-    #handle asteroid/bullet collision
-    for a, @asteroid of @as
-      for b, @bullet of @blt
-        # if(Math.pow(@asteroid.radius+@bullet.radius,2) > Math.pow(@bullet.q.x - @asteroid.q.x,2) + Math.pow(@bullet.q.y-@asteroid.q.y,2)) 
-        if @asteroid.radius > metric(@asteroid.q, @bullet.q, k) 
-          # vf = finalVelocity(@asteroid, @bullet)
-          @asteroid.hp = @asteroid.hp - 1
-          @sp.score = @sp.score + 1
-          @blt.splice(b, 1)
-          if @asteroid.hp <= 0
-            @sp.score = @sp.score + 10
-            @divideAsteroid(@asteroid, a)
-
-    #handle asteroid/spaceShip collision
-    if !@sp.hit
-      for @asteroid in @as
-        r = @asteroid.radius+@sp.radius
-        r = Math.sqrt(r*r)
-        # console.debug "radiusTotal: " + r
-        # console.debug "metric: " + metric(@asteroid.q, @sp.q, k)
-        if r > metric(@asteroid.q, @sp.q, k) 
-          handleHit geo, @sp
-          break
-
-    #handle asteroid/asteroid collision
-    # for a1, @asteroid1 of @as
-      # for a2, @asteroid2 of @as
-      #   if a1 != a2 
-      #     r = @asteroid1.radius+@asteroid2.radius
-      #     r = Math.sqrt(r*r)
-      #     if r > metric(@asteroid1.q, @asteroid2.q, k) 
-      #       vf = finalVelocity(@asteroid1, @asteroid2)
-      #       @as[a1].p = vf.a
-      #       @as[a2].p = vf.b
-
-  divideAsteroid: (@old, @index) -> 
-    if @old.initial
-      asteroid1 = new cofgl.Asteroid(@old.q, {x:Math.random()/2, y:Math.random()/2}, false)
-      asteroid2 = new cofgl.Asteroid(@old.q, {x:Math.random()/2, y:Math.random()/2}, false)
-      @asteroids.push asteroid1
-      @asteroids.push asteroid2
-    @asteroids.splice(@index, 1)
-    if @asteroids.length == 0
-      @newWave()
-
-  handleHit = (geo, @sp) ->
-    @sp.hp = @sp.hp - 1
-    if @sp.hp > 0
-      @sp.hit = true
-      @sp.hitShield()
+  shipHit: ->
+    @spaceShip.hp -= 1
+    if @spaceShip.hp > 0
+      @spaceShip.respawn SHIELD_TIME
     else
-      cofgl.game.restart geo
-      #gameOver
+      @gameOver()
 
-  metric = (z1, z2, k) ->
-    #d(z1, z2) = 2arctanK| z1-z2 / 1 + Kz1z2_ |     
-    ck = new cofgl.Complex(k, 0.0)
-    cOne = new cofgl.Complex(1, 0)
-    # numerator = z1.minus(z2)
-    # denominator = cOne.plus(z1.times(z2.conjugate()).times(ck))
-    # z = numerator.divide(denominator)
-    z = z1.minus(z2).divide(cOne.plus(z1.times(z2.conjugate()).times(ck)))
-    z = Math.sqrt(z.magnitude) #abs
-    switch k
-      when -1 then d = Math.atanh(z)
-      when 0 then d = z
-      when 1 then d = Math.atan(z)
-    # console.log d
-    return d*2
+  gameOver: ->
+    @state = 'gameover'
+    @bullets.length = 0
+    if @spaceShip.score > @best
+      @best = @spaceShip.score
+      @newRecord = true
+      saveBest @geometry.name, @best
 
-  # finalVelocity = (a, b) ->
-  #   #ke =1/2*m*v^2
-  #   #p = mv (em cada eixo )
-  #   #v = p/m
-  #   totalMass = new cofgl.Complex(a.mass + b.mass, 0.0)
-  #   massDiff = new cofgl.Complex(a.mass - b.mass, 0.0)
-  #   bMass = new cofgl.Complex(b.mass, 0.0)
-  #   aMass = new cofgl.Complex(a.mass, 0.0)
-  #   two = new cofgl.Complex(2.0, 0.0)
-
-  #   console.log "a initial p:"
-  #   console.log a.p
-  #   #vaf = (2*mb*vbi + vai*(ma – mb))/(ma + mb)
-  #   vaf = ((two.times(bMass).times(b.p)).plus(a.p.times(massDiff))).divide(totalMass)
-  #   console.log "a final p:"
-  #   console.log vaf
-  #   console.log "b initial p:"
-  #   console.log b.p
-  #   #vbf = (2*ma*vai - vbi*(ma – mb))/(ma + mb)
-  #   vbf = ((two.times(aMass).times(a.p)).plus(b.p.times(massDiff))).divide(totalMass)
-  #   console.log "b final p:"
-  #   console.log vbf
-  #   return {a:vaf, b:vbf}
-
-  fire: (@sp, @bullets) ->
-    now = new Date()
-    if now.getTime() - @sp.lastBulletTime >= @sp.bulletCooldown
-      if @sp.bulletsUsed < 10 #max bullet stream
-        bullet = new cofgl.Bullet(@sp.q, @sp.p, @sp.dir)
-        @bullets.push bullet
-        # console.log @sp.bulletsUsed
-        @sp.bulletsUsed = @sp.bulletsUsed + 1
-        # console.log @sp.bulletsUsed
-        @sp.lastBulletTime = now.getTime()
-    
-  resetBulletCooldown: ->
-    @sp.lastBulletTime = 0
-    @sp.bulletsUsed = 0
-
-  magnitude = (pa, pb)->
-    [a, b] = [pa?.x - pb?.x, pa?.y - pb?.y]
-    Math.sqrt Math.pow(a, 2) + Math.pow(b, 2)
-  
-  addAsteroid: -> 
-    # #initial position won't be near the center
+  addAsteroid: ->
+    #initial position won't be near the center
     randomQ = {x:(if Math.random()<.5 then -1 else 1)*(Math.random()*0.2 + 0.4), y:(if Math.random()<.5 then -1 else 1)*(Math.random()*0.2 + 0.4)}
-    randomP = {x:Math.random()/3, y:Math.random()/3}
-    asteroid = new cofgl.Asteroid(randomQ, randomP, true)
-    @asteroids.push asteroid
+    @asteroids.push new cofgl.Asteroid(randomQ, randomVelocity(0.15, 0.35), true)
 
-  newWave: =>
+  newWave: ->
     @spaceShip.wave = @spaceShip.wave + 1
-    @addAsteroid() for i in [0...@spaceShip.wave]# + 2]
+    @addAsteroid() for i in [0...@spaceShip.wave]
+    # the ship may be anywhere when the new asteroids appear
+    @spaceShip.shield = SHIELD_TIME if @spaceShip.wave > 1
 
   render: ->
-#    {gl} = cofgl.engine
     cofgl.clear()
     @processor.push()
     @world.draw()
@@ -331,49 +303,77 @@ class Game
     ctx.drawImage($('#viewport')[0], 0, 0)
     ctx.drawImage($('#gui')[0], 0, 0)
 
-  updateUI: (dt) ->
+  updateUI: ->
     guiCanvas = $('#gui')[0]
     gui = guiCanvas.getContext('2d')
-    gui.clearRect(0, 0, guiCanvas.width, guiCanvas.height);
+    w = guiCanvas.width
+    h = guiCanvas.height
+    gui.clearRect(0, 0, w, h)
+    cofgl.drawGluing gui, @geometry.name if @showGluing
 
     gui.globalAlpha = 0.9
-    gui.fillStyle = "#f00"
-    #Lives
+    gui.fillStyle = "#e0a458"
+    gui.textBaseline = "alphabetic"
     gui.font = "bold 16px sans-serif"
-    gui.fillText("Lives: " + @spaceShip.hp, 15, 20)
-    #Score
+    gui.textAlign = "left"
+    gui.fillText("Lives: " + Math.max(@spaceShip.hp, 0), 15, 25)
+    gui.textAlign = "right"
+    gui.fillText("Score: " + @spaceShip.score, w - 15, 25)
+    gui.font = "14px sans-serif"
+    gui.fillText("Best: " + Math.max(@best, @spaceShip.score), w - 15, 45)
     gui.font = "bold 16px sans-serif"
-    gui.fillText("Score", guiCanvas.width - 60, 20)
-    gui.font = "bold 18px sans-serif"
-    gui.fillText(@spaceShip.score, guiCanvas.width - 60, 40)
-    #Shield
-      #tbd
-    #Waves
-    gui.font = "bold 16px sans-serif"
-    gui.fillText("Wave: " + @spaceShip.wave, guiCanvas.width - 80, guiCanvas.height - 20)
-    
-    if @spaceShip.hit
-      gui.globalAlpha = 0.5
-      gui.fillStyle = "#000"
-      gui.fillRect(guiCanvas.width/2 - 90, guiCanvas.height - 25, 160, 20)
-      gui.globalAlpha = 1.0
-      gui.fillStyle = "#00f"
-      gui.fillText("Go to a safe zone!", guiCanvas.width/2 - 80, guiCanvas.height - 10)
-    
+    gui.fillText("Wave: " + @spaceShip.wave, w - 15, h - 15)
+
+    if @spaceShip.shield > 0 and @state == 'playing'
+      gui.textAlign = "center"
+      gui.fillStyle = "#7fc8ff"
+      gui.fillText("Shield", w/2, h - 15)
+
+    switch @state
+      when 'paused'
+        @drawOverlay gui, "PAUSED", ["Press P or tap to resume"]
+      when 'gameover'
+        lines = ["Score: " + @spaceShip.score]
+        lines.push(if @newRecord then "New record!" else "Best: " + @best)
+        lines.push "Press Enter or tap to play again"
+        @drawOverlay gui, "GAME OVER", lines
+    gui.globalAlpha = 1.0
+
+  drawOverlay: (gui, title, lines) ->
+    w = gui.canvas.width
+    h = gui.canvas.height
+    gui.globalAlpha = 0.6
+    gui.fillStyle = "#000"
+    gui.fillRect(0, h/2 - 70, w, 30*lines.length + 90)
+    gui.globalAlpha = 1.0
+    gui.textAlign = "center"
+    gui.fillStyle = "#e0a458"
+    gui.font = "bold 36px sans-serif"
+    gui.fillText(title, w/2, h/2 - 20)
+    gui.fillStyle = "#ddd"
+    gui.font = "18px sans-serif"
+    for line, i in lines
+      gui.fillText(line, w/2, h/2 + 20 + 30*i)
+
 initEngineAndGame = (selector, debug) ->
   canvas = $(selector)[0]
+  # probe on a scratch canvas: the engine sets its own context options
+  unless window.WebGLRenderingContext and document.createElement('canvas').getContext('webgl')
+    $('.container').html(
+      "<p>Your browser could not initialize WebGL.<br>See " +
+      "<a href='https://get.webgl.org'>get.webgl.org</a>.</p>")
+    return
   cofgl.debugPanel = new cofgl.DebugPanel()
   cofgl.engine = new cofgl.Engine(canvas, debug)
   cofgl.resmgr = cofgl.makeDefaultResourceManager()
   cofgl.game = new Game
   cofgl.game.run()
-  $("input[name='geometry']").change( -> cofgl.game.restart this.value)
 
 
 $(document).ready ->
   debug = cofgl.getRuntimeParameter('debug') == '1'
   initEngineAndGame '#viewport', debug
-  
+
 
 
 root = self.cofgl ?= {}
@@ -382,8 +382,3 @@ root.geometries = null
 root.debugPanel = null
 root.resmgr = null
 root.engine = null
-
-# toCheck
-# http://seb.ly/demos/JSTouchController/Touches.html
-# http://seb.ly/demos/JSTouchController/TouchControl.html
-# https://github.com/sebleedelisle/JSTouchController

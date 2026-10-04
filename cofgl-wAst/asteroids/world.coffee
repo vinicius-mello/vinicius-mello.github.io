@@ -1,88 +1,36 @@
 
 class World
-  constructor: (@spaceShip, @asteroids, @bullets, @c) ->
-    @shader = cofgl.game.geometry.shader
-    @bgColor = cofgl.floatColorFromHex '#F2F3DC'
+  constructor: (@game) ->
     @vbo = cofgl.makeQuadVBO()
-    @spaceShip.world = this
-    now = new Date()
-    @startTime = now.getTime()
-    for @asteroid in @asteroids
-      @asteroid.world = this
-    for @bullet in @bullets
-      @bullet.world = this
     @backgroundShader = cofgl.resmgr.resources['shaders/starfield']
 
-    #cofgl.engine.height/width/aspect
-
-  update: (dt) ->
-
   draw: ->
-    #   {gl} = cofgl.engine
-    cofgl.clear '#fff'#@bgColor
+    cofgl.clear '#fff'
 
-  #starField 
-    now = new Date()
-    time = now.getTime() - @startTime
+  #starField
     cofgl.withContext [@backgroundShader], =>
-      @backgroundShader.uniform1f "time", time/1000
+      @backgroundShader.uniform1f "time", @game.time
       @backgroundShader.uniform2f "resolution", cofgl.engine.width, cofgl.engine.height
       @vbo.draw()
 
-  #Asteroids
-    for @asteroid in @asteroids
-      q = @asteroid.q
-      p = @asteroid.p
-      dir = @asteroid.dir
-      ts = @asteroid.ts
-      inverted = @asteroid.inv
-      cSides = @asteroid.cSides
-      cofgl.withContext [@shader, @asteroid.texture], =>
-        @shader.uniform2f "uq", q.x, q.y
-        @shader.uniform2f "up", p.x, p.y
-        @shader.uniform2f "udir", dir.x, dir.y
-        @shader.uniform1f "texSize", ts
-        @shader.uniform1f "inverted", inverted
-        @shader.uniform1f "glueSide1", cSides[1]
-        @shader.uniform2f "glueSide2", cSides[0]
-        @vbo.draw()
+    this.drawObject asteroid for asteroid in @game.asteroids
+    this.drawObject bullet for bullet in @game.bullets
 
-#Bullets
-    for @bullet in @bullets
-      q = @bullet.q
-      p = @bullet.p
-      dir = @bullet.dir
-      ts = @bullet.ts
-      inverted = @bullet.inv
-      cSides = @bullet.cSides
-      cofgl.withContext [@shader, @bullet.texture], =>
-        @shader.uniform2f "uq", q.x, q.y
-        @shader.uniform2f "up", p.x, p.y
-        @shader.uniform2f "udir", dir.x, dir.y
-        @shader.uniform1f "texSize", ts
-        @shader.uniform1f "inverted", inverted
-        @shader.uniform1f "glueSide1", cSides[1]
-        @shader.uniform2f "glueSide2", cSides[0]
-        @vbo.draw()
+  #SpaceShip: hidden after game over, blinking while the shield is up
+    ship = @game.spaceShip
+    if @game.state != 'gameover' and Math.floor(ship.shield * 8) % 2 == 0
+      this.drawObject ship
 
-  #SpaceShip
-    q = @spaceShip.q
-    p = @spaceShip.p
-    dir = @spaceShip.dir
-    ts = @spaceShip.ts
-    inverted = @spaceShip.inv
-    cSides = @spaceShip.cSides
-    # console.log cSides[1] + " e " + cSides[0]
-    cofgl.withContext [@shader, @spaceShip.texture], =>
-      @shader.uniform2f "uq", q.x, q.y
-      @shader.uniform2f "up", p.x, p.y
-      @shader.uniform2f "udir", dir.x, dir.y
-      @shader.uniform1f "texSize", ts
-      @shader.uniform1f "inverted", inverted
-      @shader.uniform1f "glueSide1", cSides[1]
-      @shader.uniform2f "glueSide2", cSides[0]
+  drawObject: (obj) ->
+    shader = @game.geometry.shader
+    cofgl.withContext [shader, obj.texture], =>
+      shader.uniform2f "uq", obj.q.x, obj.q.y
+      shader.uniform2f "up", obj.p.x, obj.p.y
+      shader.uniform2f "udir", obj.dir.x, obj.dir.y
+      shader.uniform1f "texSize", obj.ts
+      shader.uniform1f "inverted", obj.inv
       @vbo.draw()
-    
+
 
 root = self.cofgl ?= {}
 root.World = World

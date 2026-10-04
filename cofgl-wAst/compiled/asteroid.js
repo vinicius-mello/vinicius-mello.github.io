@@ -6,19 +6,12 @@
 
   Asteroid = (function() {
     function Asteroid(q, p, initial) {
-      var ang;
       this.initial = initial;
-      this.texture = cofgl.Texture.fromImage(cofgl.resmgr.resources['space/' + (this.initial ? 'asteroid1' : 'asteroid')], {
-        mipmaps: true,
-        filtering: 'LINEAR'
-      });
+      this.texture = this.initial ? cofgl.game.textures.bigAsteroid : cofgl.game.textures.asteroid;
       this.inv = 1.0;
       this.q = new cofgl.Complex(q.x, q.y);
       this.p = new cofgl.Complex(p.x, p.y);
       this.dir = new cofgl.Complex(1.0, 0.0);
-      ang = Math.PI / 180 * 5;
-      this.left = new cofgl.Complex(Math.cos(ang), Math.sin(ang));
-      this.right = new cofgl.Complex(Math.cos(-ang), Math.sin(-ang));
       if (this.initial) {
         this.ts = 9.0;
         this.radius = 2 / this.ts;
@@ -30,13 +23,12 @@
         this.mass = 20;
         this.hp = 2;
       }
-      this.cSides = [10.0, 10.0];
     }
 
     Asteroid.prototype.update = function(dt) {
       var i, _i, _ref;
       for (i = _i = 1; 1 <= step_iterations ? _i <= step_iterations : _i >= step_iterations; i = 1 <= step_iterations ? ++_i : --_i) {
-        _ref = cofgl.game.geometry.step(this.q, this.p, this.dir, dt / step_iterations, this.inv, this.cSides), this.q = _ref[0], this.p = _ref[1], this.dir = _ref[2], this.inv = _ref[3], this.cSides = _ref[4];
+        _ref = cofgl.game.geometry.step(this.q, this.p, this.dir, dt / step_iterations, this.inv), this.q = _ref[0], this.p = _ref[1], this.dir = _ref[2], this.inv = _ref[3];
       }
       this.dir = this.dir.plus(this.p);
       return this.dir.normalize();
