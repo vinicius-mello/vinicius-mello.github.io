@@ -121,14 +121,21 @@ const tokenizer = (text) => {
     // collide with anything - see the editor's "\dash" input escape.
     { regex: /^—[^\S\r\n]*\r?\n/u, type: 'LINE_CONTINUATION' },
     { regex: /^⍝[^\n]*/u, type: 'COMMENT' },
-    { regex: /^(⍺{1,2}|⍵{1,2}|∇{1,2}|[⍶⍹⍙])/u, type: 'SPECIAL_VAR' },
+    { regex: /^(⍺{1,2}|⍵{1,2}|∇{1,2}|[⍶⍹])/u, type: 'SPECIAL_VAR' },
+    // Names may use ∆ and ⍙ like letters (Dyalog's own naming rule). Checked
+    // ahead of SYMBOL below, which would otherwise grab ∆ (a math symbol).
+    { regex: /^[\p{L}_∆⍙][\p{L}0-9_∆⍙]*/u, type: 'IDENTIFIER' },
     // Excludes \r\n on purpose - \s alone would greedily swallow a trailing
     // line's newline together with any spaces/tabs before it (e.g. "1   \n"),
     // silently dropping the SEPARATOR token and fusing two lines into one
     // expression. Bare \r\n is left for the SEPARATOR spec above to match.
     { regex: /^[^\S\r\n]+/, type: 'WHITESPACE' },
-    { regex: /^[¯]?\d+(\.\d+)?/u, type: 'NUMBER' },
-    { regex: /^'[^'\\]*(?:\\.[^'\\]*)*'/, type: 'STRING' },
+    // Scientific notation too (1E3, 2.5e¯4) - the exponent needs at least
+    // one digit, so a name glued to a number (2e) can't be mistaken for one.
+    { regex: /^¯?\d+(\.\d+)?([eE]¯?\d+)?/u, type: 'NUMBER' },
+    // A quote inside a string is doubled, as in APL ('it''s'); backslash
+    // escapes (\n, \t...) are also kept, as plain JS escapes.
+    { regex: /^'(?:[^'\\]|\\.|'')*'/, type: 'STRING' },
     { regex: /^#[0-9\p{L}\-]+/u, type: 'STRING' },
     { regex: /^\(/, type: 'PAREN_OPEN' },
     { regex: /^\)/, type: 'PAREN_CLOSE' },
@@ -136,10 +143,10 @@ const tokenizer = (text) => {
     { regex: /^\}/, type: 'BRACE_CLOSE' },
     { regex: /^←/u, type: 'ASSIGN' },
     { regex: /^:/, type: 'GUARD' },
-    { regex: /^⎕[a-z]+/u, type: 'IDENTIFIER' },
+    // System names are case-insensitive (⎕PP is ⎕pp), see the tokenizer loop.
+    { regex: /^⎕[a-zA-Z]+/u, type: 'IDENTIFIER' },
     { regex: /^∘\./u, type: 'SYMBOL' },
     { regex: /^[@\\!\?\*¨,-\/\p{Math}\p{Sm}\p{So}]/u, type: 'SYMBOL' },
-    { regex: /^[\p{L}_][\p{L}0-9_]*/u, type: 'IDENTIFIER' }
   ];
     
   let cursor = 0;
@@ -149,6 +156,7 @@ const tokenizer = (text) => {
     for (const spec of specs) {
       const match = text.slice(cursor).match(spec.regex);
       if (match) {
+        const firstNew = tokens.length;
         if (spec.type !== 'WHITESPACE' && spec.type !== 'COMMENT' && spec.type !== 'LINE_CONTINUATION') {
           if(spec.type === 'SYMBOL' && match[0] === '∘.') {
             tokens.push({ type: 'SYMBOL', value: '→' });
@@ -157,9 +165,26 @@ const tokenizer = (text) => {
             //console.log('String with # prefix detected:', match[0]);
             const strContent = "'"+match[0].slice(1)+"'";
             tokens.push({ type: spec.type, value: strContent });
+          } else if (spec.type === 'IDENTIFIER' && match[0].startsWith('⎕')) {
+            tokens.push({ type: spec.type, value: match[0].toLowerCase() });
+          } else if (spec.type === 'STRING' && match[0].startsWith("'")) {
+            // Re-spelled as a valid JS single-quoted literal: a doubled ''
+            // becomes \', and a raw line break (a string spanning lines)
+            // becomes \n, since emitJs splices the token text in as-is.
+            const inner = match[0].slice(1, -1).replace(/''/g, "\\'").replace(/\r?\n/g, '\\n');
+            tokens.push({ type: spec.type, value: `'${inner}'` });
+          } else if (spec.type === 'IDENTIFIER' && /[∆⍙]/u.test(match[0])) {
+            // ∆/⍙ aren't legal in a JS identifier, and every APL name ends
+            // up as one in the generated code - spell them with $, which no
+            // APL name can contain, so nothing can collide.
+            tokens.push({ type: spec.type, value: match[0].replaceAll('∆', '$D').replaceAll('⍙', '$U') });
           } else {
             tokens.push({ type: spec.type, value: match[0] });
           }
+        }
+        // Source offset of every token, for error messages.
+        for (let j = firstNew; j < tokens.length; j++) {
+          tokens[j].pos = cursor;
         }
         cursor += match[0].length;
         matched = true;
@@ -167,7 +192,7 @@ const tokenizer = (text) => {
       }
     }
     if (!matched) {
-      throw new Error(`Unexpected character: "${text[cursor]}"`);
+      throw new Error(`SYNTAX ERROR: unexpected character "${text[cursor]}" at position ${cursor}`);
     }
   }
   return tokens;
@@ -254,7 +279,6 @@ const global_category = {
   '@': { category:'D', name: 'at' },
   '↑': { category:'F', name: 'take' },
   '↓': { category:'F', name: 'drop' },
-  '⍣': { category:'D', name: 'power' },
   '⍥': { category:'D', name: 'over' },
   '⍠': { category:'F', name: 'buildObject' },
   // Purely a parse-time marker (see reduceStack): ⍞ relabels the F/M/D
@@ -283,11 +307,17 @@ const global_category = {
   '⍤': { category:'D', name: 'rank' },
   '⌸': { category:'M', name: 'key' },
   '⌹': { category:'F', name: 'domino' },
+  '⍪': { category:'F', name: 'table' },
+  '⊇': { category:'F', name: 'select' },
+  '⌺': { category:'D', name: 'stencil' },
   '⎕typeof': { category:'F', name: 'typeOf' },
   // Print precision: how many significant digits formatNum/⎕←/⍕ show for a
   // number. A plain read/write variable (category V, not a function), same
   // as ⎕ itself - ⎕pp←4 compiles to a normal assignment (G.pp = 4).
   '⎕pp': { category:'V', name: 'pp' },
+  // Index origin: fixed at 0 in this implementation. Readable like any
+  // system variable; assigning anything but 0 is an error (see G.io).
+  '⎕io': { category:'V', name: 'io' },
   // Constant JS values, same read/write-variable shape as ⎕pp - ⎕null and
   // ⎕undefined are two genuinely different "nothing" values in JS/JSON,
   // neither of which any APL primitive here otherwise produces.
@@ -392,7 +422,7 @@ const mdfunc = (m,d,w,a) => {
     } else if (Array.isArray(w)) {
       return w.map(x => mdfunc(m,d,x));
     } else {
-      throw new Error('Unsupported type for monadic function');
+      throw new Error('DOMAIN ERROR: Unsupported type for monadic function');
     }
   }
   if (isBoxed(w) || isBoxed(a)) {
@@ -409,11 +439,11 @@ const mdfunc = (m,d,w,a) => {
   }
   if (Array.isArray(w) && Array.isArray(a)) {
     if (w.length !== a.length) {
-      throw new Error('Arrays must be of the same length for element-wise operation.');
+      throw new Error('LENGTH ERROR: Arrays must be of the same length for element-wise operation.');
     }
     return a.map((x, i) => mdfunc(m,d,w[i],x));
   } else {
-    throw new Error('Unsupported types for dyadic function');
+    throw new Error('DOMAIN ERROR: Unsupported types for dyadic function');
   }
 }
 
@@ -439,23 +469,53 @@ const matchRec = (w, a) => {
 
 const mod = (w,a) => w-a*Math.floor(w/(a+((0===a)?1:0)));
 
-const factorial = (n) => {
-  if (n < 0) {
-    throw new Error('Factorial is not defined for negative numbers');
-  } 
-  if (n === 0) {
-    return 1;
+// Gamma: Stirling's series for ln Γ, after shifting x up to ≥ 10 with
+// Γ(x) = Γ(x+n) / (x(x+1)...(x+n-1)), where the series is accurate to
+// double precision; the reflection formula covers x < 0.5.
+const gamma = (x) => {
+  if (x < 0.5) {
+    return Math.PI / (Math.sin(Math.PI * x) * gamma(1 - x));
   }
-  let result = 1;
-  for (let i = 1; i <= n; i++) {
-    result *= i;
+  let shift = 1;
+  while (x < 10) {
+    shift *= x;
+    x += 1;
   }
-  return result;
+  const x2 = x * x;
+  const series = 1 / 12 - (1 / 360 - (1 / 1260 - (1 / 1680 - (1 / 1188 - (691 / 360360 - 1 / (156 * x2)) / x2) / x2) / x2) / x2) / x2;
+  const lnGamma = (x - 0.5) * Math.log(x) - x + 0.5 * Math.log(2 * Math.PI) + series / x;
+  return Math.exp(lnGamma) / shift;
 };
 
+// !⍵ is Γ(⍵+1): exact product for a non-negative integer, gamma otherwise.
+// A negative integer is a pole - DOMAIN ERROR, as in Dyalog (!2.5 is
+// 3.323350970, !¯0.5 is 1.772453851).
+const factorial = (n) => {
+  if (Number.isInteger(n)) {
+    if (n < 0) {
+      throw new Error('DOMAIN ERROR: ! of a negative integer');
+    }
+    let result = 1;
+    for (let i = 2; i <= n; i++) {
+      result *= i;
+    }
+    return result;
+  }
+  return gamma(n + 1);
+};
+
+// ⍺!⍵ (k!n): the binomial coefficient, and its gamma generalization
+// (!n)÷(!k)×!n-k for non-integers.
 const binomial = (n, k) => {
-  if (k < 0 || k > n) {
-    return 0;
+  if (Number.isInteger(n) && Number.isInteger(k) && n >= 0) {
+    if (k < 0 || k > n) {
+      return 0;
+    }
+    let result = 1;
+    for (let i = 1; i <= Math.min(k, n - k); i++) {
+      result = result * (n - Math.min(k, n - k) + i) / i;
+    }
+    return Math.round(result);
   }
   return factorial(n) / (factorial(k) * factorial(n - k));
 };
@@ -512,19 +572,14 @@ const drel = (f, w, a) => {
   if (isBoxed(w) || isBoxed(a)) {
     return pervadeBoxed((w2, a2) => drel(f, w2, a2), w, a);
   }
-  if (typeof w === 'number' && typeof a === 'number') {
+  // A multi-character string is a character vector, compared item by item;
+  // two scalars (numbers or single characters, mixed freely) compare
+  // directly. Verified against real Dyalog: 'a'='a' is the scalar 1, and
+  // 1='a' is 0 rather than an error.
+  w = charItems(w);
+  a = charItems(a);
+  if (!Array.isArray(w) && !Array.isArray(a)) {
     return f(w, a) ? 1 : 0;
-  }
-  if(typeof w === 'string' && typeof a === 'string') {
-    if(a.length===1) {
-      return w.split('').map(x => f(x, a) ? 1 : 0);
-    }
-    if(w.length===1) {
-      return a.split('').map(x => f(w, x) ? 1 : 0);
-    }
-    if(w.length===a.length) {
-      return a.split('').map((x,i) => f(w[i], x) ? 1 : 0);
-    }
   }
   if(!Array.isArray(a) && Array.isArray(w)) {
     return w.map(x => drel(f, x, a));
@@ -534,14 +589,43 @@ const drel = (f, w, a) => {
   }
   if(Array.isArray(a) && Array.isArray(w)) {
     if (a.length !== w.length) {
-      throw new Error('Arrays must be of the same length for element-wise comparison.');
+      throw new Error('LENGTH ERROR: Arrays must be of the same length for element-wise comparison.');
     }
     return a.map((x, i) => drel(f, w[i], x));
   }
-  throw new Error('Unsupported types for comparison');
+  throw new Error('DOMAIN ERROR: Unsupported types for comparison');
 }
 
+// Strings: this file keeps text as plain JS strings (so they reach d3/Plot
+// and other JS untouched), read two ways. A string ARGUMENT - the whole
+// value a primitive gets - is a character vector (a 1-character one a
+// character scalar), so ⍴'abc' is ,3. A string sitting as an ITEM of an
+// array is opaque, like a box - 'ab' 'cd' is a 2-vector of enclosed
+// strings, never misread as a 2×2 character matrix. Structural primitives
+// split a string argument with charItems and, when the result is again a
+// plain run of characters, turn it back into a string with joinChars.
+const isChar = (x) => typeof x === 'string' && x.length === 1;
+const charItems = (x) => (typeof x === 'string' && x.length !== 1 ? x.split('') : x);
+const joinChars = (x) => (Array.isArray(x) && !isBoxed(x) && x.every(isChar) ? x.join('') : x);
+// Fill element (Dyalog's prototype, simplified): ' ' for character data,
+// 0 for anything else - judged by the first simple scalar found.
+const fillFor = (x) => {
+  let first = x;
+  while (Array.isArray(first) && first.length > 0) {
+    first = first[0];
+  }
+  return typeof first === 'string' ? ' ' : 0;
+};
+
 const shapeRec = (arr) => {
+  if (typeof arr === 'string') {
+    return arr.length === 1 ? [] : [arr.length];
+  }
+  return itemShapeRec(arr);
+};
+
+// shapeRec's structural walk, where a string is an opaque item (see above).
+const itemShapeRec = (arr) => {
   const equalShape = (a, b) => {
     if(a.length !== b.length) 
       return false;
@@ -557,9 +641,9 @@ const shapeRec = (arr) => {
   if (Array.isArray(arr.shape)) {
     return arr.shape.slice();
   }
-  const shape = shapeRec(arr[0]);
+  const shape = itemShapeRec(arr[0]);
   for(let i=1; i<arr.length; i++) {
-    if(!equalShape(shape, shapeRec(arr[i]))) {
+    if(!equalShape(shape, itemShapeRec(arr[i]))) {
       return [arr.length];
     }
   }
@@ -604,6 +688,35 @@ const at = (arr, idx) => {
   return result;
 };
 
+// Depth (monadic ≡): 0 for a simple scalar, otherwise 1 + the deepest
+// depth among the CONTENTS of its scalar cells (a box's content is what it
+// wraps, any other cell is its own content) - negated when those depths
+// differ, as in Dyalog. Cells are found via shapeRec, so a plain matrix
+// (rows are axes, not items) stays depth 1, and a box (rank 0, one cell)
+// adds exactly one level. A multi-character string counts as a simple
+// vector, a 1-character one as a scalar. Verified against real Dyalog:
+// ≡5 is 0, ≡1 2 is 1, ≡(1 2)(3 4) is 2, ≡1(2 3) is ¯2, ≡⍬ is 1.
+const depth = (w) => {
+  if (typeof w === 'string') {
+    return w.length === 1 ? 0 : 1;
+  }
+  if (!Array.isArray(w)) {
+    return 0;
+  }
+  const contents = [];
+  if (isBoxed(w)) {
+    contents.push(w[0]);
+  } else {
+    traverseShapeRec(shapeRec(w), (prefix) => {
+      const cell = at(w, prefix);
+      contents.push(isBoxed(cell) ? cell[0] : cell);
+    });
+  }
+  const depths = contents.map(depth);
+  const max = Math.max(0, ...depths.map(Math.abs));
+  return depths.every((d) => d === max) ? 1 + max : -(1 + max);
+};
+
 const assignRec = (arr, idx, value) => {
   if(typeof idx === 'number') {
     arr[idx] = value;
@@ -625,7 +738,7 @@ const getRec = (arr, idx) => {
     idx = [idx];
   }
   if (!Array.isArray(idx)) {
-    throw new Error('Unsupported index type for squad');
+    throw new Error('DOMAIN ERROR: Unsupported index type for squad');
   }
   if (idx.length === 0) {
     return arr;
@@ -635,7 +748,7 @@ const getRec = (arr, idx) => {
   // arr[i] silently return JS undefined here instead of erroring.
   // Verified against real Dyalog: 2⌷⊂1 2 3 4 5 is a LENGTH ERROR.
   if (!Array.isArray(arr) || isBoxed(arr)) {
-    throw new Error('Length error: too many indices for squad');
+    throw new Error('LENGTH ERROR: too many indices for squad');
   }
   // A per-axis selector is a box when it's meant to select several indices
   // along this axis (e.g. (0 1)(2)⌷M picks rows 0 and 1, column 2) - it
@@ -647,7 +760,7 @@ const getRec = (arr, idx) => {
   const rest = idx.slice(1);
   const checkBounds = (i) => {
     if (typeof i !== 'number' || i < 0 || i >= arr.length) {
-      throw new Error('Index error: index out of bounds for squad');
+      throw new Error('INDEX ERROR: index out of bounds for squad');
     }
   };
   if (typeof t === 'number') {
@@ -655,7 +768,7 @@ const getRec = (arr, idx) => {
     return getRec(arr[t], rest);
   }
   if (!Array.isArray(t)) {
-    throw new Error('Unsupported index type for squad');
+    throw new Error('DOMAIN ERROR: Unsupported index type for squad');
   }
   const result = [];
   for (let i = 0; i < t.length; i++) {
@@ -676,7 +789,7 @@ const pickPath = (w, path) => {
   for (const idx of path) {
     if (isBoxed(current)) current = current[0];
     if (!Array.isArray(current) || typeof idx !== 'number' || idx < 0 || idx >= current.length) {
-      throw new Error('Index error: pick path out of bounds');
+      throw new Error('INDEX ERROR: pick path out of bounds');
     }
     current = current[idx];
   }
@@ -741,11 +854,11 @@ const permute = (a, p) => {
     return a;
   }
   if (!Array.isArray(p)) {
-    throw new Error('Permutation must be an array');
+    throw new Error('DOMAIN ERROR: Permutation must be an array');
   }
   const shape = shapeRec(a);
   if (p.length !== shape.length) {
-    throw new Error('Permutation length must match the array rank');
+    throw new Error('LENGTH ERROR: Permutation length must match the array rank');
   }
   const newShape = p.map(i => shape[i]);
   const ip = invertPermutation(p);
@@ -787,7 +900,7 @@ const matInverse = (A) => {
       }
     }
     if (pivotAbs < 1e-10) {
-      throw new Error('Matrix is singular and has no inverse');
+      throw new Error('DOMAIN ERROR: Matrix is singular and has no inverse');
     }
     if (pivotRow !== col) {
       [M[col], M[pivotRow]] = [M[pivotRow], M[col]];
@@ -909,32 +1022,62 @@ const rotateAxis = (w, a, firstAxis) => {
   });
 };
 
-const partitionEnclose = (a, w) => {
-  if (typeof w === 'string') {
-    w = w.split('');
+// Shared by dyadic ⊂ and ⊆: ⍺ (a scalar extends) is split against ⍵'s
+// items, and every resulting partition comes back enclosed. A string ⍵ is
+// split into characters and each partition joined back into a string, in
+// keeping with this file's "a string is one JS string" model.
+const partitionArgs = (a, w, name) => {
+  const wasString = typeof w === 'string';
+  const items = wasString ? w.split('') : w;
+  if (!Array.isArray(items)) {
+    throw new Error(`DOMAIN ERROR: ${name} requires an array right argument`);
   }
-  if (!Array.isArray(w) || !Array.isArray(a)) {
-    throw new Error('Partitioned enclose requires arrays');
+  const keys = Array.isArray(a) ? a.map((k) => (isBoxed(k) ? k[0] : k)) : items.map(() => a);
+  if (keys.length !== items.length) {
+    throw new Error(`LENGTH ERROR: ${name} requires ⍺ and ⍵ of the same length`);
   }
-  const result = [];
-  let current = null;
-  let currentKey = null;
-  for (let i = 0; i < w.length; i++) {
-    const key = a[i];
-    if (!key) {
-      current = null;
-      currentKey = null;
-      continue;
+  const finish = (parts) => parts.map((p) => (wasString ? p.join('') : boxOf(p)));
+  return { items, keys, finish };
+};
+
+// Partitioned enclose (⍺⊂⍵): ⍺[i] is how many NEW partitions start right
+// before ⍵[i] (0 just continues the current one; more than 1 inserts
+// empties), and items before the first partition start are dropped.
+// Verified against real Dyalog: 1 0 1 0⊂1 2 3 4 is (1 2)(3 4), and
+// 0 1 0 2⊂1 2 3 4 is (2 3)⍬(,4).
+const partitionedEnclose = (a, w) => {
+  const { items, keys, finish } = partitionArgs(a, w, 'Partitioned enclose');
+  const parts = [];
+  items.forEach((x, i) => {
+    for (let k = 0; k < keys[i]; k++) {
+      parts.push([]);
     }
-    if (current !== null && key === currentKey) {
-      current.push(w[i]);
-    } else {
-      current = [w[i]];
-      result.push(current);
-      currentKey = key;
+    if (parts.length > 0) {
+      parts[parts.length - 1].push(x);
     }
-  }
-  return result;
+  });
+  return finish(parts);
+};
+
+// Partition (⍺⊆⍵): a new partition starts wherever ⍺ grows over its left
+// neighbour, and a 0 drops its item (and ends the current partition).
+// Verified against real Dyalog: 1 1 2 2⊆1 2 3 4 is (1 2)(3 4), while
+// 2 2 1⊆1 2 3 is one partition (1 2 3) - 1 doesn't exceed 2.
+const partition = (a, w) => {
+  const { items, keys, finish } = partitionArgs(a, w, 'Partition');
+  const parts = [];
+  let previous = 0;
+  items.forEach((x, i) => {
+    const key = keys[i];
+    if (key !== 0) {
+      if (key > previous) {
+        parts.push([]);
+      }
+      parts[parts.length - 1].push(x);
+    }
+    previous = key;
+  });
+  return finish(parts);
 };
 
 const flattenDeep = (w) => {
@@ -970,9 +1113,14 @@ const roundSignificant = (x, digits) => {
   if (digits === undefined || !Number.isFinite(x) || x === 0) {
     return x;
   }
-  const magnitude = Math.pow(10, digits - Math.ceil(Math.log10(Math.abs(x))));
-  return Math.round(x * magnitude) / magnitude;
+  // toPrecision rather than scaling by a power of 10, which overflows to
+  // Infinity (and then NaN) for very small or very large x.
+  return Number(x.toPrecision(Math.min(Math.max(Math.round(digits), 1), 100)));
 };
+
+// JS number text -> APL spelling: ¯ for every minus sign (mantissa and
+// exponent alike) and Dyalog's E notation, e.g. -1e-7 -> ¯1E¯7.
+const aplNumberText = (text) => text.replace(/e\+?/, 'E').replace(/-/g, '¯').replace('Infinity', '∞');
 
 // Same, recursively applied through (possibly nested) arrays - used to
 // round a whole result/⎕← value for display without touching non-numbers
@@ -999,17 +1147,33 @@ const formatNum = (x, digits) => {
     return String(x);
   }
   const v = Object.is(roundSignificant(x, digits), -0) ? 0 : roundSignificant(x, digits);
-  return String(v).replace('-', '¯');
+  return aplNumberText(String(v));
 };
 
 const formatCell = (x, digits) => (typeof x === 'string' ? x : formatNum(x, digits));
 
+// Right-aligned columns, for ⍕'s dyadic (fixed-decimals) form.
 const padColumns = (rows) => {
   const cols = rows[0].length;
   const widths = Array.from({ length: cols }, (_, j) =>
     Math.max(...rows.map(r => r[j].length)));
   return rows.map(r => r.map((c, j) => c.padStart(widths[j])).join(' ')).join('\n');
 };
+
+// Monadic ⍕'s layout, close to Dyalog's: a simple vector is space-separated,
+// a character vector/matrix is printed as plain text, nested items sit side
+// by side two spaces apart (each item its own top-aligned block of lines,
+// so a matrix inside a vector keeps its rows), columns of a matrix are
+// right-aligned, and a rank ≥ 3 array prints its major cells one after
+// another separated by a blank line.
+const formatBlocks = (blocks, sep) => {
+  const height = Math.max(...blocks.map((b) => b.length));
+  const widths = blocks.map((b) => Math.max(0, ...b.map((line) => line.length)));
+  return Array.from({ length: height }, (_, i) =>
+    blocks.map((b, j) => (b[i] ?? '').padEnd(widths[j])).join(sep).trimEnd()).join('\n');
+};
+
+const isSimpleScalar = (x) => typeof x === 'number' || isChar(x) || x === null || typeof x === 'boolean';
 
 const formatArray = (w, digits) => {
   if (typeof w === 'string') {
@@ -1018,17 +1182,46 @@ const formatArray = (w, digits) => {
   if (!Array.isArray(w)) {
     return formatCell(w, digits);
   }
-  if (w.length === 0 || !Array.isArray(w[0])) {
-    return w.map((c) => formatCell(c, digits)).join(' ');
+  if (isBoxed(w)) {
+    return formatArray(w[0], digits);
   }
-  return padColumns(w.map(row => row.map((c) => formatCell(c, digits))));
+  const shape = shapeRec(w);
+  if (shape.includes(0)) {
+    return '';
+  }
+  const block = (x) => formatArray(x, digits).split('\n');
+  if (shape.length === 1) {
+    if (w.every(isChar)) {
+      return w.join('');
+    }
+    if (w.every(isSimpleScalar)) {
+      return w.map((c) => formatCell(c, digits)).join(' ');
+    }
+    return formatBlocks(w.map(block), '  ');
+  }
+  if (shape.length === 2) {
+    if (w.every((row) => row.every(isChar))) {
+      return w.map((row) => row.join('')).join('\n');
+    }
+    const nested = !w.every((row) => row.every(isSimpleScalar));
+    const cells = w.map((row) => row.map(block));
+    const widths = cells[0].map((_, j) => Math.max(...cells.map((row) => Math.max(...row[j].map((l) => l.length)))));
+    return cells.map((row) => {
+      const height = Math.max(...row.map((b) => b.length));
+      return Array.from({ length: height }, (_, k) => row.map((b, j) => {
+        const line = b[k] ?? '';
+        return typeof w[0][j] === 'number' && !nested ? line.padStart(widths[j]) : line.padEnd(widths[j]);
+      }).join(nested ? '  ' : ' ').trimEnd()).join('\n');
+    }).join('\n');
+  }
+  return w.map((cell) => formatArray(cell, digits)).join('\n\n');
 };
 
 const formatFixed = (x, decimals) => {
   if (typeof x !== 'number') {
     return String(x);
   }
-  return x.toFixed(decimals).replace('-', '¯');
+  return aplNumberText(x.toFixed(decimals));
 };
 
 const formatArrayFixed = (w, decimals, width) => {
@@ -1065,11 +1258,172 @@ const totalCompare = (a, b) => {
 
   if (aIsArray) return -1;
   if (bIsArray) return 1;
+  // Mixed simple scalars: numbers sort before characters, as in Dyalog,
+  // instead of whatever JS's own number/string coercion would make of it.
+  if (typeof a !== typeof b) return typeof a === 'number' ? -1 : 1;
 
   if (a < b) return -1;
   if (a > b) return 1;
   return 0;
 }
+
+// Mix (monadic ↑): ⍵'s items - each disclosed, a string read as its
+// characters - become the trailing axes of one simple array, every item
+// padded with the fill element up to the largest item's shape (a lower-rank
+// item gets leading unit axes). Verified against real Dyalog: ↑(1 2)(3 4 5)
+// is 2 3⍴1 2 0 3 4 5, and ↑1(2 3) is 2 2⍴1 0 2 3.
+const mix = (w) => {
+  if (typeof w === 'string' || !Array.isArray(w)) {
+    return w;
+  }
+  if (isBoxed(w)) {
+    return w[0];
+  }
+  const frame = shapeRec(w);
+  const items = [];
+  traverseShapeRec(frame, (p) => {
+    const cell = at(w, p);
+    items.push(charItems(isBoxed(cell) ? cell[0] : cell));
+  });
+  if (items.length === 0) {
+    return w;
+  }
+  const shapes = items.map(shapeRec);
+  const r = Math.max(...shapes.map((sh) => sh.length));
+  const padded = shapes.map((sh) => Array(r - sh.length).fill(1).concat(sh));
+  const inner = Array.from({ length: r }, (_, i) => Math.max(...padded.map((sh) => sh[i])));
+  const fill = fillFor(items[0]);
+  let k = 0;
+  const cellsByFrame = new Map();
+  traverseShapeRec(frame, (p) => { cellsByFrame.set(p.join(','), k++); });
+  return fillShapeRec(frame.concat(inner), (p) => {
+    const j = cellsByFrame.get(p.slice(0, frame.length).join(','));
+    const item = items[j];
+    const sh = padded[j];
+    const q = p.slice(frame.length);
+    if (q.some((x, i) => x >= sh[i])) {
+      return fill;
+    }
+    const realRank = shapes[j].length;
+    return realRank === 0 ? item : at(item, q.slice(r - realRank));
+  });
+};
+
+// Split (monadic ↓): each vector along ⍵'s last axis becomes one enclosed
+// item - a run of characters a string - so ↓ of a character matrix is a
+// vector of strings. Verified against real Dyalog: ↓2 3⍴⍳6 is (0 1 2)(3 4 5).
+const split = (w) => {
+  const shape = shapeRec(w);
+  if (shape.length === 0 || typeof w === 'string') {
+    return w;
+  }
+  const n = shape[shape.length - 1];
+  const result = fillShapeRec(shape.slice(0, -1), (p) => {
+    const vec = Array.from({ length: n }, (_, j) => at(w, p.concat(j)));
+    return n > 0 && vec.every(isChar) ? vec.join('') : boxOf(vec);
+  });
+  return result;
+};
+
+// Shared by G.take/G.drop (see there). For take, |⍺[i]| is the new length
+// of axis i, counted from the end when negative; for drop it's how many
+// items come off that axis (from the end when negative).
+const takeDrop = (w, a, isDrop) => {
+  const name = isDrop ? 'Drop' : 'Take';
+  const wasString = typeof w === 'string';
+  w = charItems(w);
+  if (!Array.isArray(w) || isBoxed(w)) {
+    w = [w];
+  }
+  if (typeof a === 'number') {
+    a = [a];
+  }
+  if (!Array.isArray(a)) {
+    throw new Error(`DOMAIN ERROR: ${name} requires a numeric left argument`);
+  }
+  const shape = shapeRec(w);
+  if (a.length > shape.length) {
+    throw new Error(`LENGTH ERROR: ${name} shape has more dimensions than the array`);
+  }
+  const fill = fillFor(w);
+  const resultShape = shape.slice();
+  for (let i = 0; i < a.length; i++) {
+    resultShape[i] = isDrop ? Math.max(0, shape[i] - Math.abs(a[i])) : Math.abs(a[i]);
+  }
+  const result = fillShapeRec(resultShape, (prefix) => {
+    const idx = prefix.slice();
+    for (let i = 0; i < a.length; i++) {
+      if (isDrop) {
+        idx[i] = a[i] < 0 ? prefix[i] : prefix[i] + a[i];
+      } else {
+        idx[i] = a[i] < 0 ? prefix[i] + shape[i] + a[i] : prefix[i];
+      }
+      if (idx[i] >= shape[i] || idx[i] < 0) {
+        return fill;
+      }
+    }
+    return at(w, idx);
+  });
+  if (resultShape.includes(0)) {
+    result.shape = resultShape;
+  }
+  return wasString && resultShape.length === 1 ? joinChars(result) : result;
+};
+
+// Catenation along any axis of two arrays of rank ≥ 2 (for rank ≤ 1 the
+// plain vector splice in G.comma applies). Dyalog's rules: equal ranks
+// must agree on every other axis; an argument one rank short gets a unit
+// axis inserted at the catenation axis (so a vector becomes one more
+// column/row); a scalar is extended to a full unit-thick slice. Verified
+// against real Dyalog: (2 2⍴1),2 2⍴0 is 2 4, (2 2⍴1),9 8 is 2 3, and
+// (2 2⍴1)⍪0 is 3 2.
+const catenateAxis = (a, w, firstAxis) => {
+  a = charItems(a);
+  w = charItems(w);
+  let sa = shapeRec(a);
+  let sw = shapeRec(w);
+  const r = Math.max(sa.length, sw.length);
+  const axis = firstAxis ? 0 : r - 1;
+  const raise = (x, sx, other) => {
+    if (sx.length === r) {
+      return [x, sx];
+    }
+    if (sx.length === 0) {
+      const s = other.slice();
+      s[axis] = 1;
+      return [fillShapeRec(s, () => x), s];
+    }
+    if (sx.length === r - 1) {
+      const s = sx.slice();
+      s.splice(axis, 0, 1);
+      return [fillShapeRec(s, (p) => at(x, p.filter((_, i) => i !== axis))), s];
+    }
+    throw new Error('RANK ERROR: catenation arguments differ in rank by more than 1');
+  };
+  // Raise the non-scalar side first, so a scalar side can copy its shape.
+  if (sa.length !== 0) [a, sa] = raise(a, sa, sw);
+  if (sw.length !== 0) [w, sw] = raise(w, sw, sa);
+  if (sa.length === 0) [a, sa] = raise(a, sa, sw);
+  if (sw.length === 0) [w, sw] = raise(w, sw, sa);
+  if (sa.some((d, i) => i !== axis && d !== sw[i])) {
+    throw new Error('LENGTH ERROR: catenation arguments disagree on the other axes');
+  }
+  const na = sa[axis];
+  const shape = sa.slice();
+  shape[axis] = na + sw[axis];
+  const result = fillShapeRec(shape, (p) => {
+    if (p[axis] < na) {
+      return at(a, p);
+    }
+    const q = p.slice();
+    q[axis] -= na;
+    return at(w, q);
+  });
+  if (shape.includes(0)) {
+    result.shape = shape;
+  }
+  return result;
+};
 
 // Rank operator (⍤) helper: given the requested rank `k` and an operand's
 // actual rank `n`, returns the cell rank per Dyalog's clamping rule -
@@ -1094,13 +1448,13 @@ const compressAxis = (w, a) => {
   const wIsScalar = isScalarLike(witems);
   const aIsScalar = isScalarLike(a);
   if (!wIsScalar && !Array.isArray(witems)) {
-    throw new Error('Unsupported types for compress');
+    throw new Error('DOMAIN ERROR: Unsupported types for compress');
   }
   if (!aIsScalar && !Array.isArray(a)) {
-    throw new Error('Unsupported types for compress');
+    throw new Error('DOMAIN ERROR: Unsupported types for compress');
   }
   if (!wIsScalar && !aIsScalar && witems.length !== a.length) {
-    throw new Error('Length mismatch for compress');
+    throw new Error('LENGTH ERROR: Length mismatch for compress');
   }
   const length = wIsScalar ? (aIsScalar ? 1 : a.length) : witems.length;
   const result = [];
@@ -1116,26 +1470,48 @@ const compressAxis = (w, a) => {
 };
 const expandAxis = (w, a) => {
   if (!Array.isArray(a)) {
-    throw new Error('Expand requires a 0/1 mask vector for ⍺');
+    throw new Error('DOMAIN ERROR: Expand requires a 0/1 mask vector for ⍺');
   }
-  const witems = Array.isArray(w) ? w : [w];
+  const wasString = typeof w === 'string';
+  const witems = Array.isArray(w) ? w : (wasString ? w.split('') : [w]);
+  const fill = fillFor(witems);
   let wi = 0;
   const result = [];
   for (const cell of a) {
     const bit = isBoxed(cell) ? cell[0] : cell;
     if (bit) {
       if (wi >= witems.length) {
-        throw new Error('Length error: not enough elements for expand');
+        throw new Error('LENGTH ERROR: not enough elements for expand');
       }
       result.push(witems[wi++]);
     } else {
-      result.push(0);
+      result.push(fill);
     }
   }
   if (wi !== witems.length) {
-    throw new Error('Length error: too many elements for expand');
+    throw new Error('LENGTH ERROR: too many elements for expand');
   }
-  return result;
+  return wasString ? joinChars(result) : result;
+};
+
+// The jot (∘) derived function itself - see G.jot, which wraps it to
+// attach an inverse.
+const jotApply = (f, g) => (w, a) => {
+  // f is a bound value, g a function: (f∘g)⍵ ≡ f g ⍵ - f is g's LEFT
+  // argument (⍺), the jot's own ⍵ is g's right. Every primitive here
+  // takes (w,a) positionally, so that's g(w, f), not g(f, w) - the
+  // latter swaps ⍺ and ⍵, which non-commutative functions expose.
+  // Verified against real Dyalog: (2∘|)5 is 1 (2|5), not 2.
+  if(typeof f !== 'function') {
+    return g(w, f);
+  }
+  // g is a bound value, f a function: (f∘g)⍵ ≡ ⍵ f g - the jot's own
+  // ⍵ is f's LEFT argument, g is f's right. Same swap for the same
+  // reason. Verified against real Dyalog: (|∘2)5 is 2 (5|2), not 1.
+  if(typeof g !== 'function') {
+    return f(g, w);
+  }
+  return f(g(w),a);
 };
 
 // --- Runtime: one property per primitive glyph's `name` in global_category
@@ -1228,6 +1604,12 @@ const G = {
   // assigned (⎕pp←4 compiles to a normal G.pp = 4), same as any other
   // reassignable global.
   pp: 10,
+  get io() { return 0; },
+  set io(value) {
+    if (value !== 0) {
+      throw new Error('DOMAIN ERROR: ⎕IO is fixed at 0 in APL.js');
+    }
+  },
   null: null,
   undefined: undefined,
   set quad(value) {
@@ -1237,7 +1619,7 @@ const G = {
   left: (w,a) => (a===undefined?w:a),
   each: (f)=>(w, a) => {
     if (typeof f !== 'function') {
-      throw new Error('Each requires a function');
+      throw new Error('DOMAIN ERROR: Each requires a function');
     }
     // A box is one rank-0 cell for each too, not an array to iterate -
     // same disclose/apply/re-enclose rule as pervadeBoxed/G.outer.
@@ -1251,26 +1633,41 @@ const G = {
       const aArg = isBoxed(aCell) ? aCell[0] : aCell;
       return encloseIfNeeded(f(wArg, aArg));
     };
+    // A string argument is its characters, one cell each - and if every
+    // result is again a single character, they form a string back.
+    // Verified against real Dyalog: ≢¨'abc' is 1 1 1.
+    const fromString = typeof w === 'string' && w.length !== 1;
+    w = charItems(w);
+    a = charItems(a);
     const wIsArray = Array.isArray(w) && !isBoxed(w);
     const aIsArray = Array.isArray(a) && !isBoxed(a);
+    let result;
     if (wIsArray && aIsArray) {
-      return w.map((x,i) => applyCell(x, a[i]));
+      if (w.length !== a.length) {
+        throw new Error('LENGTH ERROR: each requires arguments of the same length');
+      }
+      result = w.map((x,i) => applyCell(x, a[i]));
     } else if (wIsArray) {
-      return w.map(x => applyCell(x, a));
+      result = w.map(x => applyCell(x, a));
     } else if (aIsArray) {
-      return a.map(x => applyCell(w, x));
+      result = a.map(x => applyCell(w, x));
     } else {
       return applyCell(w, a);
     }
+    return fromString && result.length > 0 ? joinChars(result) : result;
   },
   power: (f, g)=>(w, a) => {
     if (typeof f !== 'function') {
-      throw new Error('Power requires a function');
+      throw new Error('DOMAIN ERROR: Power requires a function');
     }
     if (typeof g === 'number') {
+      // A negative count applies the inverse that many times instead -
+      // verified against real Dyalog: 2(+⍣¯1)5 is 3, and 2(⊥⍣¯1)5 is
+      // 1 0 1 (⊤ as ⊥'s inverse - see INVERSE).
+      const step = g < 0 ? inverseOf(f) : f;
       let result = w;
-      for (let i = 0; i < g; i++) {
-        result = f(result, a);
+      for (let i = 0; i < Math.abs(g); i++) {
+        result = step(result, a);
       }
       return result;
     }
@@ -1278,13 +1675,16 @@ const G = {
       let result = w;
       let newResult;
       let iterations = 100000; // Prevent infinite loops
+      // Dyalog returns the first NEW value for which (new g old) holds, not
+      // the old one - verified: {⍵×2}⍣{⍺>100}1 is 128, not 64. (For the
+      // usual ⍣= fixpoint the two coincide, which hid this.)
       while (g(result, newResult=f(result, a)) === 0 && iterations > 0) {
         result = newResult;
         iterations--;
       }
-      return result;
+      return newResult;
     }
-    throw new Error('Power requires a function or a number');
+    throw new Error('DOMAIN ERROR: Power requires a function or a number');
   },
   reverse: (w, a) => {
     if (a === undefined) {
@@ -1313,6 +1713,8 @@ const G = {
     if (a===undefined) {
       return shapeRec(w);
     }
+    const wasString = typeof w === 'string';
+    w = charItems(w);
     if (!Array.isArray(w)) {
       w = [w];
     }
@@ -1320,7 +1722,13 @@ const G = {
       a = [a];
     }
     const m = w.length;
-    const result = fillShapeRec(a, (prefix, index) => w[index % m]);
+    // An empty ⍵ has nothing to cycle through, so every position gets the
+    // fill element instead - verified against real Dyalog: 5⍴⍬ is 0 0 0 0 0.
+    const result = fillShapeRec(a, (prefix, index) => (m === 0 ? 0 : w[index % m]));
+    if (wasString && a.length === 1) {
+      // 5⍴'abc' is the string 'abcab', not a list of characters.
+      return joinChars(result);
+    }
     if (a.includes(0)) {
       // Any zero dimension collapses everything nested inside it to a
       // bare [] - e.g. 0 3⍴w has nothing left to structurally reveal the
@@ -1332,7 +1740,10 @@ const G = {
     return result;
   },
   match: (w, a) => {
-    return matchRec(w, a);  
+    if (a === undefined) {
+      return depth(w);
+    }
+    return matchRec(w, a);
   },
   tally: (w, a) => {
     if (a !== undefined) {
@@ -1343,7 +1754,7 @@ const G = {
     } else {
       return 1; 
       // console.log('tally:', w, typeof w);
-      // throw new Error(`Unsupported type for tally ${typeof w}`);
+      // throw new Error(`DOMAIN ERROR: Unsupported type for tally ${typeof w}`);
     }
   }, 
   compress: (w, a) => {
@@ -1402,11 +1813,12 @@ const G = {
   },
   deal: (w, a) => {
     if(a===undefined) {
-      return mdfunc(x => Math.floor(Math.random() * x), undefined, w);
+      // ?0 is a random float in (0,1), as in Dyalog.
+      return mdfunc(x => (x === 0 ? Math.random() : Math.floor(Math.random() * x)), undefined, w);
     }
     if (typeof w === 'number' && typeof a === 'number') {
       if (a > w) {
-        throw new Error('Deal requires the left argument to not exceed the right argument');
+        throw new Error('DOMAIN ERROR: Deal requires the left argument to not exceed the right argument');
       }
       const pool = Array.from({ length: w }, (_, i) => i);
       const result = [];
@@ -1417,21 +1829,11 @@ const G = {
       }
       return result;
     }
-    throw new Error('Unsupported types for deal');
+    throw new Error('DOMAIN ERROR: Unsupported types for deal');
   },
+  // Pervasive like any scalar function (mdfunc), so ⍺ can be a vector too:
+  // 1 2○x is sin x, cos x - previously only a scalar ⍺ was accepted.
   circle: (w, a) => {
-    if(a===undefined) {
-      if (typeof w === 'number') {
-        return Math.PI * w;
-      }
-      if (Array.isArray(w)) {
-        const result = fillShapeRec(shapeRec(w), (prefix, index) => {
-          const v = at(w, prefix);
-          return Math.PI * v;
-        });
-        return result;
-      }
-    }
     const circFunc = [
       (x) =>Math.sqrt(1.0-x*x),
       (x) =>Math.sin(x),
@@ -1454,22 +1856,21 @@ const G = {
       (x) =>Math.atanh(x),
       (x) =>-Math.sqrt(-1.0+x*x),
     ];
-    if (typeof w === 'number' && typeof a === 'number') {
-      return a>=0?circFunc[a](w):circInvFunc[-a](w);
-    }
-    if(Array.isArray(w) && typeof a === 'number') {
-      const func = a>=0?circFunc[a]:circInvFunc[-a];
-      const result = fillShapeRec(shapeRec(w), (prefix, index) => {
-        const v = at(w, prefix);
-        return func(v);
-      });
-      return result;
-    }
-    throw new Error('Unsupported types for circle');
+    const apply = (x, k) => {
+      const func = k >= 0 ? circFunc[k] : circInvFunc[-k];
+      if (!func) {
+        throw new Error(`DOMAIN ERROR: ${k}○ is not supported`);
+      }
+      return func(x);
+    };
+    return mdfunc(x => Math.PI * x, apply, w, a);
   },
   encode: (w, a) => {
-    if (typeof a === 'number')
-      a = [a];
+    // A scalar radix gives one digit per item of ⍵, the result shaped like
+    // ⍵ - verified against real Dyalog: 10⊤123 is 3, 10⊤12 34 is 2 4.
+    if (typeof a === 'number') {
+      return mdfunc(undefined, (x) => encode(x, [a])[0], w, 0);
+    }
     const shapea = shapeRec(a);
     if (typeof w === 'number' && shapea.length === 1) {
       return encode(w, a);
@@ -1492,7 +1893,7 @@ const G = {
     if (shapew.length === 1) {
       if (Array.isArray(a) && w.length !== a.length) {
         if(a.length !== 1) {
-          throw new Error('Arrays must be of the same length for decode');
+          throw new Error('LENGTH ERROR: Arrays must be of the same length for decode');
         }
       }
       return decode(w, a);
@@ -1504,7 +1905,7 @@ const G = {
     }
     const shapea = shapeRec(a);
     if(shapea[shapea.length-1] !== shapew[0]) {
-      throw new Error('Incompatible shapes for decode');
+      throw new Error('LENGTH ERROR: Incompatible shapes for decode');
     }
     const tw = transposeRec(w);
     const resultShape = shapea.slice(0, -1).concat(shapew.slice(1));
@@ -1517,7 +1918,7 @@ const G = {
   },
   outer: (f) => (w, a) => {
     if (typeof f !== 'function') {
-      throw new Error('Outer requires a function');
+      throw new Error('DOMAIN ERROR: Outer requires a function');
     }
     // A plain scalar or boxed value (⊂x) has shape ⍬ - it contributes one
     // atomic cell to the outer product, not a dimension of its own, same
@@ -1584,12 +1985,21 @@ const G = {
   },
   dot: (aa,ww) => (w, a) => {
     if (typeof aa !== 'function' || typeof ww !== 'function') {
-      throw new Error('Dot requires two functions');
+      throw new Error('DOMAIN ERROR: Dot requires two functions');
+    }
+    // A scalar side extends to match the other side's inner axis -
+    // verified against real Dyalog: 2+.×3 4 is 14.
+    if (isScalarLike(a) && !isScalarLike(w)) {
+      a = Array.from({ length: shapeRec(w)[0] }, () => a);
+    } else if (isScalarLike(w) && !isScalarLike(a)) {
+      w = Array.from({ length: shapeRec(a).at(-1) }, () => w);
+    } else if (isScalarLike(w) && isScalarLike(a)) {
+      return ww(w, a);
     }
     const sw = shapeRec(w);
     const sa = shapeRec(a);
     if(sa.at(-1) !== sw.at(0)) {
-      throw new Error('Incompatible shapes for dot product');
+      throw new Error('LENGTH ERROR: Incompatible shapes for dot product');
     }
     const resultShape = sa.slice(0, -1).concat(sw.slice(1));
     w = transposeRec(w);
@@ -1619,7 +2029,7 @@ const G = {
     // and get treated as a real (garbage) matrix. Verified against real
     // Dyalog: ⌹⊂2 2⍴1 2 3 4 is a DOMAIN ERROR, not a disclose-and-proceed.
     if (!Array.isArray(w) || isBoxed(w)) {
-      throw new Error('Domino requires a matrix or vector');
+      throw new Error('DOMAIN ERROR: Domino requires a matrix or vector');
     }
     const wIsVector = !Array.isArray(w[0]);
     const wMat = wIsVector ? [w] : w;
@@ -1637,7 +2047,7 @@ const G = {
   },
   rank: (f, g) => (w, a) => {
     if (typeof f !== 'function') {
-      throw new Error('Rank requires a function');
+      throw new Error('DOMAIN ERROR: Rank requires a function');
     }
     // g: scalar k applies everywhere; [k1,k2] is [dyadic-alpha, both-omega];
     // [k1,k2,k3] is [dyadic-alpha, dyadic-omega, monadic-omega] (Dyalog order).
@@ -1655,7 +2065,7 @@ const G = {
       omegaKDyadic = g[1];
       omegaKMonadic = g[2];
     } else {
-      throw new Error('Rank requires a number or an array of 2 or 3 numbers');
+      throw new Error('DOMAIN ERROR: Rank requires a number or an array of 2 or 3 numbers');
     }
 
     if (a === undefined) {
@@ -1689,7 +2099,7 @@ const G = {
     if (frameW.length === 0) {
       return fillShapeRec(frameA, (prefix) => f(w, at(a, prefix)));
     }
-    throw new Error('Rank operator: frames of the two arguments must match, or one must reduce to a single cell');
+    throw new Error('LENGTH ERROR: Rank operator: frames of the two arguments must match, or one must reduce to a single cell');
   },
   equals: (w,a) => {
     return drel((x,y) => y===x, w, a);
@@ -1713,7 +2123,16 @@ const G = {
     return mdfunc(x => Math.abs(x), mod, w, a);
   },
   divide: (w, a) => {
-    return mdfunc(x => 1/x, (x,y) => y/x, w, a);
+    // Verified against real Dyalog: 0÷0 is 1, any other x÷0 (and ÷0) is a
+    // DOMAIN ERROR rather than JS's Infinity/NaN.
+    const div = (x, y) => {
+      if (x === 0) {
+        if (y === 0) return 1;
+        throw new Error('DOMAIN ERROR: division by zero');
+      }
+      return y / x;
+    };
+    return mdfunc(x => div(x, 1), div, w, a);
   },
   plus: (w, a) => {
     return mdfunc(x => x, (x,y) => y+x, w, a);
@@ -1779,22 +2198,26 @@ const G = {
       if (typeof w === 'number') {
         return Array.from({ length: w }, (_, i) => i);
       } 
-      throw new Error('Unsupported type for iota');
+      throw new Error('DOMAIN ERROR: Unsupported type for iota');
     }
     if (typeof a === 'string') {
       a = a.split('');
     }
+    // A scalar ⍵ (a number, a box, a single character) looks up ONE item
+    // and gives a scalar back - verified against real Dyalog: 2 3 4⍳3 is
+    // 1, not ,1.
+    const wIsScalar = isScalarLike(w) && !(typeof w === 'string' && w.length !== 1);
     if (typeof w === 'string') {
       w = w.split('');
     }
-    if (!Array.isArray(w)) {
+    if (!Array.isArray(w) || isBoxed(w)) {
       w = [w];
     }
     const shapea = shapeRec(a);
     const shapew = shapeRec(w);
     const r = shapew.length-(shapea.length-1);
     if(r<1) {
-      throw new Error('Incompatible shapes for iota');
+      throw new Error('LENGTH ERROR: Incompatible shapes for iota');
     }
     const resultShape = shapew.slice(0, r);
     const result = fillShapeRec(resultShape, (prefix, index) => {
@@ -1806,14 +2229,14 @@ const G = {
       }
       return len;
     });
-    return result;
+    return wIsScalar ? result[0] : result;
   },
   iota_index: (w, a) => {
     if (a === undefined) {
       if(typeof w === 'number')
         w = [w];
       if(!Array.isArray(w)) {
-        throw new Error('Unsupported type for iota_index');
+        throw new Error('DOMAIN ERROR: Unsupported type for iota_index');
       }
       const shapew = shapeRec(w);
       const result = [];
@@ -1828,8 +2251,12 @@ const G = {
       }
       traverseShapeRec(shapew, (prefix) => {
         const v = at(w, prefix);
+        // Each multi-axis index is enclosed, exactly like ⍳'s own index
+        // vectors (see G.iota) - left raw, shapeRec would misread the
+        // result as one extra real axis. Verified against real Dyalog:
+        // ⍴⍸2 2⍴1 0 0 1 is ,2.
         for(let i=0; i<v; i++) {
-          result.push(prefix);
+          result.push(boxOf(prefix));
         }
       });
       return result;
@@ -1837,6 +2264,7 @@ const G = {
     if (typeof a === 'string') {
       a = a.split('');
     }
+    const wIsScalar = typeof w === 'number' || isChar(w);
     if (typeof w === 'string') {
       w = w.split('');
     }
@@ -1847,36 +2275,42 @@ const G = {
     const shapew = shapeRec(w);
     const r = shapew.length-(shapea.length-1);
     if(r<1) {
-      throw new Error('Incompatible shapes for iota_index');
+      throw new Error('LENGTH ERROR: Incompatible shapes for iota_index');
     }
     const resultShape = shapew.slice(0, r);
     const result = fillShapeRec(resultShape, (prefix, index) => {
       const v = at(w, prefix);
       const len = a.length;
       for (let i = 0; i < len; i++) {
+        // Index of the last boundary ≤ v (¯1 below the first one) -
+        // verified against real Dyalog (⎕IO←0): 10 20 30⍸5 15 30 is ¯1 0 2.
         if (v < at(a, [i]))
-          return i;
+          return i - 1;
       }
-      return len;
+      return len - 1;
     });
-    return result;
+    return wIsScalar ? result[0] : result;
   },            
-  jot: (f, g) => (w, a) => {
-    // f is a bound value, g a function: (f∘g)⍵ ≡ f g ⍵ - f is g's LEFT
-    // argument (⍺), the jot's own ⍵ is g's right. Every primitive here
-    // takes (w,a) positionally, so that's g(w, f), not g(f, w) - the
-    // latter swaps ⍺ and ⍵, which non-commutative functions expose.
-    // Verified against real Dyalog: (2∘|)5 is 1 (2|5), not 2.
-    if(typeof f !== 'function') {
-      return g(w, f);
+  jot: (f, g) => {
+    const derived = jotApply(f, g);
+    // Inverses for ⍣¯1, when every part has one: a bound left argument
+    // (k∘f) inverts f in its right argument, a bound right argument (f∘k)
+    // inverts f in its LEFT argument (see LEFT_INVERSE), and a plain
+    // composition (f∘g) inverts as g⁻¹∘f⁻¹.
+    if (typeof f !== 'function' && typeof g === 'function') {
+      derived.inverse = (w) => inverseOf(g)(w, f);
+    } else if (typeof g !== 'function' && typeof f === 'function') {
+      derived.inverse = (w) => {
+        const inv = LEFT_INVERSE.get(f);
+        if (!inv) {
+          throw new Error('DOMAIN ERROR: no inverse known for this function');
+        }
+        return inv(w, g);
+      };
+    } else if (typeof f === 'function' && typeof g === 'function') {
+      derived.inverse = (w) => inverseOf(g)(inverseOf(f)(w));
     }
-    // g is a bound value, f a function: (f∘g)⍵ ≡ ⍵ f g - the jot's own
-    // ⍵ is f's LEFT argument, g is f's right. Same swap for the same
-    // reason. Verified against real Dyalog: (|∘2)5 is 2 (5|2), not 1.
-    if(typeof g !== 'function') {
-      return f(g, w);
-    }
-    return f(g(w),a);
+    return derived;
   },
   reduce: (w, a) => {
     if (a === undefined) {
@@ -1903,9 +2337,9 @@ const G = {
           // primitive to expose its own identity element (+⌿⍬ is 0, ×⌿⍬
           // is 1, ∧⌿⍬ is 1, etc. in real Dyalog), which nothing here
           // currently does. Only the two most common cases are covered.
-          if (f === G.plus) return 0;
-          if (f === G.times) return 1;
-          throw new Error('Reduce cannot be applied to an empty array');
+          const identity = REDUCE_IDENTITY.get(f);
+          if (identity !== undefined) return identity;
+          throw new Error('DOMAIN ERROR: no identity element to reduce an empty array with');
         }
         return arr.reduceRight(f);
       };
@@ -1930,16 +2364,14 @@ const G = {
           return arr;
         }
         if (arr.length === 0) {
-          throw new Error('Scan cannot be applied to an empty array');
+          return arr;
         }
-        const result = [];
-        let acc = arr[0];
-        result.push(acc);
-        for (let i = 1; i < arr.length; i++) {
-          acc = f(acc, arr[i]);
-          result.push(acc);
-        }
-        return result;
+        // Item i is f⌿ of the first i+1 items, reduced right-to-left like
+        // any other APL reduction - a running left-to-right accumulator
+        // only agrees with that for an associative AND commutative f.
+        // Verified against real Dyalog: -⍀1 2 3 is 1 ¯1 2, ,⍀1 2 3 is
+        // 1 (1 2) (1 2 3). O(n²), the price of being correct for any f.
+        return arr.map((_, i) => arr.slice(0, i + 1).reduceRight((acc, x) => f(acc, x)));
       };
     }
     // Dyadic ⍺⍀⍵: expand along the FIRST axis - same reasoning as reduce's
@@ -1956,14 +2388,14 @@ const G = {
   // key, in first-occurrence order.
   key: (f) => (w, a) => {
     if (typeof f !== 'function') {
-      throw new Error('Key requires a function');
+      throw new Error('DOMAIN ERROR: Key requires a function');
     }
     const findKeyIndex = (keys, k) => keys.findIndex((existing) => matchRec(existing, k) === 1);
 
     if (a === undefined) {
       const items = typeof w === 'string' ? w.split('') : w;
       if (!Array.isArray(items)) {
-        throw new Error('Key requires an array');
+        throw new Error('DOMAIN ERROR: Key requires an array');
       }
       const keys = [];
       const indexGroups = [];
@@ -1983,7 +2415,7 @@ const G = {
     const classifier = typeof a === 'string' ? a.split('') : (Array.isArray(a) ? a : [a]);
     const items = typeof w === 'string' ? w.split('') : (Array.isArray(w) ? w : [w]);
     if (classifier.length !== items.length) {
-      throw new Error('Key requires the classifier and data to have the same length');
+      throw new Error('LENGTH ERROR: Key requires the classifier and data to have the same length');
     }
     const keys = [];
     const valueGroups = [];
@@ -2001,15 +2433,54 @@ const G = {
   },
   comma: (w, a) => {
     if (a === undefined) {
+      if (typeof w === 'string') {
+        return w;
+      }
       if (isBoxed(w)) {
         return [w];
       }
       if (Array.isArray(w)) {
-        return w.flatMap(asCatenationTerms);
+        // Every scalar cell in ravel order, found through shapeRec - so a
+        // rank-3 array flattens all the way (⍴,2 2 2⍴⍳8 is 8) while boxes
+        // and string items stay whole.
+        const cells = [];
+        traverseShapeRec(shapeRec(w), (p) => { cells.push(at(w, p)); });
+        return cells;
       }
       return [w];
     }
-    return [...asCatenationTerms(a), ...asCatenationTerms(w)];
+    if (Math.max(shapeRec(w).length, shapeRec(a).length) >= 2) {
+      return catenateAxis(a, w, false);
+    }
+    // A string side contributes its characters, and an all-character
+    // result is a string again - 'ab','cd' is 'abcd' and 'ab','c' is 'abc',
+    // as in Dyalog, while 'ab',1 stays a mixed 3-item vector.
+    const result = [...asCatenationTerms(charItems(a)), ...asCatenationTerms(charItems(w))];
+    return (typeof w === 'string' || typeof a === 'string') ? joinChars(result) : result;
+  },
+  // ⍪: monadic "table" reshapes ⍵ into a matrix, one row per major cell
+  // (a scalar or vector becomes a column); dyadic catenates along the FIRST
+  // axis - for vectors that's the same as ,. Verified against real Dyalog:
+  // ⍴⍪1 2 3 is 3 1, ⍴⍪2 3 4⍴0 is 2 12, and 1 2⍪3 4 is 1 2 3 4.
+  table: (w, a) => {
+    if (a === undefined) {
+      const items = charItems(w);
+      const shape = shapeRec(items);
+      if (shape.length === 0) {
+        return [[items]];
+      }
+      const cols = shape.slice(1).reduce((x, y) => x * y, 1);
+      const flat = shape.length === 1 ? items : G.comma(items);
+      const result = fillShapeRec([shape[0], cols], (p) => flat[p[0] * cols + p[1]]);
+      if (shape[0] === 0 || cols === 0) {
+        result.shape = [shape[0], cols];
+      }
+      return result;
+    }
+    if (Math.max(shapeRec(w).length, shapeRec(a).length) >= 2) {
+      return catenateAxis(a, w, true);
+    }
+    return G.comma(w, a);
   },
   transpose: (w, a) => {
     if (a === undefined) {
@@ -2023,11 +2494,15 @@ const G = {
     if (a === undefined) {
       return w;
     }
-    if(typeof w === 'string')
-      w = w.split('');
+    if (typeof w === 'string') {
+      return joinChars(getRec(w.split(''), a));
+    }
     return getRec(w, a);
   },
   at: (f,g) => (w, a) => {
+    if (typeof w === 'string') {
+      return joinChars(G.at(f, g)(w.split(''), a));
+    }
     if(typeof g === 'function') {
       const listPrefixes = [];
       const listValues = [];
@@ -2044,7 +2519,7 @@ const G = {
       let newValues;
       if(Array.isArray(f)) {
         if(f.length !== listValues.length)
-          throw new Error('Array lengths must match');
+          throw new Error('LENGTH ERROR: Array lengths must match');
         newValues = f;
       } else if (typeof f === 'function') {
         newValues = f(listValues);
@@ -2065,7 +2540,7 @@ const G = {
     if(Array.isArray(g)) {
       if(Array.isArray(f)) {
         if(f.length !== g.length)
-          throw new Error('Array lengths must match');
+          throw new Error('LENGTH ERROR: Array lengths must match');
       } else
         f = Array.apply(null, {length: g.length}).map(() => f);
       const result = fillShapeRec(shapeRec(w), (prefix, index) => {
@@ -2077,19 +2552,21 @@ const G = {
       }
       return result;
     }
-    throw new Error('Unsupported usage of at');
+    throw new Error('DOMAIN ERROR: Unsupported usage of at');
   },
   grade_up: (w) => {
+    w = charItems(w);
     if (!Array.isArray(w)) {
-      throw new Error('Grade up requires an array');
+      throw new Error('DOMAIN ERROR: Grade up requires an array');
     }
     return w.map((v, i) => {return {i, v}})
           .sort((a, b) => totalCompare(a.v, b.v))
           .map((obj) => obj.i);
   },
   grade_down: (w) => {
+    w = charItems(w);
     if (!Array.isArray(w)) {
-      throw new Error('Grade down requires an array');
+      throw new Error('DOMAIN ERROR: Grade down requires an array');
     }
     return w.map((v, i) => {return {i, v}})
           .sort((a, b) => -totalCompare(a.v, b.v))
@@ -2104,13 +2581,18 @@ const G = {
       // vector, or a value that's already boxed) gets wrapped/re-wrapped.
       return Array.isArray(w) ? boxOf(w) : w;
     }
-    return partitionEnclose(a, w);
+    return partitionedEnclose(a, w);
   },
   partition: (w, a) => {
     if (a === undefined) {
-      return [w];
+      // Monadic ⊆ (nest) encloses only a SIMPLE array - one with no
+      // nested items - and leaves anything already nested, or a scalar,
+      // alone. Verified against real Dyalog: ≡⊆1 2 3 is 2, and
+      // (⊆(1 2)(3 4))≡(1 2)(3 4) is 1.
+      const isSimple = Array.isArray(w) && !isBoxed(w) && w.every((x) => !Array.isArray(x));
+      return isSimple ? boxOf(w) : w;
     }
-    return partitionEnclose(a, w);
+    return partition(a, w);
   },
   pick: (w, a) => {
     if (a===undefined) {
@@ -2137,61 +2619,63 @@ const G = {
     if (Array.isArray(a) && a.every((x) => typeof x === 'number')) {
       return pickPath(w, a);
     }
-    throw new Error('Unsupported type for pick: ⍺ must be a simple (unboxed) numeric path');
+    throw new Error('DOMAIN ERROR: Unsupported type for pick: ⍺ must be a simple (unboxed) numeric path');
   },
-  take: (w, a) => {
-    if (!Array.isArray(w)) {
-      throw new Error('Take requires an array');
+  // ↑/↓: a scalar ⍵ extends to a 1-item vector, a string ⍵ is its
+  // characters (and the result a string again), and overtake pads with
+  // the fill element - ' ' for characters. Verified against real Dyalog:
+  // 3↑5 is 5 0 0, 4↑'ab' is 'ab  ', ¯4↑'ab' is '  ab'.
+  // Monadic ↑ (mix) and ↓ (split) - see mix/split below.
+  take: (w, a) => (a === undefined ? mix(w) : takeDrop(w, a, false)),
+  drop: (w, a) => (a === undefined ? split(w) : takeDrop(w, a, true)),
+  // ⍺⊇⍵ (select): one item of ⍵ per item of ⍺, the result shaped like ⍺ -
+  // a number indexes ⍵'s first axis, a box holds one index per axis.
+  // Verified against real Dyalog (⎕IO←0): 2 0⊇'abc' is 'ca', and
+  // (0 1)(1 0)⊇2 2⍴⍳4 is 1 2.
+  select: (w, a) => {
+    if (a === undefined) {
+      throw new Error('SYNTAX ERROR: ⊇ has no monadic form');
     }
-    if (typeof a === 'number') {
-      a = [a];
+    const wasString = typeof w === 'string';
+    const items = charItems(w);
+    const pick = (cell) => {
+      const idx = isBoxed(cell) ? cell[0] : cell;
+      return getRec(items, typeof idx === 'number' ? [idx] : idx);
+    };
+    if (isScalarLike(a)) {
+      return pick(a);
+    }
+    const result = fillShapeRec(shapeRec(a), (p) => pick(at(a, p)));
+    return wasString ? joinChars(result) : result;
+  },
+  // f⌺g (stencil): for each item of ⍵, f gets the g-sized neighbourhood
+  // centred on it as ⍵ (fill 0 past the edges) and, as ⍺, how much
+  // padding that neighbourhood needed per axis (positive: before the
+  // start, negative: past the end). Only odd window sizes with step 1 are
+  // supported. Verified against real Dyalog: {+/⍵}⌺3⊢1 2 3 is 3 6 5, and
+  // {⍺}⌺3⊢1 2 3 is the 3 1 matrix of paddings 1 0 ¯1.
+  stencil: (f, g) => (w) => {
+    if (typeof f !== 'function') {
+      throw new Error('DOMAIN ERROR: Stencil requires a function');
     }
     const shape = shapeRec(w);
-    const resultShape = shape.slice();
-    if (a.length > resultShape.length) {
-      throw new Error('Take shape has more dimensions than the array');
+    const sizes = typeof g === 'number' ? [g] : g;
+    if (!Array.isArray(sizes) || sizes.length !== shape.length) {
+      throw new Error('LENGTH ERROR: ⌺ needs one window size per axis of ⍵');
     }
-    for (let i = 0; i < a.length; i++) {
-      resultShape[i] = Math.abs(a[i]);
+    if (sizes.some((k) => k % 2 !== 1)) {
+      throw new Error('DOMAIN ERROR: ⌺ supports only odd window sizes');
     }
-    const result = fillShapeRec(resultShape, (prefix, index) => {
-      const idx = prefix.slice();
-      for (let i = 0; i < a.length; i++) {
-        idx[i] = a[i] < 0 ? prefix[i] + shape[i]+a[i] : prefix[i];
-        if (idx[i] >= shape[i] || idx[i] < 0) {
-          return 0;
-        }
-      }
-      return at(w, idx);
+    const fill = fillFor(w);
+    return fillShapeRec(shape, (p) => {
+      const starts = p.map((x, i) => x - (sizes[i] - 1) / 2);
+      const padding = starts.map((st, i) => (st < 0 ? -st : Math.min(0, shape[i] - (st + sizes[i]))));
+      const window = fillShapeRec(sizes, (q) => {
+        const idx = q.map((x, i) => x + starts[i]);
+        return idx.every((x, i) => x >= 0 && x < shape[i]) ? at(w, idx) : fill;
+      });
+      return f(window, padding);
     });
-    return result;
-  },
-  drop: (w, a) => {
-    if (!Array.isArray(w)) {
-      throw new Error('Drop requires an array');
-    }
-    if (typeof a === 'number') {
-      a = [a];
-    }
-    const shape = shapeRec(w);
-    const resultShape = shape.slice();
-    if (a.length > resultShape.length) {
-      throw new Error('Drop shape has more dimensions than the array');
-    }
-    for (let i = 0; i < a.length; i++) {
-      resultShape[i] = Math.max(0, shape[i] - Math.abs(a[i]));
-    }
-    const result = fillShapeRec(resultShape, (prefix, index) => {
-      const idx = prefix.slice();
-      for (let i = 0; i < a.length; i++) {
-        idx[i] = a[i] < 0 ? prefix[i] : prefix[i] + a[i];
-        if (idx[i] >= shape[i] || idx[i] < 0) {
-          return 0;
-        }
-      }
-      return at(w, idx);
-    });
-    return result;
   },
   // Not an arrow function on purpose - needs `this` bound to the calling
   // context (see `execute` below for the same trick) to read the caller's
@@ -2212,7 +2696,7 @@ const G = {
   },
   execute: function (w) {
     if (typeof w !== 'string') {
-      throw new Error('Execute requires a string');
+      throw new Error('DOMAIN ERROR: Execute requires a string');
     }
     // Reuses the caller's own runtime object (`this`) so assignments and
     // lookups inside the executed string see/affect the same session state.
@@ -2257,9 +2741,10 @@ const G = {
   find: (w, a) => {
     const warr = typeof w === 'string' ? w.split('') : w;
     if (!Array.isArray(warr)) {
-      throw new Error('Find requires an array right argument');
+      throw new Error('DOMAIN ERROR: Find requires an array right argument');
     }
-    const parr = Array.isArray(a) ? a : [a];
+    // A string pattern is a run of characters to search for, same as ⍵.
+    const parr = typeof a === 'string' ? a.split('') : (Array.isArray(a) ? a : [a]);
     const n = warr.length;
     const m = parr.length;
     const result = new Array(n).fill(0);
@@ -2284,7 +2769,7 @@ const G = {
     const wasString = typeof w === 'string';
     const witems = wasString ? w.split('') : w;
     if (!Array.isArray(witems)) {
-      throw new Error('Unique/union requires an array');
+      throw new Error('DOMAIN ERROR: Unique/union requires an array');
     }
     if (a === undefined) {
       const result = uniqueItems(witems);
@@ -2300,7 +2785,7 @@ const G = {
     const aitems = wasStringA ? a.split('') : a;
     const witems = typeof w === 'string' ? w.split('') : w;
     if (!Array.isArray(aitems) || !Array.isArray(witems)) {
-      throw new Error('Intersection requires arrays');
+      throw new Error('DOMAIN ERROR: Intersection requires arrays');
     }
     const result = uniqueItems(aitems).filter(x => isMember(x, witems));
     return wasStringA ? result.join('') : result;
@@ -2309,7 +2794,7 @@ const G = {
     if (a === undefined) {
       return mdfunc((x) => {
         if (x !== 0 && x !== 1) {
-          throw new Error('Domain error: ~ requires 0 or 1');
+          throw new Error('DOMAIN ERROR: ~ requires 0 or 1');
         }
         return 1 - x;
       }, undefined, w);
@@ -2319,12 +2804,80 @@ const G = {
     const aitems = wasStringA ? a.split('') : a;
     const witems = typeof w === 'string' ? w.split('') : (Array.isArray(w) ? w : [w]);
     if (!Array.isArray(aitems)) {
-      throw new Error('Without requires an array left argument');
+      throw new Error('DOMAIN ERROR: Without requires an array left argument');
     }
     const result = aitems.filter(x => !isMember(x, witems));
     return wasStringA ? result.join('') : result;
   }
 };
+
+// Inverses for f⍣¯1, keyed by primitive: each takes (w, a) like the
+// primitive itself, and solves ⍺ f x ≡ ⍵ (or f x ≡ ⍵) for x. A derived
+// function can carry its own `.inverse` instead (see G.jot).
+const noInverse = () => {
+  throw new Error('DOMAIN ERROR: no inverse known for this function');
+};
+const monadicOnly = (inv) => (w, a) => (a === undefined ? inv(w) : noInverse());
+const INVERSE = new Map([
+  [G.plus, (w, a) => (a === undefined ? w : G.minus(a, w))],
+  [G.minus, (w, a) => (a === undefined ? G.minus(w) : G.minus(w, a))],
+  [G.times, (w, a) => (a === undefined ? noInverse() : G.divide(a, w))],
+  [G.divide, (w, a) => (a === undefined ? G.divide(w) : G.divide(w, a))],
+  [G.exp, (w, a) => (a === undefined ? G.log(w) : G.log(w, a))],
+  [G.log, (w, a) => (a === undefined ? G.exp(w) : G.exp(w, a))],
+  [G.sqrt, (w, a) => (a === undefined ? G.exp(2, w) : G.exp(a, w))],
+  [G.circle, (w, a) => (a === undefined ? G.divide(Math.PI, w) : G.circle(w, G.minus(a)))],
+  [G.encode, (w, a) => (a === undefined ? noInverse() : G.decode(w, a))],
+  [G.decode, (w, a) => {
+    if (a === undefined) {
+      return noInverse();
+    }
+    if (typeof a !== 'number') {
+      return G.encode(w, a);
+    }
+    // A scalar base gets just enough digits for the largest |⍵| - verified
+    // against real Dyalog: 10⊥⍣¯1⊢123 is 1 2 3.
+    let largest = Math.max(...flattenDeep(w).map(Math.abs));
+    let digits = 1;
+    while (largest >= a) {
+      largest = Math.floor(largest / a);
+      digits++;
+    }
+    return G.encode(w, Array(digits).fill(a));
+  }],
+  [G.reverse, (w, a) => (a === undefined ? G.reverse(w) : G.reverse(w, G.minus(a)))],
+  [G.reverse_first, (w, a) => (a === undefined ? G.reverse_first(w) : G.reverse_first(w, G.minus(a)))],
+  [G.transpose, monadicOnly((w) => G.transpose(w))],
+  [G.not, monadicOnly((w) => G.not(w))],
+  [G.right, (w) => w],
+]);
+const inverseOf = (f) => {
+  if (typeof f.inverse === 'function') {
+    return f.inverse;
+  }
+  const inv = INVERSE.get(f);
+  if (!inv) {
+    return noInverse;
+  }
+  return inv;
+};
+// Solves x f k ≡ ⍵ for x (the bound right argument k of f∘k).
+const LEFT_INVERSE = new Map([
+  [G.plus, (w, k) => G.minus(k, w)],
+  [G.minus, (w, k) => G.plus(k, w)],
+  [G.times, (w, k) => G.divide(k, w)],
+  [G.divide, (w, k) => G.times(k, w)],
+  [G.exp, (w, k) => G.exp(G.divide(k), w)],
+]);
+
+// Identity elements for reducing an empty array (f⌿⍬), per Dyalog: the
+// value e with e f x ≡ x - e.g. ⌈⌿⍬ is ¯∞ (the most negative number).
+const REDUCE_IDENTITY = new Map([
+  [G.plus, 0], [G.minus, 0], [G.times, 1], [G.divide, 1], [G.residue, 0],
+  [G.ceiling, -Infinity], [G.floor, Infinity], [G.exp, 1], [G.factorial, 1],
+  [G.and, 1], [G.or, 0], [G.equals, 1], [G.not_equals, 0],
+  [G.less_than, 0], [G.greater_than, 0], [G.less_than_or_equal, 1], [G.greater_than_or_equal, 1],
+]);
 
 // --- Parser support: per-scope name lookup and the boundary/category sets
 // reduceStack's grammar rules (below) pattern-match against. ---
@@ -2346,7 +2899,7 @@ const dfn_or_dop = (subExpressions) => {
          (token.value === '⍺⍺'||token.value === '⍶')) {
         countAlpha++;
       } else if (token.type === 'SPECIAL_VAR' && 
-         (token.value === '⍹')) {
+         (token.value === '⍵⍵' || token.value === '⍹')) {
         countOmega++;
       }
     }
@@ -2509,7 +3062,10 @@ const emitJs = (node, asTarget = false) => {
       return `${emitJs(node.operator)}(${emitJs(node.left)}, ${emitJs(node.right)})`;
     case 'Fork':
       if (node.leftIsValue) {
-        return `((${_w_}, ${_a_})=> ${emitJs(node.mid)}(${emitJs(node.right)}(${_w_}), ${emitJs(node.left)}))`;
+        // A g h: the value A is g's left argument, and h still sees both of
+        // the fork's own arguments - ⍺ (A g h) ⍵ ≡ A g (⍺ h ⍵). Verified
+        // against real Dyalog: 2 (1+-) 5 is ¯2.
+        return `((${_w_}, ${_a_})=> ${emitJs(node.mid)}(${emitJs(node.right)}(${_w_}, ${_a_}), ${emitJs(node.left)}))`;
       }
       return `((${_w_}, ${_a_})=> ${emitJs(node.mid)}(${emitJs(node.right)}(${_w_}, ${_a_}), ${emitJs(node.left)}(${_w_}, ${_a_})))`;
     case 'Atop':
@@ -2554,17 +3110,17 @@ const emitJs = (node, asTarget = false) => {
 const assignedNames = (node) => {
   if (node.type === 'Identifier') return [node.name];
   if (node.type === 'Strand') return node.elements.flatMap(assignedNames);
-  throw new Error(`Invalid assignment target: ${node.type}`);
+  throw new Error(`SYNTAX ERROR: Invalid assignment target: ${node.type}`);
 };
 const localTargetText = (node) => {
   if (node.type === 'Identifier') return node.name;
   if (node.type === 'Strand') return `[${node.elements.map(localTargetText).join(', ')}]`;
-  throw new Error(`Invalid assignment target: ${node.type}`);
+  throw new Error(`SYNTAX ERROR: Invalid assignment target: ${node.type}`);
 };
 const globalTargetText = (node) => {
   if (node.type === 'Identifier') return `G.${node.name}`;
   if (node.type === 'Strand') return `[${node.elements.map(globalTargetText).join(', ')}]`;
-  throw new Error(`Invalid assignment target: ${node.type}`);
+  throw new Error(`SYNTAX ERROR: Invalid assignment target: ${node.type}`);
 };
 
 // A "train" is an implicit composition of functions formed by bare
@@ -2973,7 +3529,8 @@ const parseExpression = (expression, scope) => {
     scope.pop();
     return { type: 'Block', declarations, statements };
   }
-  const tokens = expression.reverse();
+  // A reversed copy: the caller's token list is left untouched.
+  const tokens = expression.slice().reverse();
   tokens.push({ type: 'Edge', value: 'Edge' });
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
@@ -2995,6 +3552,11 @@ const parseExpression = (expression, scope) => {
         token.type === 'SYMBOL'
       ) {
       const [cat_name, global] = find_category(token.value, scope);
+      if (!cat_name && token.type === 'SYMBOL') {
+        // A glyph with no entry would otherwise compile to G.<glyph> - a
+        // baffling JS syntax error rather than an APL one.
+        throw new Error(`SYNTAX ERROR: unknown primitive ${token.value} at position ${token.pos}`);
+      }
       reg.category = cat_name ? cat_name.category : 'V';
       const name = cat_name && cat_name.name ? cat_name.name : token.value;
       reg.node = { type: 'Identifier', name, global };
@@ -3002,7 +3564,7 @@ const parseExpression = (expression, scope) => {
       reg.category =
         token.type === 'NUMBER' ? 'V' :
         token.type === 'STRING' ? 'V' : token.value;
-      const text = token.type === 'NUMBER' ? token.value.replace('¯', '-') : token.value;
+      const text = token.type === 'NUMBER' ? token.value.replaceAll('¯', '-') : token.value;
       reg.node = { type: 'Raw', text };
     }
     stack.push(reg);
@@ -3011,7 +3573,7 @@ const parseExpression = (expression, scope) => {
   }
   // Post-parsing structural check
   if (stack.length > 2) {
-    console.log("❌ SYNTAX ERROR: The stack ended with orphaned elements!:", stack.slice(1).map(e => emitJs(e.node)).join(', '));
+    throw new Error(`SYNTAX ERROR: could not combine ${stack.slice(0, -1).map(e => emitJs(e.node)).join(', ')}`);
   }
   return stack[0].node;
 }

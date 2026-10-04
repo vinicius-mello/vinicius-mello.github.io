@@ -951,7 +951,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1 class="title">APL.js REPL <span class="version">v0.2.4</span></h1>
+      <h1 class="title">APL.js REPL <span class="version">v0.3.0</span></h1>
       <p class="subtitle">An APL to JavaScript transpiler.</p>
     </div>
     <div class="toolbar">
@@ -1332,6 +1332,9 @@
       key: "⌸",
       sqrt: "√",
       domino: "⌹",
+      table: "⍪",
+      select: "⊇",
+      stencil: "⌺",
       dash: "—",
     };
 
@@ -1355,16 +1358,19 @@
       { glyph: "⍀", name: "Expand / Scan (first axis, operator)", monadic: "Running fold down each column: <code>+⍀2 3⍴⍳6</code> → matrix", dyadic: "Insert fills at each 0: <code>1 0 1⍀1 2</code> → 1 0 2" },
       { glyph: "\\", name: "Expand / Scan (last axis, operator)", monadic: "Running fold each row: <code>+\\2 3⍴⍳6</code> → matrix", dyadic: "Insert fills at each 0: <code>1 0 1\\1 2</code> → 1 0 2" },
       { glyph: "⍨", name: "Selfie (operator)", monadic: "Both args = ⍵: <code>+⍨3</code> → 6", dyadic: "Swap args: <code>5-⍨2</code> → ¯3" },
-      { glyph: ",", name: "Comma", monadic: "Ravel: <code>,2 3⍴⍳6</code> → flat vector", dyadic: "Catenate: <code>1 2,3 4</code> → 1 2 3 4" },
+      { glyph: ",", name: "Comma", monadic: "Ravel: <code>,2 3⍴⍳6</code> → flat vector", dyadic: "Catenate (last axis): <code>1 2,3 4</code> → 1 2 3 4, <code>(2 2⍴1),9 8</code> → 2×3 matrix" },
+      { glyph: "⍪", name: "Table / Catenate first", monadic: "One row per major cell: <code>⍪1 2 3</code> → 3×1 matrix", dyadic: "Catenate along the first axis: <code>(2 2⍴1)⍪7 8</code> → 3×2 matrix" },
       { glyph: "⍳", name: "Iota", monadic: "Index generator: <code>⍳5</code> → 0 1 2 3 4", dyadic: "Index of: <code>10 20 30⍳20</code> → 1" },
-      { glyph: "⍸", name: "Where / interval index", monadic: "Indices where true: <code>⍸0 1 1 0</code> → 1 2", dyadic: "Interval index of value in boundaries" },
+      { glyph: "⍸", name: "Where / interval index", monadic: "Indices where true: <code>⍸0 1 1 0</code> → 1 2", dyadic: "Interval index: <code>10 20 30⍸5 15 30</code> → ¯1 0 2" },
       { glyph: "⍋", name: "Grade up", monadic: "Ascending sort indices: <code>⍋3 1 2</code> → 1 2 0" },
       { glyph: "⍒", name: "Grade down", monadic: "Descending sort indices: <code>⍒3 1 2</code> → 0 2 1" },
-      { glyph: "⍣", name: "Power (operator)", dyadic: "Repeat n times: <code>(2×)⍣3⊢1</code> → 8" },
+      { glyph: "⍣", name: "Power (operator)", dyadic: "Repeat n times: <code>(2∘×)⍣3⊢1</code> → 8, until a condition: <code>{⍵×2}⍣{⍺>100}1</code> → 128, or invert with a negative count: <code>10(⊥⍣¯1)123</code> → 1 2 3" },
+      { glyph: "⌺", name: "Stencil (operator)", dyadic: "f on each g-sized neighbourhood (⍺ = padding): <code>{+/⍵}⌺3⊢1 2 3</code> → 3 6 5" },
       { glyph: "∇", name: "Self-reference", monadic: "Recursive call inside a dfn" },
       { glyph: "≢", name: "Tally", monadic: "Length: <code>≢1 2 3</code> → 3", dyadic: "Not-match: <code>1 2≢1 2</code> → 0" },
       { glyph: "⎕", name: "Quad", monadic: "Print/emit a value: <code>⎕←value</code>" },
       { glyph: "⎕typeof", name: "Type of", monadic: "JS type of a value: <code>⎕typeof 5</code> → \"number\", <code>⎕typeof 1 2 3</code> → \"array\"" },
+      { glyph: "⎕io", name: "Index origin", monadic: "Read-only here: always 0 (<code>⎕io←0</code> is accepted, any other value is a DOMAIN ERROR). System names are case-insensitive: <code>⎕IO</code>, <code>⎕PP</code>." },
       { glyph: "⎕pp", name: "Print precision", monadic: "Read/write variable: significant digits shown by <code>⍕</code> and <code>⎕←</code> (default 10): <code>⎕pp←4 ⋄ ⍕2÷3</code> → \"0.6667\". Stored values keep full precision - only display rounds." },
       { glyph: "⎕null", name: "JS null", monadic: "Read/write variable holding JS's <code>null</code>: <code>⎕typeof ⎕null</code> → \"null\"" },
       { glyph: "⎕undefined", name: "JS undefined", monadic: "Read/write variable holding JS's <code>undefined</code>: <code>⎕typeof ⎕undefined</code> → \"undefined\"" },
@@ -1380,7 +1386,7 @@
       { glyph: "⍟", name: "Log", monadic: "Natural log: <code>⍟1</code> → 0", dyadic: "Log base ⍺: <code>2⍟8</code> → 3" },
       { glyph: "√", name: "Sqrt", monadic: "Square root: <code>√9</code> → 3", dyadic: "⍺-th root of ⍵: <code>3√8</code> → 2" },
       { glyph: "?", name: "Deal / roll", monadic: "Random integer: <code>?6</code> → 0..5", dyadic: "Sample without replacement: <code>3?10</code>" },
-      { glyph: "≡", name: "Match", dyadic: "Structural equality: <code>1 2≡1 2</code> → 1" },
+      { glyph: "≡", name: "Depth / Match", monadic: "Nesting depth: <code>≡(1 2)(3 4)</code> → 2", dyadic: "Structural equality: <code>1 2≡1 2</code> → 1" },
       { glyph: "!", name: "Factorial", monadic: "<code>!5</code> → 120", dyadic: "Binomial coefficient: <code>2!5</code> → 10" },
       { glyph: "∨", name: "Or", monadic: "Descending sort: <code>∨3 1 2</code> → 3 2 1", dyadic: "Logical or / GCD: <code>1∨0</code> → 1, <code>4∨6</code> → 2" },
       { glyph: "∧", name: "And", monadic: "Ascending sort: <code>∧3 1 2</code> → 1 2 3", dyadic: "Logical and / LCM: <code>1∧1</code> → 1, <code>4∧6</code> → 12" },
@@ -1389,12 +1395,13 @@
       { glyph: "⍱", name: "Nor", dyadic: "<code>0⍱0</code> → 1" },
       { glyph: "⍉", name: "Transpose", monadic: "Reverse axes", dyadic: "Permute axes: <code>2 1⍉array</code>" },
       { glyph: "⌷", name: "Squad (index)", dyadic: "Index into an array: <code>2 3⌷array</code>" },
-      { glyph: "⊂", name: "Enclose / partitioned enclose", monadic: "Box a value: <code>⊂1 2 3</code> → (1 2 3)", dyadic: "Group runs: <code>1 1 2 2⊂1 2 3 4</code> → (1 2)(3 4)" },
-      { glyph: "⊆", name: "Partition", dyadic: "Same grouping as dyadic ⊂: <code>1 1 2 2⊆1 2 3 4</code> → (1 2)(3 4)" },
+      { glyph: "⊂", name: "Enclose / partitioned enclose", monadic: "Box a value: <code>⊂1 2 3</code> → (1 2 3)", dyadic: "Start a new group at each 1: <code>1 0 1 0⊂1 2 3 4</code> → (1 2)(3 4)" },
+      { glyph: "⊆", name: "Nest / Partition", monadic: "Enclose if simple: <code>⊆1 2 3</code> → (1 2 3)", dyadic: "New group where ⍺ grows, 0 drops: <code>1 1 2 2⊆1 2 3 4</code> → (1 2)(3 4)" },
       { glyph: "⊃", name: "Pick", monadic: "First item: <code>⊃(1 2)(3 4)</code> → 1 2", dyadic: "Pick by index: <code>1⊃w</code>" },
       { glyph: "@", name: "At (operator)", dyadic: "Amend at indices or mask: <code>f@indices</code>" },
-      { glyph: "↑", name: "Take", dyadic: "<code>3↑1 2 3 4 5</code> → 1 2 3" },
-      { glyph: "↓", name: "Drop", dyadic: "<code>2↓1 2 3 4 5</code> → 3 4 5" },
+      { glyph: "↑", name: "Mix / Take", monadic: "Items into one padded array: <code>↑(1 2)(3 4 5)</code> → 2×3 matrix", dyadic: "<code>3↑1 2 3 4 5</code> → 1 2 3, overtake pads: <code>4↑'ab'</code> → 'ab  '" },
+      { glyph: "↓", name: "Split / Drop", monadic: "Rows into enclosed vectors: <code>↓2 3⍴⍳6</code> → (0 1 2)(3 4 5)", dyadic: "<code>2↓1 2 3 4 5</code> → 3 4 5" },
+      { glyph: "⊇", name: "Select", dyadic: "Items at indices: <code>2 0⊇'abc'</code> → 'ca'" },
       { glyph: "⍥", name: "Over (operator)", dyadic: "Apply g to both args, then f: <code>a f⍥g w</code>" },
       { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>. A function property comes back already bound to obj, so it's still correctly callable even stored away and used later. A command-list right argument chains calls instead: <code>obj⍠('x' a b)('y' c d)</code> is <code>obj.x(a,b).y(c,d)</code>; a command with no args is a bare (bound) get rather than a call (<code>obj⍠('x' a)('y')</code> gets <code>.y</code> without calling it), and <code>('name' ⎕null)</code> calls with zero real arguments (⎕null rather than ⍬, so ⍬ stays free to mean an actual empty-array argument)." },
       { glyph: "⍞", name: "FFI: quote a function", monadic: "Turn a function/operator into a plain value (no call) - lets it be stored, put in an array, or handed to JS: <code>⍞+</code>" },
