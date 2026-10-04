@@ -2698,13 +2698,14 @@ const G = {
     if (typeof w !== 'string') {
       throw new Error('DOMAIN ERROR: Execute requires a string');
     }
-    // Reuses the caller's own runtime object (`this`) so assignments and
-    // lookups inside the executed string see/affect the same session state.
-    // Parses with fresh default categories, so it only knows about names
-    // already present as plain values on `this` - it can't tell that a
-    // previously-defined dfn is a function, so `f 5` inside the string
-    // won't apply it (falls back to strand-forming an array instead).
-    const generatedCode = aplToJavaScript(w);
+    // Runs against the caller's own session (`this`, bound by
+    // createContext): same variables, and the same name categories, so a
+    // dfn defined earlier is still a function inside the string (⍎'f 5'
+    // applies f) and anything the string defines is seen afterwards. A
+    // dfn's LOCAL names are plain JS variables, out of reach here - ⍎ only
+    // sees session-level names.
+    const categories = this[SESSION_CATEGORIES] ?? { ...global_category };
+    const generatedCode = aplToJavaScript(w, categories);
     const fn = new Function('G', generatedCode);
     return fn(this);
   },
@@ -3595,15 +3596,29 @@ const aplToJavaScript = (text, categories = { ...global_category }) => {
   return parser(text, categories);
 };
 
+// A session: a fresh object inheriting every primitive from `runtime`,
+// carrying the parser categories its code was compiled with (so ⍎ can parse
+// with them too). The primitives that read session state through `this` -
+// ⍕ (⎕pp) and ⍎ - are bound to the session, so they keep working when passed
+// around as operands (⍕¨, ⍎¨), where a bare G.format reference loses `this`.
+const SESSION_CATEGORIES = Symbol('session categories');
+const createContext = (runtime = G, categories = { ...global_category }) => {
+  const context = Object.create(runtime);
+  context.format = runtime.format.bind(context);
+  context.execute = runtime.execute.bind(context);
+  Object.defineProperty(context, SESSION_CATEGORIES, { value: categories });
+  return context;
+};
+
 const evaluateApl = (text, runtime = G, categories = { ...global_category }) => {
   const generatedCode = aplToJavaScript(text, categories);
   const executor = new Function('G', generatedCode);
-  return executor(Object.create(runtime));
+  return executor(createContext(runtime, categories));
 };
 
 const AplJS = () => {
-  const context = Object.create(G);
   const categories = { ...global_category };
+  const context = createContext(G, categories);
   return (text) => {
     const generatedCode = aplToJavaScript(text, categories);
     const executor = new Function('G', generatedCode);
@@ -3625,6 +3640,7 @@ export {
   G,
   global_category,
   AplJS,
+  createContext,
   roundValue,
   formatNum
 };

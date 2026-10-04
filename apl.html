@@ -951,7 +951,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1 class="title">APL.js REPL <span class="version">v0.3.1</span></h1>
+      <h1 class="title">APL.js REPL <span class="version">v0.3.2</span></h1>
       <p class="subtitle">An APL to JavaScript transpiler.</p>
     </div>
     <div class="toolbar">
@@ -1129,7 +1129,7 @@
     import { syntaxHighlighting, HighlightStyle, bracketMatching } from "https://esm.sh/@codemirror/language@6";
     import { tags } from "https://esm.sh/@lezer/highlight@1";
     import { apl } from "https://esm.sh/@codemirror/legacy-modes@6/mode/apl";
-    import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, roundValue, formatNum } from "./apl.js";
+    import { parseToAst, emitJs, emitGraph, isTrain, G, global_category, roundValue, formatNum, createContext } from "./apl.js";
 
     const baseAplToken = apl.token.bind(apl);
     // Matches the tokenizer's own unquoted-string rule in apl.js
@@ -1339,6 +1339,7 @@
       stencil: "⌺",
       dash: "—",
       del: "∇",
+      log: "⍟",
     };
 
     const PRIMITIVE_DOCS = [
@@ -1413,11 +1414,11 @@
       { glyph: "⍠", name: "FFI: object builder", monadic: "Build a plain object from key/value pairs: <code>⍠('x' 1)('y' 2)</code>", dyadic: "Property get: <code>obj⍠'key'</code>. A function property comes back already bound to obj, so it's still correctly callable even stored away and used later. A command-list right argument chains calls instead: <code>obj⍠('x' a b)('y' c d)</code> is <code>obj.x(a,b).y(c,d)</code>; a command with no args is a bare (bound) get rather than a call (<code>obj⍠('x' a)('y')</code> gets <code>.y</code> without calling it), and <code>('name' ⎕null)</code> calls with zero real arguments (⎕null rather than ⍬, so ⍬ stays free to mean an actual empty-array argument)." },
       { glyph: "⍞", name: "FFI: quote a function", monadic: "Turn a function/operator into a plain value (no call) - lets it be stored, put in an array, or handed to JS: <code>⍞+</code>" },
       { glyph: "⍔", name: "FFI: value → function (operator)", monadic: "The inverse of ⍞: relabels a value as an applicable function, e.g. to call a JS method fetched via ⍠: <code>(obj⍠'method')⍔⊢args</code>" },
-      { glyph: "○", name: "Circle (trig)", monadic: "π×⍵: <code>○1</code> → 3.14159", dyadic: "Circular fns: <code>1○0</code> → sin(0), <code>2○0</code> → cos(0); ⍺ may be a vector: <code>1 2○0</code> → 0 1" },
+      { glyph: "○", name: "Circle (trig)", monadic: "π×⍵: <code>○1</code> → 3.141592654", dyadic: "Circular fns: <code>1○0</code> → sin(0), <code>2○0</code> → cos(0); ⍺ may be a vector: <code>1 2○0</code> → 0 1" },
       { glyph: "⊤", name: "Encode", dyadic: "Mixed radix: <code>2 2 2⊤5</code> → 1 0 1; a scalar radix gives one digit: <code>10⊤123</code> → 3 (all digits: <code>10(⊥⍣¯1)123</code>)" },
       { glyph: "⊥", name: "Decode", dyadic: "Mixed radix: <code>2 2 2⊥1 0 1</code> → 5" },
       { glyph: "⍕", name: "Format", monadic: "To display string: <code>⍕1 2 3</code> → \"1 2 3\"; nested items sit two spaces apart (<code>⍕(1 2)(3 4)</code> → \"1 2  3 4\") and a character matrix prints as lines of text", dyadic: "Fixed decimals: <code>2⍕3.14159</code> → \"3.14\"" },
-      { glyph: "⍎", name: "Execute", monadic: "Evaluate an APL source string: <code>⍎'2+2'</code> → 4" },
+      { glyph: "⍎", name: "Execute", monadic: "Evaluate an APL source string in this session: <code>⍎'2+2'</code> → 4; it knows the session's variables and dfns (<code>⍎'f 5'</code> applies f), but not a dfn's local names" },
       { glyph: "∊", name: "Member / enlist", monadic: "Flatten all nesting: <code>∊(1 2)(3 4)</code> → 1 2 3 4", dyadic: "Membership: <code>3 9∊1 2 3</code> → 1 0" },
       { glyph: "⍷", name: "Find", dyadic: "Locate a pattern: <code>1 2⍷1 2 3 1 2</code> → 1 0 0 1 0" },
       { glyph: "∪", name: "Unique / union", monadic: "Remove duplicates: <code>∪1 2 2 3</code> → 1 2 3", dyadic: "Union: <code>1 2∪2 3</code> → 1 2 3" },
@@ -1538,8 +1539,10 @@
     let historyCursor = 0;
     let historyDraft = "";
 
-    const createRuntimeContext = () => {
-      const runtime = Object.create(G);
+    // createContext shares the session's categories with ⍎, so code run
+    // through ⍎ knows the session's dfns (and defines new ones for later).
+    const createRuntimeContext = (categories) => {
+      const runtime = createContext(G, categories);
       Object.defineProperty(runtime, "quad", {
         configurable: true,
         enumerable: true,
@@ -1553,8 +1556,8 @@
     let replRuntime;
     let replCategories;
     let lastEmissions = [];
-    replRuntime = createRuntimeContext();
     replCategories = { ...global_category };
+    replRuntime = createRuntimeContext(replCategories);
 
     // Colors are var(--syntax-*)/var(--editor-*) (defined in the <style>
     // block above, one set per theme) rather than hardcoded hex, so
@@ -2322,8 +2325,8 @@
       inputHistory.length = 0;
       historyCursor = 0;
       historyDraft = "";
-      replRuntime = createRuntimeContext();
       replCategories = { ...global_category };
+      replRuntime = createRuntimeContext(replCategories);
 
       createInputCell();
       setStatus("Session restarted. Runtime and history reset.");
