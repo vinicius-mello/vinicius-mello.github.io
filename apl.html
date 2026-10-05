@@ -936,6 +936,65 @@
       }
     }
 
+    /* Language bar: one button per glyph, pinned to the bottom of the
+       viewport so it stays reachable whichever cell is being edited. */
+    .glyph-bar {
+      position: sticky;
+      bottom: 0;
+      z-index: 15;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+      padding: 5px 10px;
+      border-top: 1px solid var(--border);
+      background: var(--topbar-bg);
+      backdrop-filter: blur(5px);
+      justify-content: center;
+    }
+
+    .glyph-bar button {
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border-radius: 5px;
+      font-family: "Fira Code", "IBM Plex Mono", "Noto Sans Mono", "DejaVu Sans Mono", monospace;
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
+    /* Clear History / Restart Session after a first click: the next click
+       within a few seconds confirms. */
+    button.warn.armed {
+      background: var(--btn-warn-border);
+      color: var(--ink);
+    }
+
+    .cm-tooltip.cm-tooltip-autocomplete {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+      background: var(--btn-bg-hover);
+      color: var(--accent);
+    }
+
+    .cm-tooltip.cm-tooltip-autocomplete .cm-completionDetail {
+      margin-left: 0.8em;
+      font-style: normal;
+      font-size: 1.1em;
+      color: var(--accent);
+    }
+
+    .cm-tooltip.cm-completionInfo {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+    }
+
     @media (max-width: 760px) {
       .topbar {
         align-items: flex-start;
@@ -945,13 +1004,23 @@
       .toolbar {
         width: 100%;
       }
+
+      .glyph-bar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+      }
+
+      .glyph-bar button {
+        flex: 0 0 auto;
+      }
     }
   </style>
 </head>
 <body>
   <header class="topbar">
     <div>
-      <h1 class="title">APL.js REPL <span class="version">v0.3.2</span></h1>
+      <h1 class="title">APL.js REPL <span class="version">v0.3.3</span></h1>
       <p class="subtitle">An APL to JavaScript transpiler.</p>
     </div>
     <div class="toolbar">
@@ -981,9 +1050,11 @@
         <span id="status">Ready.</span>
       </div>
       <section id="repl" aria-live="polite"></section>
-      <p class="hint">Shift+Enter runs current input and creates a new cell.</p>
+      <p class="hint">Shift+Enter runs current input and creates a new cell. Type <code>\</code> plus a name (e.g. <code>\iota</code>) or click a glyph below to enter APL symbols.</p>
     </section>
   </main>
+
+  <nav id="glyphBar" class="glyph-bar" aria-label="APL glyphs"></nav>
 
   <div id="helpOverlay" class="help-overlay" aria-hidden="true">
     <div class="help-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
@@ -1124,7 +1195,7 @@
     import { EditorState, Prec } from "https://esm.sh/@codemirror/state@6";
     import { EditorView, keymap, lineNumbers } from "https://esm.sh/@codemirror/view@6";
     import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6";
-    import { closeBrackets, closeBracketsKeymap } from "https://esm.sh/@codemirror/autocomplete@6";
+    import { closeBrackets, closeBracketsKeymap, autocompletion, completionStatus } from "https://esm.sh/@codemirror/autocomplete@6";
     import { StreamLanguage } from "https://esm.sh/@codemirror/language@6";
     import { syntaxHighlighting, HighlightStyle, bracketMatching } from "https://esm.sh/@codemirror/language@6";
     import { tags } from "https://esm.sh/@lezer/highlight@1";
@@ -1495,6 +1566,7 @@
     const runBtn = document.getElementById("runBtn");
     const clearBtn = document.getElementById("clearBtn");
     const restartBtn = document.getElementById("restartBtn");
+    const glyphBar = document.getElementById("glyphBar");
     const helpBtn = document.getElementById("helpBtn");
     const exampleSelect = document.getElementById("exampleSelect");
     const themeSelect = document.getElementById("themeSelect");
@@ -2149,6 +2221,10 @@
     };
 
     const navigateHistory = (view, direction) => {
+      // With the \name completion menu open, the arrows move through it.
+      if (completionStatus(view.state) === "active") {
+        return false;
+      }
       if (inputHistory.length === 0) {
         return false;
       }
@@ -2254,6 +2330,7 @@
               ...defaultKeymap,
               ...historyKeymap
             ]),
+            autocompletion({ override: [escapeCompletions], icons: false }),
             StreamLanguage.define(aplModeNoHashComment),
             syntaxHighlighting(highlight),
             bracketMatching(),
@@ -2398,6 +2475,110 @@
       }
     };
 
+    // Language bar order: arithmetic, comparison/logic, structure, selection,
+    // search/sets, operators, then names and syntax.
+    const LANGUAGE_BAR = [..."←+-×÷*⍟√⌹○!?|⌈⌊⊥⊤⊣⊢=≠≤<>≥≡≢∨∧⍲⍱~⍴,⍪⌽⊖⍉↑↓⊂⊃⊆⊇⌷⍋⍒⍳⍸∊⍷∪∩/\\⌿⍀¨⍨⍣.∘⍤⍥@⌸⌺⍕⍎⍠⍞⍔⍬⍺⍵⍶⍹∇⎕¯⋄⍝"];
+
+    // Names for language-bar glyphs that aren't primitives in PRIMITIVE_DOCS.
+    const GLYPH_EXTRA_NAMES = {
+      "←": "Assign",
+      "¯": "High minus (negative numbers)",
+      "⋄": "Diamond (statement separator)",
+      "⍝": "Comment",
+    };
+
+    // glyph -> {name, escape} for the language bar and \name completion.
+    const glyphInfo = (() => {
+      const info = {};
+      PRIMITIVE_DOCS.forEach((entry) => {
+        entry.glyph.split(" ").forEach((g) => {
+          info[g] = info[g] || { name: entry.name };
+        });
+      });
+      Object.entries(GLYPH_EXTRA_NAMES).forEach(([g, name]) => {
+        info[g] = { name };
+      });
+      Object.entries(APL_ESCAPES).forEach(([escape, g]) => {
+        info[g] = info[g] || {};
+        info[g].escape = info[g].escape || escape;
+      });
+      return info;
+    })();
+
+    // Completion for \name escapes: offered once at least one letter follows
+    // the backslash - a bare \ is also APL's scan/expand, and an Enter right
+    // after +\ must not pick a completion.
+    const ESCAPE_OPTIONS = Object.entries(APL_ESCAPES).map(([escape, g]) => ({
+      label: `\\${escape}`,
+      detail: g,
+      info: glyphInfo[g] && glyphInfo[g].name,
+      apply: g,
+    }));
+    const escapeCompletions = (context) => {
+      const word = context.matchBefore(/\\[a-z][a-z0-9_]*/i);
+      if (!word) {
+        return null;
+      }
+      return { from: word.from, options: ESCAPE_OPTIONS, validFor: /^\\[a-z0-9_]*$/i };
+    };
+
+    // The editor a glyph click types into: the focused cell, else the draft.
+    const activeEditor = () => (focusedRecord && focusedRecord.editor) || (draftRecord && draftRecord.editor);
+
+    const buildGlyphBar = () => {
+      glyphBar.innerHTML = "";
+      LANGUAGE_BAR.forEach((g) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = g;
+        const { name, escape } = glyphInfo[g] || {};
+        button.title = [g, name, escape && `\\${escape}`].filter(Boolean).join("  ·  ");
+        button.setAttribute("aria-label", name ? `${name} (${g})` : g);
+        glyphBar.appendChild(button);
+      });
+    };
+
+    // mousedown (not click) with preventDefault keeps focus and the caret in
+    // the editor, so the glyph lands where the user was typing.
+    glyphBar.addEventListener("mousedown", (event) => {
+      const button = event.target.closest("button");
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      const view = activeEditor();
+      if (!view) {
+        return;
+      }
+      view.dispatch(view.state.replaceSelection(button.textContent));
+      view.focus();
+    });
+
+    // Destructive toolbar buttons need a second click within a few seconds:
+    // the first one only arms the button and says what the next click does.
+    const ARM_TIMEOUT_MS = 3000;
+    const requireSecondClick = (button, armedLabel, message, action) => {
+      const label = button.textContent;
+      let timer = null;
+      const disarm = () => {
+        clearTimeout(timer);
+        timer = null;
+        button.textContent = label;
+        button.classList.remove("armed");
+      };
+      button.addEventListener("click", () => {
+        if (timer === null) {
+          button.textContent = armedLabel;
+          button.classList.add("armed");
+          setStatus(message);
+          timer = setTimeout(disarm, ARM_TIMEOUT_MS);
+          return;
+        }
+        disarm();
+        action();
+      });
+    };
+
     const buildHelp = () => {
       // Single source of truth for the version: the header badge.
       document.getElementById("aboutVersion").textContent = document.querySelector(".version").textContent.replace(/^v/, "");
@@ -2495,13 +2676,8 @@
 
     runBtn.addEventListener("click", () => runCurrentCell());
 
-    clearBtn.addEventListener("click", () => {
-      clearHistory();
-    });
-
-    restartBtn.addEventListener("click", () => {
-      restartSession();
-    });
+    requireSecondClick(clearBtn, "Click again to clear", "Click Clear History again to remove every cell (variables are kept).", clearHistory);
+    requireSecondClick(restartBtn, "Click again to restart", "Click Restart Session again to reset all variables and history.", restartSession);
 
     helpBtn.addEventListener("click", () => {
       openHelp();
@@ -2563,6 +2739,7 @@
 
     buildHelp();
     buildPrimitivesTable();
+    buildGlyphBar();
     buildGraphicsDocs();
     buildFFIExamples();
     restoreSession();
