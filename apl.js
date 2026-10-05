@@ -182,9 +182,11 @@ const tokenizer = (text) => {
             tokens.push({ type: spec.type, value: match[0] });
           }
         }
-        // Source offset of every token, for error messages.
+        // Source offset and length of every token, for error messages
+        // (both the raw source text's - a token's value may be re-spelled).
         for (let j = firstNew; j < tokens.length; j++) {
           tokens[j].pos = cursor;
+          tokens[j].len = match[0].length;
         }
         cursor += match[0].length;
         matched = true;
@@ -192,7 +194,7 @@ const tokenizer = (text) => {
       }
     }
     if (!matched) {
-      throw new Error(`SYNTAX ERROR: unexpected character "${text[cursor]}" at position ${cursor}`);
+      throw withSpan(new Error(`SYNTAX ERROR: unexpected character "${text[cursor]}" at position ${cursor}`), [cursor, cursor + 1]);
     }
   }
   return tokens;
@@ -3556,7 +3558,7 @@ const parseExpression = (expression, scope) => {
       if (!cat_name && token.type === 'SYMBOL') {
         // A glyph with no entry would otherwise compile to G.<glyph> - a
         // baffling JS syntax error rather than an APL one.
-        throw new Error(`SYNTAX ERROR: unknown primitive ${token.value} at position ${token.pos}`);
+        throw withSpan(new Error(`SYNTAX ERROR: unknown primitive ${token.value} at position ${token.pos}`), tokenSpan(token));
       }
       reg.category = cat_name ? cat_name.category : 'V';
       const name = cat_name && cat_name.name ? cat_name.name : token.value;
@@ -3568,24 +3570,79 @@ const parseExpression = (expression, scope) => {
       const text = token.type === 'NUMBER' ? token.value.replaceAll('¯', '-') : token.value;
       reg.node = { type: 'Raw', text };
     }
+    // Source range of the node, so a syntax error can point back at the
+    // APL text (see nodeSpan).
+    reg.node.span = tokenSpan(token);
     stack.push(reg);
     // Apply reduction rules greedily onto the stack frame
     /*if(reg.category !=='V')*/ reduceStack();
   }
   // Post-parsing structural check
   if (stack.length > 2) {
-    throw new Error(`SYNTAX ERROR: could not combine ${stack.slice(0, -1).map(e => emitJs(e.node)).join(', ')}`);
+    // The pieces left over (all but the Edge marker on top), reported as
+    // source ranges - parseToAst turns them into the user's own APL text.
+    const error = new Error('SYNTAX ERROR');
+    error.aplFragments = stack.slice(0, -1).map((e) => nodeSpan(e.node)).filter(Boolean);
+    throw error;
   }
   return stack[0].node;
 }
+
+// --- Source ranges for error messages ---
+// [from, to) offsets into the source text. A token knows its own (set by the
+// tokenizer); a {...} token is a list of sub-expression token lists, so its
+// range spans its contents; an AST node's range is its own leaf range or the
+// union of its children's (nodeSpan walks any node shape generically).
+const unionSpans = (spans) => {
+  const real = spans.filter(Boolean);
+  return real.length === 0 ? null : [Math.min(...real.map((s) => s[0])), Math.max(...real.map((s) => s[1]))];
+};
+const tokenSpan = (token) => {
+  if (typeof token.pos === 'number') {
+    return [token.pos, token.pos + token.len];
+  }
+  if (Array.isArray(token.value)) {
+    return unionSpans(token.value.flat().map(tokenSpan));
+  }
+  return null;
+};
+const nodeSpan = (node) => {
+  if (!node || typeof node !== 'object') {
+    return null;
+  }
+  if (node.span) {
+    return node.span;
+  }
+  const children = Object.values(node).flatMap((v) => (Array.isArray(v) ? v : [v]))
+    .filter((v) => v && typeof v === 'object' && typeof v.type === 'string');
+  return unionSpans(children.map(nodeSpan));
+};
+const withSpan = (error, span) => {
+  error.aplSpan = span;
+  return error;
+};
 
 // --- Public API ---
 const parseToAst = (text, categories = { ...global_category }) => {
   const tokens = tokenizer(text);
   const [expressions, _] = breakExpressions(tokens, 0);
   const scope = [categories];
-  const statements = expressions.map((expression) => parseExpression(expression, scope));
-  return { type: 'Program', statements };
+  try {
+    const statements = expressions.map((expression) => parseExpression(expression, scope));
+    return { type: 'Program', statements };
+  } catch (error) {
+    // A statement that didn't reduce to one value: name the pieces that
+    // wouldn't combine in the user's own text, e.g. for "4 5 +"
+    // SYNTAX ERROR: can't combine “4 5” and “+”.
+    if (error.aplFragments && error.aplFragments.length > 0) {
+      const fragments = error.aplFragments.slice().sort((x, y) => x[0] - y[0]);
+      const quoted = fragments.map(([from, to]) => `“${text.slice(from, to)}”`);
+      const list = quoted.length > 1 ? `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}` : quoted[0];
+      error.message = `SYNTAX ERROR: can't combine ${list}`;
+      error.aplSpan = [fragments[0][0], Math.max(...fragments.map((f) => f[1]))];
+    }
+    throw error;
+  }
 };
 
 const parser = (text, categories = { ...global_category }) => {

@@ -989,6 +989,52 @@
       color: var(--accent);
     }
 
+    .cm-tooltip.cm-tooltip-hover .glyph-tip {
+      max-width: 340px;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      color: var(--ink);
+    }
+
+    .glyph-tip-head {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .glyph-tip-glyph {
+      font-size: 1.4rem;
+      color: var(--accent);
+    }
+
+    .glyph-tip-escape {
+      margin-left: auto;
+      color: var(--muted);
+      font-family: "Fira Code", "IBM Plex Mono", monospace;
+    }
+
+    .glyph-tip p {
+      margin: 2px 0;
+    }
+
+    .glyph-tip code {
+      font-family: "Fira Code", "IBM Plex Mono", monospace;
+      color: var(--accent);
+    }
+
+    .cm-tooltip.cm-tooltip-hover {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .cm-tooltip-lint .cm-diagnostic {
+      color: var(--ink);
+      background: var(--panel);
+    }
+
     .cm-tooltip.cm-completionInfo {
       border: 1px solid var(--border);
       background: var(--panel);
@@ -996,13 +1042,41 @@
     }
 
     @media (max-width: 760px) {
+      /* Narrow screens: the sticky header shrinks to the title plus one
+         horizontally scrollable row of controls, so it doesn't eat half
+         the screen. */
       .topbar {
-        align-items: flex-start;
+        align-items: stretch;
         flex-direction: column;
+        gap: 6px;
+        padding: 8px 10px;
+      }
+
+      .subtitle {
+        display: none;
       }
 
       .toolbar {
         width: 100%;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 6px;
+      }
+
+      .toolbar > * {
+        flex: 0 0 auto;
+      }
+
+      .toolbar,
+      .glyph-bar {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+
+      .toolbar button,
+      .toolbar select {
+        padding: 6px 10px;
+        font-size: 0.78rem;
       }
 
       .glyph-bar {
@@ -1020,7 +1094,7 @@
 <body>
   <header class="topbar">
     <div>
-      <h1 class="title">APL.js REPL <span class="version">v0.3.3</span></h1>
+      <h1 class="title">APL.js REPL <span class="version">v0.3.4</span></h1>
       <p class="subtitle">An APL to JavaScript transpiler.</p>
     </div>
     <div class="toolbar">
@@ -1050,7 +1124,7 @@
         <span id="status">Ready.</span>
       </div>
       <section id="repl" aria-live="polite"></section>
-      <p class="hint">Shift+Enter runs current input and creates a new cell. Type <code>\</code> plus a name (e.g. <code>\iota</code>) or click a glyph below to enter APL symbols.</p>
+      <p class="hint">Shift+Enter runs current input and creates a new cell. Type <code>\</code> plus a name (e.g. <code>\iota</code>) or click a glyph below to enter APL symbols; hover a glyph in the editor for its help, and 🔗 on a cell copies a link to its code.</p>
     </section>
   </main>
 
@@ -1193,7 +1267,8 @@
     //                                 startup call (restoreSession())
     // ===========================================================================
     import { EditorState, Prec } from "https://esm.sh/@codemirror/state@6";
-    import { EditorView, keymap, lineNumbers } from "https://esm.sh/@codemirror/view@6";
+    import { EditorView, keymap, lineNumbers, hoverTooltip } from "https://esm.sh/@codemirror/view@6";
+    import { setDiagnostics } from "https://esm.sh/@codemirror/lint@6";
     import { defaultKeymap, history, historyKeymap } from "https://esm.sh/@codemirror/commands@6";
     import { closeBrackets, closeBracketsKeymap, autocompletion, completionStatus } from "https://esm.sh/@codemirror/autocomplete@6";
     import { StreamLanguage } from "https://esm.sh/@codemirror/language@6";
@@ -1978,6 +2053,65 @@
     // called on creation and after every run, since a cell can go from
     // never-run to run (or from erroring to succeeding) many times over its
     // life. The editor/mount below the head is never touched here.
+    const copyText = async (text) => {
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textarea);
+        }
+        return true;
+      } catch (error) {
+        return false;
+      }
+    };
+
+    // Share links carry the code in the URL fragment (#code=...), as
+    // base64url of its UTF-8 bytes - the fragment never reaches the server.
+    const SHARE_PREFIX = "#code=";
+    const encodeShare = (text) => {
+      let binary = "";
+      new TextEncoder().encode(text).forEach((byte) => { binary += String.fromCharCode(byte); });
+      return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    };
+    const decodeShare = (encoded) => {
+      const binary = atob(encoded.replace(/-/g, "+").replace(/_/g, "/"));
+      return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+    };
+    const shareLink = (text) => `${location.origin}${location.pathname}${SHARE_PREFIX}${encodeShare(text)}`;
+
+    // Code opened from a share link goes into the input cell for the reader
+    // to look at - it is never run automatically.
+    const openSharedCode = () => {
+      if (!location.hash.startsWith(SHARE_PREFIX)) {
+        return;
+      }
+      let code;
+      try {
+        code = decodeShare(location.hash.slice(SHARE_PREFIX.length));
+      } catch (error) {
+        setStatus("The code in this link couldn't be read.");
+        return;
+      }
+      // window.history: in this module, `history` is CodeMirror's undo history.
+      window.history.replaceState(null, "", location.pathname + location.search);
+      const view = draftRecord && draftRecord.editor;
+      if (!view) {
+        return;
+      }
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code } });
+      view.focus();
+      setStatus("Code from the link is in the input cell - review it, then Run.");
+    };
+
     const renderCellHead = (record) => {
       const oldHead = record.cellEl.querySelector(":scope > .cell-head");
       const head = document.createElement("div");
@@ -2011,25 +2145,19 @@
         copyButton.setAttribute("aria-label", "Copy input");
         copyButton.title = "Copy input";
         copyButton.addEventListener("click", async () => {
-          const textToCopy = record.editor.state.doc.toString();
-          try {
-            if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-              await navigator.clipboard.writeText(textToCopy);
-            } else {
-              const textarea = document.createElement("textarea");
-              textarea.value = textToCopy;
-              textarea.setAttribute("readonly", "");
-              textarea.style.position = "fixed";
-              textarea.style.opacity = "0";
-              document.body.appendChild(textarea);
-              textarea.select();
-              document.execCommand("copy");
-              document.body.removeChild(textarea);
-            }
-            setStatus(`Copied Input #${record.execCount} to clipboard.`);
-          } catch (error) {
-            setStatus("Clipboard copy failed.");
-          }
+          const ok = await copyText(record.editor.state.doc.toString());
+          setStatus(ok ? `Copied Input #${record.execCount} to clipboard.` : "Clipboard copy failed.");
+        });
+
+        const linkButton = document.createElement("button");
+        linkButton.className = "history-copy-btn";
+        linkButton.type = "button";
+        linkButton.textContent = "🔗";
+        linkButton.setAttribute("aria-label", "Copy a link to this input");
+        linkButton.title = "Copy a link that opens this code in the REPL";
+        linkButton.addEventListener("click", async () => {
+          const ok = await copyText(shareLink(record.editor.state.doc.toString().trimEnd()));
+          setStatus(ok ? `Copied a link to Input #${record.execCount}.` : "Clipboard copy failed.");
         });
 
         const deleteButton = document.createElement("button");
@@ -2044,6 +2172,7 @@
 
         actions.appendChild(jsButton);
         actions.appendChild(copyButton);
+        actions.appendChild(linkButton);
         actions.appendChild(deleteButton);
         head.appendChild(actions);
       }
@@ -2151,6 +2280,17 @@
           // shouldn't block execution.
         }
       }
+
+      // Underline the source range a syntax error points at (or clear the
+      // underline left by a previous failed run of this cell).
+      const span = transpileError && transpileError.aplSpan;
+      const docLength = record.editor.state.doc.length;
+      record.editor.dispatch(setDiagnostics(record.editor.state, span ? [{
+        from: Math.min(span[0], docLength),
+        to: Math.min(Math.max(span[1], span[0] + 1), docLength),
+        severity: "error",
+        message: transpileError.message,
+      }] : []));
 
       if (transpileError) {
         newOutputs.push(buildOutputCell("error", transpileError instanceof Error ? transpileError.message : String(transpileError)));
@@ -2331,6 +2471,7 @@
               ...historyKeymap
             ]),
             autocompletion({ override: [escapeCompletions], icons: false }),
+            glyphHover,
             StreamLanguage.define(aplModeNoHashComment),
             syntaxHighlighting(highlight),
             bracketMatching(),
@@ -2521,6 +2662,58 @@
       }
       return { from: word.from, options: ESCAPE_OPTIONS, validFor: /^\\[a-z0-9_]*$/i };
     };
+
+    // Hovering a glyph in the editor shows its help entry: name, escape,
+    // and the monadic/dyadic descriptions from PRIMITIVE_DOCS.
+    const docByGlyph = {};
+    PRIMITIVE_DOCS.forEach((entry) => {
+      entry.glyph.split(" ").forEach((g) => {
+        docByGlyph[g] = docByGlyph[g] || entry;
+      });
+    });
+    const glyphHover = hoverTooltip((view, pos, side) => {
+      const at = side < 0 ? pos - 1 : pos;
+      const g = view.state.doc.sliceString(at, at + 1);
+      const info = glyphInfo[g];
+      if (!info || /[A-Za-z0-9\s]/.test(g)) {
+        return null;
+      }
+      const entry = docByGlyph[g];
+      return {
+        pos: at,
+        end: at + 1,
+        above: true,
+        create: () => {
+          const dom = document.createElement("div");
+          dom.className = "glyph-tip";
+          const head = document.createElement("div");
+          head.className = "glyph-tip-head";
+          const glyph = document.createElement("span");
+          glyph.className = "glyph-tip-glyph";
+          glyph.textContent = g;
+          const name = document.createElement("strong");
+          name.textContent = info.name || "";
+          head.append(glyph, name);
+          if (info.escape) {
+            const escape = document.createElement("span");
+            escape.className = "glyph-tip-escape";
+            escape.textContent = `\\${info.escape}`;
+            head.appendChild(escape);
+          }
+          dom.appendChild(head);
+          // Static, trusted help text (it contains <code> markup).
+          [["Monadic", entry && entry.monadic], ["Dyadic", entry && entry.dyadic]].forEach(([label, html]) => {
+            if (!html) {
+              return;
+            }
+            const p = document.createElement("p");
+            p.innerHTML = `<em>${label}:</em> ${html}`;
+            dom.appendChild(p);
+          });
+          return { dom };
+        },
+      };
+    });
 
     // The editor a glyph click types into: the focused cell, else the draft.
     const activeEditor = () => (focusedRecord && focusedRecord.editor) || (draftRecord && draftRecord.editor);
@@ -2743,6 +2936,7 @@
     buildGraphicsDocs();
     buildFFIExamples();
     restoreSession();
+    openSharedCode();
   </script>
 </body>
 </html>
