@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Riemann Surfaces in CP²</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    html {
+      background:
+        radial-gradient(circle at 15% 0%, rgba(224, 164, 88, 0.16), transparent 45%),
+        linear-gradient(160deg, #6b4e2f 0%, #4a341e 45%, #2b1d12 100%);
+      background-attachment: fixed;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: 'Michroma', sans-serif;
+      max-width: none;
+      height: 100vh;
+      height: 100dvh;
+      margin: 0;
+      padding: 14px 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .tagline {
+      flex: 1 1 360px;
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      color: rgba(255, 255, 255, 0.68);
+    }
+
+    .home {
+      font-size: 0.68rem;
+      text-decoration: none;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    a.home:link, a.home:visited { color: rgba(255, 255, 255, 0.6); font-weight: normal; }
+    a.home:hover { color: rgba(224, 164, 88, 0.9); }
+
+    .seg {
+      display: inline-flex;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .seg button {
+      font-family: 'Michroma', sans-serif;
+      font-size: 0.66rem;
+      letter-spacing: 0.05em;
+      padding: 7px 12px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .seg button.active { background: rgba(224, 164, 88, 0.22); color: white; }
+
+    main {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 14px;
+    }
+
+    .card {
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+    }
+
+    .stage { position: relative; min-height: 0; overflow: hidden; }
+
+    .viewer {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 40%, #3a2918 0%, #1d140c 75%);
+    }
+
+    .viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+    .overlay {
+      position: absolute;
+      font-family: system-ui, sans-serif;
+      font-size: 0.74rem;
+      color: rgba(255, 255, 255, 0.55);
+      pointer-events: none;
+    }
+
+    .results {
+      position: absolute;
+      inset: 0;
+      overflow: auto;
+      padding: 6px 18px 18px;
+      font-family: system-ui, sans-serif;
+      display: none;
+    }
+
+    body.show-results .results { display: block; }
+    body.show-results .viewer { visibility: hidden; }
+
+    .results h2 {
+      font-family: 'Michroma', sans-serif;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      color: rgba(224, 164, 88, 0.95);
+      margin: 18px 0 4px;
+    }
+
+    .results p {
+      font-size: 0.84rem;
+      line-height: 1.5;
+      color: rgba(255, 255, 255, 0.72);
+      margin: 4px 0 6px;
+      max-width: 980px;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 12px 14px;
+      font-family: system-ui, sans-serif;
+      font-size: 0.83rem;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin: 12px 0 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+    }
+
+    .tabs button {
+      flex: 1;
+      font-family: 'Michroma', sans-serif;
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      padding: 7px 4px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 0;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .tabs button.active { color: white; border-bottom-color: #e0a458; }
+
+    .tabpage { display: none; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+    .tabpage.active { display: block; }
+
+    select, button {
+      font: inherit;
+      color: white;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      padding: 5px 8px;
+    }
+
+    select { width: 100%; }
+    select option, select optgroup { background: #3b2a19; }
+    button { cursor: pointer; }
+    button:hover { border-color: rgba(224, 164, 88, 0.7); }
+    button.on { border-color: rgba(224, 164, 88, 0.9); background: rgba(224, 164, 88, 0.18); }
+
+    .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+    .row label { flex: 0 0 auto; }
+    .row input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: #e0a458; }
+    .row .val { flex: 0 0 3.4em; text-align: right; font-variant-numeric: tabular-nums; color: rgba(255, 255, 255, 0.7); }
+    .row .ax { flex: 0 0 4.2em; }
+    input[type=checkbox] { accent-color: #e0a458; }
+
+    .swatch { display: inline-block; width: 0.9em; height: 0.9em; border-radius: 3px; vertical-align: -0.1em; margin-right: 4px; }
+
+    .eq { margin: 0 0 8px; font-size: 0.95rem; }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
+    dt { color: rgba(255, 255, 255, 0.6); }
+    dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+    .ok { color: #9fd49a; }
+    .warn { color: #f0b36b; }
+
+    .note { font-size: 0.76rem; line-height: 1.45; color: rgba(255, 255, 255, 0.58); margin: 8px 0 4px; }
+
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; font-size: 0.78rem; margin: 6px 0 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    th, td { padding: 3px 10px; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: rgba(224, 164, 88, 0.95); font-weight: 600; border-bottom: 1px solid rgba(255, 255, 255, 0.2); }
+    tr:nth-child(even) td { background: rgba(255, 255, 255, 0.035); }
+
+    @media (max-width: 900px) {
+      body { height: auto; overflow: auto; }
+      main { grid-template-columns: 1fr; }
+      .stage { height: 62vh; }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+<header>
+  <h1>Riemann Surfaces in ℂP²</h1>
+  <p class="tagline">
+    Plane algebraic curves triangulated inside ℂP², with no distinguished chart:
+    adaptive Maubach bisection of Gaifullin's 15-vertex triangulation along
+    Fubini–Study geodesics, and continuation from cell to cell. Faces are oriented
+    by the complex orientation of the curve.
+  </p>
+  <div class="seg">
+    <button id="btn-viewer" class="active">Viewer</button>
+    <button id="btn-results">Results</button>
+  </div>
+  <a class="home" href="../index.html">Prof. Vinícius</a>
+</header>
+
+<main>
+  <div class="card stage">
+    <div class="viewer" id="viewer">
+      <div class="overlay" id="status" style="left:14px; bottom:10px">loading…</div>
+      <div class="overlay" style="right:14px; bottom:10px">drag: rotate · wheel: zoom · right-drag: pan</div>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <div class="card panel">
+    <select id="mesh" aria-label="Mesh"></select>
+    <div class="tabs">
+      <button data-tab="tab-mesh" class="active">Mesh</button>
+      <button data-tab="tab-look">Appearance</button>
+      <button data-tab="tab-clip">Clipping</button>
+    </div>
+
+    <div class="tabpage active" id="tab-mesh"></div>
+
+    <div class="tabpage" id="tab-look">
+      <div class="row">
+        <label for="colormode">Color</label>
+        <select id="colormode" style="flex:1">
+          <option value="orient">orientation (front / back)</option>
+          <option value="dist">distance to center</option>
+          <option value="normal">normal direction</option>
+        </select>
+      </div>
+      <div class="note" id="orientlegend">
+        <span class="swatch" style="background:#e0a458"></span>front
+        <span class="swatch" style="background:#5b8fb9; margin-left:10px"></span>back
+        — the front is the positive side of the Kähler form.
+      </div>
+      <div class="row">
+        <label for="opacity">Opacity</label>
+        <input type="range" id="opacity" min="0.05" max="1" step="0.01" value="1">
+        <span class="val" id="opacityval">1.00</span>
+      </div>
+      <div class="row"><label><input type="checkbox" id="edges"> polygon edges</label></div>
+      <div class="row"><label><input type="checkbox" id="flat"> flat shading</label></div>
+      <div class="row"><label><input type="checkbox" id="rotate"> auto-rotate</label></div>
+      <div class="row" style="margin-top:12px"><button id="reset">reset view</button></div>
+    </div>
+
+    <div class="tabpage" id="tab-clip">
+      <div id="clips"></div>
+      <div class="row">
+        <label for="clipmode">Remove</label>
+        <select id="clipmode" style="flex:1">
+          <option value="union">what any plane cuts</option>
+          <option value="intersection">what all planes cut</option>
+        </select>
+      </div>
+      <div class="row"><label><input type="checkbox" id="helpers" checked> show planes</label></div>
+      <p class="note">Each plane removes the side beyond its slider value; ⇄ removes the other side.</p>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const FRONT = new THREE.Color('#e0a458'), BACK = new THREE.Color('#5b8fb9');
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 0) => x == null ? '—' : Number(x).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// ---------------------------------------------------------------- tabs
+for (const b of document.querySelectorAll('.tabs button')) {
+  b.onclick = () => {
+    for (const o of document.querySelectorAll('.tabs button')) o.classList.toggle('active', o === b);
+    for (const p of document.querySelectorAll('.tabpage')) p.classList.toggle('active', p.id === b.dataset.tab);
+  };
+}
+function showResults(on) {
+  document.body.classList.toggle('show-results', on);
+  $('btn-results').classList.toggle('active', on);
+  $('btn-viewer').classList.toggle('active', !on);
+}
+$('btn-viewer').onclick = () => showResults(false);
+$('btn-results').onclick = () => showResults(true);
+
+// ---------------------------------------------------------------- scene
+const container = $('viewer');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.localClippingEnabled = true;
+container.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.01, 1000);
+camera.up.set(0, 0, 1);
+scene.add(camera);
+scene.add(new THREE.HemisphereLight(0xfff4e6, 0x2a1d12, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.6);
+key.position.set(1, 1.5, 2);
+camera.add(key); // the light follows the view
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.autoRotateSpeed = 1.2;
+
+function resize() {
+  const w = container.clientWidth, h = container.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(container);
+
+// ---------------------------------------------------------------- materials
+// The surface is drawn twice, back faces first, so that transparency
+// composes front over back; three.js flips the normal on back faces.
+const matBack = new THREE.MeshStandardMaterial({ side: THREE.BackSide, roughness: 0.65, metalness: 0 });
+const matFront = new THREE.MeshStandardMaterial({ side: THREE.FrontSide, roughness: 0.55, metalness: 0 });
+const matEdges = new THREE.LineBasicMaterial({ color: 0x1b120a, transparent: true, opacity: 0.45 });
+const meshBack = new THREE.Mesh(undefined, matBack);
+const meshFront = new THREE.Mesh(undefined, matFront);
+const edgeLines = new THREE.LineSegments(undefined, matEdges);
+meshBack.renderOrder = 0; meshFront.renderOrder = 1; edgeLines.renderOrder = 2;
+scene.add(meshBack, meshFront, edgeLines);
+
+// ---------------------------------------------------------------- clipping
+const clip = [0, 1, 2].map(i => ({ i, on: false, flip: false, value: 0, plane: new THREE.Plane(new THREE.Vector3(), 0), helper: null }));
+let bbox = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1));
+
+function buildClipControls() {
+  for (const c of clip) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<label class="ax"><input type="checkbox"> <span></span></label>
+      <input type="range" min="0" max="1000" value="500">
+      <span class="val"></span>
+      <button title="remove the other side">⇄</button>`;
+    c.ui = {
+      chk: row.querySelector('input[type=checkbox]'), range: row.querySelector('input[type=range]'),
+      val: row.querySelector('.val'), btn: row.querySelector('button'), name: row.querySelector('label span'),
+    };
+    c.ui.chk.onchange = () => { c.on = c.ui.chk.checked; updateClipping(); };
+    c.ui.range.oninput = () => { c.value = sliderToValue(c, +c.ui.range.value); updateClipping(); };
+    c.ui.btn.onclick = () => { c.flip = !c.flip; c.ui.btn.classList.toggle('on', c.flip); updateClipping(); };
+    $('clips').appendChild(row);
+  }
+}
+function sliderToValue(c, s) {
+  const lo = bbox.min.getComponent(c.i), hi = bbox.max.getComponent(c.i);
+  return lo + (hi - lo) * s / 1000;
+}
+function updateClipping() {
+  const active = [];
+  for (const c of clip) {
+    // three.js discards points at negative signed distance: keep {x_i <= value}, or {x_i >= value} when flipped
+    c.plane.normal.set(0, 0, 0).setComponent(c.i, c.flip ? 1 : -1);
+    c.plane.constant = c.flip ? -c.value : c.value;
+    c.ui.val.textContent = c.value.toFixed(2);
+    c.ui.range.disabled = !c.on;
+    if (c.helper) c.helper.visible = c.on && $('helpers').checked;
+    if (c.on) active.push(c.plane);
+  }
+  const inter = $('clipmode').value === 'intersection';
+  for (const m of [matBack, matFront, matEdges]) {
+    m.clippingPlanes = active;
+    m.clipIntersection = inter;
+    m.needsUpdate = true;
+  }
+}
+function resetClipHelpers() {
+  const size = bbox.getSize(new THREE.Vector3()).length();
+  for (const c of clip) {
+    if (c.helper) { scene.remove(c.helper); c.helper.dispose(); }
+    c.helper = new THREE.PlaneHelper(c.plane, size * 0.75, 0xe0a458);
+    c.helper.material.transparent = true;
+    c.helper.material.opacity = 0.55;
+    scene.add(c.helper);
+  }
+}
+
+// ---------------------------------------------------------------- appearance
+function applyAppearance() {
+  const op = +$('opacity').value;
+  $('opacityval').textContent = op.toFixed(2);
+  const transparent = op < 0.999;
+  const mode = $('colormode').value;
+  const geo = meshFront.geometry;
+  if (geo && mode !== 'orient' && geo.userData.colorMode !== mode) {
+    setVertexColors(geo, mode);
+    geo.userData.colorMode = mode;
+  }
+  for (const m of [matBack, matFront]) {
+    m.vertexColors = mode !== 'orient';
+    m.transparent = transparent;
+    m.opacity = op;
+    m.depthWrite = !transparent;
+    m.flatShading = $('flat').checked;
+    m.needsUpdate = true;
+  }
+  matFront.color.copy(mode === 'orient' ? FRONT : new THREE.Color(1, 1, 1));
+  matBack.color.copy(mode === 'orient' ? BACK : new THREE.Color(0.72, 0.72, 0.72));
+  $('orientlegend').style.display = mode === 'orient' ? '' : 'none';
+  edgeLines.visible = $('edges').checked;
+  controls.autoRotate = $('rotate').checked;
+}
+
+// colormap: dark violet -> teal -> amber (ordered in lightness, readable on brown)
+const STOPS = ['#3b2c6b', '#2f6f8f', '#3fa58a', '#b8c25a', '#f2c46d'].map(c => new THREE.Color(c));
+function cmap(t, out) {
+  t = Math.min(1, Math.max(0, t)) * (STOPS.length - 1);
+  const k = Math.min(STOPS.length - 2, Math.floor(t));
+  return out.copy(STOPS[k]).lerp(STOPS[k + 1], t - k);
+}
+function setVertexColors(geo, mode) {
+  const p = geo.attributes.position, n = geo.attributes.normal;
+  const col = new Float32Array(p.count * 3), c = new THREE.Color();
+  const ctr = geo.userData.center;
+  let dmin = Infinity, dmax = 0;
+  const d = new Float32Array(p.count);
+  for (let i = 0; i < p.count; i++) {
+    d[i] = Math.hypot(p.getX(i) - ctr.x, p.getY(i) - ctr.y, p.getZ(i) - ctr.z);
+    dmin = Math.min(dmin, d[i]); dmax = Math.max(dmax, d[i]);
+  }
+  for (let i = 0; i < p.count; i++) {
+    if (mode === 'dist') cmap((d[i] - dmin) / (dmax - dmin || 1), c);
+    else c.setRGB(0.5 + 0.5 * n.getX(i), 0.5 + 0.5 * n.getY(i), 0.5 + 0.5 * n.getZ(i));
+    col[3 * i] = c.r; col[3 * i + 1] = c.g; col[3 * i + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+}
+
+// ---------------------------------------------------------------- loading
+// meshes/ID.bin: uint32 nv, nt, np; nv*3 float32 positions; nt*3 uint32
+// indices; np uint8 polygon sizes (each polygon is a fan of size-2
+// consecutive triangles). Written by vgtl2.0's report/article/figures/obj2web.py.
+const cache = new Map();
+async function loadMesh(entry) {
+  if (cache.has(entry.id)) return cache.get(entry.id);
+  const res = await fetch('meshes/' + entry.file);
+  if (!res.ok) throw new Error(res.status + ' ' + entry.file);
+  const buf = await res.arrayBuffer();
+  const [nv, nt, np] = new Uint32Array(buf, 0, 3);
+  const pos = new Float32Array(buf, 12, 3 * nv);
+  const idx = new Uint32Array(buf, 12 + 12 * nv, 3 * nt);
+  const sizes = new Uint8Array(buf, 12 + 12 * nv + 12 * nt, np);
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+  geo.userData.center = geo.boundingBox.getCenter(new THREE.Vector3());
+
+  const seen = new Set(), seg = [];
+  let t = 0;
+  for (let k = 0; k < np; k++) {
+    const m = sizes[k], loop = [idx[3 * t], idx[3 * t + 1]];
+    for (let j = 0; j < m - 2; j++) loop.push(idx[3 * (t + j) + 2]);
+    t += m - 2;
+    for (let j = 0; j < m; j++) {
+      const a = loop[j], b = loop[(j + 1) % m], key = a < b ? a * nv + b : b * nv + a;
+      if (!seen.has(key)) { seen.add(key); seg.push(a, b); }
+    }
+  }
+  const eg = new THREE.BufferGeometry();
+  eg.setAttribute('position', geo.attributes.position);
+  eg.setIndex(seg);
+  const out = { geo, edges: eg };
+  cache.set(entry.id, out);
+  return out;
+}
+
+function frame(geo) {
+  resize();
+  const s = geo.boundingSphere, c = geo.userData.center;
+  controls.target.copy(c);
+  const half = THREE.MathUtils.degToRad(camera.fov / 2);
+  const fit = Math.min(Math.sin(half), Math.sin(Math.atan(Math.tan(half) * camera.aspect)));
+  const dist = s.radius / fit * 1.08;
+  camera.position.copy(c).add(new THREE.Vector3(0.9, -1.4, 0.8).normalize().multiplyScalar(dist));
+  camera.near = dist / 100; camera.far = dist * 10;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+const AXNAMES = { alpha: ['x', 'y', 'z'], CP2: ['Re z', 'Im z', 'Re w'], CP1xCP1: ['Re w', 'Im w', 'Re z'] };
+const PROJ = {
+  alpha: "Dutter's map α̃: ℂP² → ℝ³ — no charts; the image self-intersects.",
+  CP2: 'Chart Z = 1, drawn as the graph (Re z, Im z, Re w); cut at radius 4.',
+  CP1xCP1: 'Affine chart, drawn as the graph (Re w, Im w, Re z); cut at radius 4.',
+};
+
+let entries = [], current = null;
+async function show(entry) {
+  current = entry;
+  $('status').textContent = `loading ${entry.title}…`;
+  let m;
+  try { m = await loadMesh(entry); }
+  catch (e) { $('status').textContent = 'could not load: ' + e.message; return; }
+  if (current !== entry) return;
+  meshBack.geometry = meshFront.geometry = m.geo;
+  edgeLines.geometry = m.edges;
+  bbox = m.geo.boundingBox.clone();
+  const names = entry.projection === 'alpha' ? AXNAMES.alpha : AXNAMES[entry.space];
+  for (const c of clip) {
+    c.ui.name.textContent = names[c.i];
+    c.value = sliderToValue(c, +c.ui.range.value);
+  }
+  resetClipHelpers();
+  updateClipping();
+  applyAppearance();
+  frame(m.geo);
+  renderInfo(entry);
+  $('status').textContent = `${fmt(entry.triangles)} triangles`;
+  history.replaceState(null, '', '#' + entry.id);
+}
+
+function renderInfo(e) {
+  const touched = (e.ok ?? 0) + (e.bad ?? 0);
+  const g = e.genus;
+  const closed = e.boundary_edges === 0;
+  const space = e.space === 'CP2' ? 'ℂP²' : 'ℂP¹ × ℂP¹';
+  const genusOut = x => g == null ? x : `<span class="${+x === +g ? 'ok' : 'warn'}">${x}</span> (expected ${g})`;
+  const rows = [
+    ['space', space],
+    e.space === 'CP2' ? ['degree', e.degree] : ['bidegree', `(${e.bidegree.join(', ')})`],
+    ['depth', e.depth],
+    ['4D mesh leaves', fmt(e.leaves)],
+    ['bad cells', touched ? `${fmt(e.bad)} (${fmt(100 * e.bad / touched, 3)}%)` : '—'],
+    ['area / nπ', e.area_ratio ? fmt(e.area_ratio, 5) : '—'],
+    ['vertices', fmt(e.vertices)],
+    ['polygons', fmt(e.polygons)],
+  ];
+  if (closed) rows.push(['χ', e.chi], ['genus (2 − χ)/2', genusOut(1 - e.chi / 2)]);
+  else rows.push([`χ (closed, in ${space})`, e.chi_cp2 ?? '—'], ['genus', genusOut(e.genus_est)]);
+  rows.push(['file', fmt(e.bytes / 1e6, 1) + ' MB']);
+  const eq = e.equation.replace(/\^(\d+)/g, '<sup>$1</sup>').replace(/ - /g, ' − ');
+  const projKey = e.projection === 'alpha' ? 'alpha' : e.space;
+  $('tab-mesh').innerHTML = `<p class="eq">${eq}</p>
+    <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+    <p class="note">${PROJ[projKey]}${closed ? '' : ` Part of the surface lies beyond the cut, so χ and the genus are those of the whole closed surface in ${space}.`}${e.space === 'CP1xCP1' && e.id.includes('elliptic') ? ' The curve has a cusp at (∞, ∞); its geometric genus is 1.' : ''}</p>`;
+}
+
+// ---------------------------------------------------------------- UI wiring
+buildClipControls();
+for (const id of ['opacity', 'colormode', 'edges', 'flat', 'rotate']) $(id).addEventListener('input', applyAppearance);
+$('clipmode').onchange = updateClipping;
+$('helpers').onchange = updateClipping;
+$('reset').onclick = () => meshFront.geometry && frame(meshFront.geometry);
+$('mesh').onchange = () => show(entries.find(e => e.id === $('mesh').value));
+
+const GROUPS = [
+  ['ℂP² — Dutter’s map', e => e.space === 'CP2' && e.projection === 'alpha'],
+  ['ℂP² — affine chart', e => e.space === 'CP2' && e.projection !== 'alpha'],
+  ['ℂP¹ × ℂP¹ — affine chart', e => e.space === 'CP1xCP1'],
+];
+
+fetch('meshes/meshes.json').then(r => r.json()).then(list => {
+  entries = list;
+  for (const [label, pred] of GROUPS) {
+    const og = document.createElement('optgroup');
+    og.label = label;
+    for (const e of list.filter(pred)) og.appendChild(new Option(e.title, e.id));
+    if (og.children.length) $('mesh').appendChild(og);
+  }
+  const want = location.hash.slice(1);
+  const first = list.find(e => e.id === want) ?? list.find(e => e.id === 'fermat_quartic') ?? list[0];
+  $('mesh').value = first.id;
+  show(first);
+}).catch(e => { $('status').textContent = 'could not load the mesh list: ' + e.message; });
+
+window.viewer = { camera, controls, meshFront, renderer }; // for debugging from the console
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+
+// ---------------------------------------------------------------- result tables
+function parseCSV(text) {
+  const [head, ...lines] = text.trim().split('\n');
+  const keys = head.split(',');
+  return lines.map(l => Object.fromEntries(l.split(',').map((v, i) => [keys[i], v])));
+}
+const NAMES = {
+  conic: 'conic', elliptic: 'elliptic', fermat_cubic: 'Fermat cubic', fermat_quartic: 'Fermat quartic',
+  quartic: 'Fermat quartic', fermat_5: 'Fermat quintic', fermat_6: 'Fermat sextic',
+  kostlan_3: 'Kostlan cubic', kostlan_4: 'Kostlan quartic', kostlan_5: 'Kostlan quintic', kostlan_6: 'Kostlan sextic',
+  parabola: 'parabola',
+};
+const pct = (b, n) => n > 0 ? fmt(100 * b / n, 3) + '%' : '—';
+const genusCell = (got, want) => `<span class="${+got === +want ? 'ok' : 'warn'}">${got}</span>`;
+function table(cols, rows) {
+  return `<div class="table-wrap"><table><thead><tr>${cols.map(c => `<th>${c[0]}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${cols.map(c => `<td>${c[1](r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+const SECTIONS = [
+  {
+    file: 'genus.csv', title: 'Genus and area in ℂP²',
+    text: 'With the tangency threshold and two repair rounds. The genus is that of the closed surface; |F| is the residual of the equation at the vertices.',
+    cols: [
+      ['curve', r => NAMES[r.curve] ?? r.curve], ['depth', r => r.depth],
+      ['good cells', r => fmt(r.ok)], ['bad', r => fmt(r.bad)], ['rate', r => pct(+r.bad, +r.ok + +r.bad)],
+      ['χ', r => r.closed_chi], ['genus', r => genusCell(r.genus_est, r.genus)], ['expected', r => r.genus],
+      ['area / nπ', r => fmt(r.area_ratio_closed, 5)], ['max |F|', r => (+r.F_max).toExponential(1)],
+    ],
+  },
+  {
+    file: 'degree.csv', title: 'Degrees 3 to 6: Fermat curves and Kostlan random curves',
+    text: '“base”: refinement by continuation only; “both”: with the tangency threshold and repair rounds. The genus (n−1)(n−2)/2 is exact in all 48 runs.',
+    cols: [
+      ['curve', r => NAMES[r.curve] ?? r.curve], ['degree', r => r.degree], ['depth', r => r.depth], ['mode', r => r.mode],
+      ['leaves', r => fmt(r.leaves)], ['touched', r => fmt(r.touched)], ['bad', r => fmt(r.bad)], ['rate', r => pct(+r.bad, +r.touched)],
+      ['genus', r => genusCell(r.genus_closed, (r.degree - 1) * (r.degree - 2) / 2)], ['area / nπ', r => fmt(r.area_closed, 4)],
+      ['time (s)', r => fmt(+r.refine_s + +r.extract_s, 1)], ['memory (MiB)', r => fmt(r.peak_mib)],
+    ],
+  },
+  {
+    file: 's2s2.csv', title: 'The same code on ℂP¹ × ℂP¹',
+    text: 'The elliptic curve w² = z³ − z has a cusp at (∞, ∞) in this compactification; the parabola w² = z does not. The Kähler filter (|ω|/area ≥ 0.9) rejects polygons that cut across the cusp with the wrong orientation; “near” counts cells within 0.1 of the corner.',
+    cols: [
+      ['curve', r => NAMES[r.curve] ?? r.curve], ['depth', r => r.depth], ['seed', r => r.seed],
+      ['leaves', r => fmt(r.leaves)], ['good', r => fmt(r.ok)], ['bad', r => fmt(r.bad)],
+      ['Kähler filter', r => r.kahler], ['bad near', r => r.near_bad], ['χ', r => r.closed_chi],
+      ['orientable', r => r.orientable], ['genus', r => r.genus_est], ['area', r => fmt(r.area_closed, 4)],
+    ],
+  },
+];
+const INTRO = `<h2>About the measurements</h2>
+  <p>A cell is <em>bad</em> when the curve does not decompose in it into polygons; the hole it leaves
+  is capped afterwards by a cone. The genus comes from the Euler characteristic of the closed surface,
+  χ = 2 − 2g, and the Fubini–Study area is compared with nπ (Wirtinger's theorem, for a curve of degree n).</p>`;
+Promise.all(SECTIONS.map(s => fetch('data/' + s.file).then(r => r.ok ? r.text() : '').catch(() => ''))).then(texts => {
+  $('results').innerHTML = INTRO + SECTIONS.map((s, i) => texts[i]
+    ? `<h2>${s.title}</h2><p>${s.text}</p>${table(s.cols, parseCSV(texts[i]))}` : '').join('');
+});
+</script>
+</body>
+</html>
