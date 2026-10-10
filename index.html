@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <title>Prof. Vinícius</title>
+  <title>Prof. Vinícius Mello — UFBA</title>
+  <meta name="description" content="Página do Prof. Vinícius Mello (UFBA): ferramentas interativas de matemática e programação — APL.js, Guacyra, CindyJS, exercícios de Pré-Cálculo, Geometria Analítica e superfícies de Riemann.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
@@ -54,8 +56,10 @@
 
     .app-card {
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 8px;
       min-height: 96px;
       padding: 18px;
       text-align: center;
@@ -91,6 +95,13 @@
       letter-spacing: 0.03em;
       line-height: 1.4;
     }
+
+    .app-card small {
+      font-family: system-ui, sans-serif;
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.65);
+      line-height: 1.35;
+    }
   </style>
 </head>
 <body>
@@ -100,17 +111,17 @@
 </div>
 <hr/>
 <div class="app-grid">
-  <a class="app-card" href="apl.html"><span>APL.js</span></a>
-  <a class="app-card" href="guacyra.html"><span>Guacyra</span></a>
-  <a class="app-card" href="cindyjs.html"><span>CindyJS</span></a>
-  <a class="app-card" href="rotulador.html"><span>Rotulador de Cores</span></a>
-  <a class="app-card" href="marpit.html"><span>Marpit</span></a>
-  <a class="app-card" href="cofgl-wAst/asteroids/index.html"><span>Asteroids</span></a>
-  <a class="app-card" href="obscnv/index.html"><span>obscnv</span></a>
-  <a class="app-card" href="chuckjs.html"><span>chuck.js</span></a>
-  <a class="app-card" href="GA/index.html"><span>GA</span></a>
-  <a class="app-card" href="precalculo/index.html"><span>Pré-Cálculo</span></a>
-  <a class="app-card" href="riemann/index.html"><span>Riemann Surfaces</span></a>
+  <a class="app-card" href="apl.html"><span>APL.js</span><small>Linguagem APL no navegador</small></a>
+  <a class="app-card" href="guacyra.html"><span>Guacyra</span><small>Álgebra computacional em Lua</small></a>
+  <a class="app-card" href="cindyjs.html"><span>CindyJS</span><small>Editor de geometria dinâmica</small></a>
+  <a class="app-card" href="rotulador.html"><span>Rotulador de Cores</span><small>Cor média de regiões de imagens</small></a>
+  <a class="app-card" href="marpit.html"><span>Marpit</span><small>Slides em Markdown</small></a>
+  <a class="app-card" href="cofgl-wAst/asteroids/index.html"><span>Asteroids</span><small>Jogo em geometrias não euclidianas</small></a>
+  <a class="app-card" href="obscnv/index.html"><span>obscnv</span><small>Caderno reativo em JavaScript</small></a>
+  <a class="app-card" href="chuckjs.html"><span>chuck.js</span><small>Interpretador de Forth</small></a>
+  <a class="app-card" href="GA/index.html"><span>GA</span><small>Geometria Analítica interativa</small></a>
+  <a class="app-card" href="precalculo/index.html"><span>Pré-Cálculo</span><small>Exercícios com respostas</small></a>
+  <a class="app-card" href="riemann/index.html"><span>Riemann Surfaces</span><small>Curvas algébricas em ℂP²</small></a>
 </div>
 </body>
 </html>
