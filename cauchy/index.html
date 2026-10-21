@@ -6,6 +6,7 @@
 <title>Cauchy</title>
 <meta name="description" content="Ambiente reativo de exploração numérica sobre FLINT, no navegador.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23233'/%3E%3Ctext x='16' y='23' font-family='serif' font-size='20' font-style='italic' fill='%23fc6' text-anchor='middle'%3E%E2%88%AE%3C/text%3E%3C/svg%3E">
+<script>try { const t = localStorage.getItem('cauchy.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
 <style>:root {
   --bg: #f7f5f0;
   --paper: #fffdf8;
@@ -73,6 +74,7 @@ button {
   cursor: pointer;
 }
 button:hover { background: var(--faint); }
+button.icon { min-width: 2.2em; padding-left: 0; padding-right: 0; font-size: 15px; line-height: 1; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 select { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
 
@@ -311,6 +313,7 @@ sup { font-size: .68em; line-height: 0; }
     <button id="export" data-i18n="export" data-i18n-title="export.t"></button>
     <button id="share" data-i18n="share" data-i18n-title="share.t"></button>
     <button id="help" data-i18n="help" data-i18n-title="help.t"></button>
+    <button id="theme" class="icon" data-i18n-title="theme.t" data-i18n-aria="theme.t"></button>
     <select id="lang" data-i18n-aria="lang.a"><option value="pt">PT</option><option value="en">EN</option></select>
   </nav>
 </header>
@@ -5820,6 +5823,7 @@ const STRINGS = {
     help: 'Referência', 'help.t': 'Referência de funções',
     'title.a': 'título do notebook',
     'lang.a': 'idioma da interface',
+    'theme.t': 'Alternar tema claro/escuro',
     loading: 'carregando FLINT…', ready: 'pronto', computing: 'calculando…',
     stop: 'Interromper', autorun: 'avaliar ao digitar',
     objects: (n) => `${n} objetos FLINT`,
@@ -5850,6 +5854,7 @@ const STRINGS = {
     help: 'Reference', 'help.t': 'Function reference',
     'title.a': 'notebook title',
     'lang.a': 'interface language',
+    'theme.t': 'Toggle light/dark theme',
     loading: 'loading FLINT…', ready: 'ready', computing: 'computing…',
     stop: 'Interrupt', autorun: 'evaluate while typing',
     objects: (n) => `${n} FLINT objects`,
@@ -7847,6 +7852,28 @@ function applyLang(lang) {
   for (const c of state.cells) if (c.result) { c.relang = true; showResult(c, c.result); c.relang = false; }
 }
 
+// --------------------------------------------------------------- tema
+
+// Tema efetivo: escolha salva (data-theme) ou, sem ela, o do sistema.
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const currentTheme = () => document.documentElement.dataset.theme ?? (darkQuery.matches ? 'dark' : 'light');
+
+function showThemeIcon() {
+  // O ícone indica o tema para o qual o botão leva.
+  $('#theme').textContent = currentTheme() === 'dark' ? '☀' : '☾';
+}
+
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem('cauchy.theme', next);
+  } catch {
+    // sem armazenamento: vale só nesta sessão
+  }
+  showThemeIcon();
+}
+
 // --------------------------------------------------------------- inicialização
 
 async function initialNotebook() {
@@ -7870,6 +7897,9 @@ async function initialNotebook() {
 async function main() {
   applyLang(detectLang());
   $('#lang').onchange = (ev) => applyLang(ev.target.value);
+  $('#theme').onclick = toggleTheme;
+  darkQuery.addEventListener('change', showThemeIcon);
+  showThemeIcon();
   const examples = $('#examples');
   examples.onchange = () => {
     const e = EXAMPLES[+examples.value];
