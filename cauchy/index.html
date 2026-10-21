@@ -250,11 +250,7 @@ sup { font-size: .68em; line-height: 0; }
 .plot .frame { fill: none; stroke: var(--line); }
 .plot .tick { font-size: 11px; fill: var(--muted); }
 .plot .ptitle { font-size: 13px; fill: var(--ink); }
-.plot path.series { fill: none; stroke-width: 1.8; stroke-linejoin: round; }
-.plot .series.s0 { stroke: var(--s0); fill: var(--s0); } .plot .series.s1 { stroke: var(--s1); fill: var(--s1); }
-.plot .series.s2 { stroke: var(--s2); fill: var(--s2); } .plot .series.s3 { stroke: var(--s3); fill: var(--s3); }
-.plot .series.s4 { stroke: var(--s4); fill: var(--s4); } .plot .series.s5 { stroke: var(--s5); fill: var(--s5); }
-.plot path.series { fill: none !important; }
+.plot .gtext { font-family: var(--sans); }
 .plot .hover line { stroke: var(--muted); stroke-dasharray: 3 3; }
 .plot .hover circle { fill: var(--accent); }
 .plot .hoverlabel { fill: var(--ink); }
@@ -2851,13 +2847,34 @@ class Factored extends Array {
   }
 }
 
-class Plot {
-  constructor(data) {
-    this.data = data;
+// Gráfico: lista de primitivas já convertidas em números de ponto flutuante
+// ({g: 'line'|'points'|'circle'|..., attrs}) e opções da janela (xlim, ylim,
+// aspect, axes, ...). Não guarda handles FLINT.
+class Graphic {
+  constructor(items, opts = {}) {
+    this.items = items;
+    this.opts = opts;
+  }
+  // g1 + g2: junta as primitivas; opções da esquerda têm prioridade.
+  concat(other) {
+    return new Graphic([...this.items, ...other.items], { ...other.opts, ...this.opts });
   }
   display() {
-    return { t: 'plot', ...this.data };
+    return { t: 'graphics', items: this.items, opts: this.opts };
   }
+}
+
+// Lista (possivelmente aninhada) só de gráficos vira um gráfico; senão null.
+function asGraphic(v) {
+  if (v instanceof Graphic) return v;
+  if (!Array.isArray(v) || !v.length) return null;
+  let acc = new Graphic([]);
+  for (const x of v) {
+    const g = asGraphic(x);
+    if (!g) return null;
+    acc = acc.concat(g);
+  }
+  return acc;
 }
 
 // Widget de entrada: o valor corrente vem da UI.
@@ -2873,7 +2890,7 @@ class Widget {
   }
 }
 
-return { Tuple, UNIT, Func, Factored, Plot, Widget };
+return { Tuple, UNIT, Func, Factored, Graphic, asGraphic, Widget };
 })();
 // ---- src/js/lang/eval.js
 __m["src/js/lang/eval.js"] = (() => {
@@ -2881,7 +2898,7 @@ __m["src/js/lang/eval.js"] = (() => {
 
 const { CauchyError } = __m["src/js/lang/lexer.js"];
 const { Elem, Ring, ZZ, QQ, RR, PolyRing, MatSpace, Poly, Mat, flint, add, sub, mul, div, neg, pow, equal, compare, floorDiv, mod, commonRing, coerce } = __m["src/js/runtime/rings.js"];
-const { Tuple, Func, UNIT, Widget } = __m["src/js/runtime/values.js"];
+const { Tuple, Func, UNIT, Widget, Graphic, asGraphic } = __m["src/js/runtime/values.js"];
 const { fail } = __m["src/js/runtime/errors.js"];
 
 class Env {
@@ -3184,6 +3201,11 @@ function binop(op, l, r) {
     f.parts = [l, r];
     return f;
   }
+  if (l instanceof Graphic || r instanceof Graphic) {
+    const a = asGraphic(l), b = asGraphic(r);
+    if (op === '+' && a && b) return a.concat(b);
+    fail(`operador ${op} não se aplica a ${typeName(l)} e ${typeName(r)}`);
+  }
   if (typeof l === 'string' || typeof r === 'string') {
     if (op === '+') return toStr(l) + toStr(r);
     if (op === '*' && typeof l === 'string' && r instanceof Elem) return l.repeat(toInt(r));
@@ -3239,6 +3261,7 @@ function typeName(v) {
   if (typeof v === 'boolean') return 'booleano';
   if (v instanceof Func) return 'função';
   if (v instanceof Ring) return 'anel';
+  if (v instanceof Graphic) return 'gráfico';
   return typeof v;
 }
 
@@ -3528,10 +3551,10 @@ __m["src/js/runtime/show.js"] = (() => {
 // (enviadas do worker para a UI) e em texto simples.
 //
 // Estruturas: {t:'int'|'rat'|'ball'|'cplx'|'gf'|'poly'|'mat'|'list'|'tuple'|
-//   'factored'|'str'|'bool'|'fn'|'ring'|'unit'|'plot'|'widget'|'more', ...}
+//   'factored'|'str'|'bool'|'fn'|'ring'|'unit'|'graphics'|'widget'|'more', ...}
 
 const { Elem, Ring, ZZ, QQ, RR, CC, ZmodRing, FiniteField, PolyRing, MatSpace, Poly, flint, equal } = __m["src/js/runtime/rings.js"];
-const { Tuple, Func, Factored, Plot, Widget } = __m["src/js/runtime/values.js"];
+const { Tuple, Func, Factored, Graphic, Widget, asGraphic } = __m["src/js/runtime/values.js"];
 
 const MAX_ITEMS = 500;
 const MAX_DIGITS = 5000;
@@ -3546,6 +3569,8 @@ function display(v, opts = {}) {
     };
   }
   if (Array.isArray(v)) {
+    const g = asGraphic(v);
+    if (g) return g.display();
     const items = v.slice(0, MAX_ITEMS).map((x) => display(x, opts));
     return { t: 'list', items, more: Math.max(0, v.length - MAX_ITEMS) };
   }
@@ -3558,7 +3583,7 @@ function display(v, opts = {}) {
   if (typeof v === 'number') return { t: 'int', s: String(v) };
   if (v instanceof Func) return { t: 'fn', name: v.name ?? null, arity: v.arity ?? null };
   if (v instanceof Ring) return { t: 'ring', s: v.name };
-  if (v instanceof Plot) return v.display();
+  if (v instanceof Graphic) return v.display();
   if (v instanceof Widget) return v.display();
   if (v === null || v === undefined) return { t: 'unit' };
   return { t: 'str', s: String(v) };
@@ -3731,7 +3756,7 @@ function toText(d) {
     case 'bool': return d.v ? 'true' : 'false';
     case 'fn': return d.name ? `<função ${d.name}>` : '<função>';
     case 'ring': return d.s;
-    case 'plot': return '<gráfico>';
+    case 'graphics': return '<gráfico>';
     case 'widget': return toText(d.value);
     default: return `<${d.t}>`;
   }
@@ -3751,7 +3776,7 @@ __m["src/js/lang/builtins.js"] = (() => {
 // polinômios, matrizes, corpos finitos, listas, gráficos e widgets.
 
 const { Elem, Ring, ZZ, QQ, RR, CC, ZmodRing, FiniteField, PolyRing, MatSpace, Zmod, GF, Poly, Mat, flint, commonRing, coerce, isScalarRing, finiteOr, add, sub, mul, div, neg, pow, compare, equal, divrem, inv, matInv, floor, ceil, sign, isZero } = __m["src/js/runtime/rings.js"];
-const { Tuple, Func, Factored, Plot, Widget, UNIT } = __m["src/js/runtime/values.js"];
+const { Tuple, Func, Factored, Graphic, Widget, UNIT, asGraphic } = __m["src/js/runtime/values.js"];
 const { fail } = __m["src/js/runtime/errors.js"];
 const { showText } = __m["src/js/runtime/show.js"];
 const { Env, callValue, toInt, toBool, int, iterable, range, index, valuesEqual, typeName, matrixFromRows, setRingCall, setEvalPoly, setToStr, currentContext, binop } = __m["src/js/lang/eval.js"];
@@ -4847,27 +4872,209 @@ function makeGlobals() {
     });
     return pts;
   };
+  // Ponto do plano: número (real ou complexo) ou tupla (x, y).
+  const pt = (p, what = 'ponto') => {
+    if (p instanceof Tuple && p.items.length === 2) {
+      const xy = p.items.map(toNum);
+      if (xy.every(Number.isFinite)) return xy;
+    } else if (p instanceof Elem && (p.ring === ZZ || p.ring === QQ || p.ring === RR || p.ring === CC)) {
+      const c = CC.coerce(p);
+      const xy = [RR.mid(CC.re(c)), RR.mid(CC.im(c))];
+      if (xy.every(Number.isFinite)) return xy;
+    }
+    fail(`${what} deve ser um número complexo ou uma tupla (x, y)`);
+  };
+  const pts = (ps, min, what = 'pontos') => {
+    const out = list(ps).map((p) => pt(p));
+    if (out.length < min) fail(`${what}: esperava pelo menos ${min} pontos`);
+    return out;
+  };
+  const real = (v, what) => {
+    const x = toNum(v);
+    if (!Number.isFinite(x)) fail(`${what} deve ser um número real`);
+    return x;
+  };
+  const positive = (v, what) => {
+    const x = real(v, what);
+    if (!(x > 0)) fail(`${what} deve ser positivo`);
+    return x;
+  };
+
+  // Atributos visuais, validados aqui e interpretados por src/ui/plot.js.
+  const COLOR_NAMES = new Set(('black white gray grey red green blue yellow orange purple brown pink cyan magenta navy teal ' +
+    'olive maroon lime aqua fuchsia silver gold indigo violet crimson coral salmon tomato orchid plum tan khaki beige ' +
+    'turquoise darkred darkgreen darkblue darkorange darkviolet darkgray lightgray lightblue lightgreen steelblue skyblue ' +
+    'royalblue forestgreen seagreen slategray chocolate sienna firebrick none ink').split(' '));
+  const color = (v, name) => {
+    if (v instanceof Elem && v.ring === ZZ) {
+      const k = toInt(v);
+      if (k >= 1 && k <= 6) return k;
+    }
+    if (typeof v === 'string') {
+      const c = v.trim().toLowerCase();
+      if (COLOR_NAMES.has(c) || /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(c) || /^(rgb|hsl)\([\d.,%\s]+\)$/.test(c)) return c;
+    }
+    fail(`${name} deve ser uma cor: nome, "#rrggbb", rgb(r, g, b), hsl(h, s, l) ou índice de 1 a 6`);
+  };
+  const DASHES = { dot: '1.5 3', dash: '6 4', dashdot: '6 3 1.5 3' };
+  const MARKERS = ['dot', 'circle', 'square', 'diamond', 'cross', 'plus'];
+  const ATTRS = {
+    color,
+    fill: (v, k) => (typeof v === 'boolean' ? v : color(v, k)),
+    width: (v, k) => Math.min(100, positive(v, k)),
+    size: (v, k) => Math.min(100, positive(v, k)),
+    fontsize: (v, k) => Math.min(100, positive(v, k)),
+    opacity: (v, k) => {
+      const x = real(v, k);
+      if (x < 0 || x > 1) fail(`${k} deve estar entre 0 e 1`);
+      return x;
+    },
+    dash: (v, k) => {
+      if (v === false) return null;
+      if (typeof v === 'string') {
+        const d = DASHES[v.trim()] ?? v.trim();
+        if (/^\d+(\.\d+)?([\s,]+\d+(\.\d+)?)*$/.test(d)) return d;
+      }
+      fail(`${k} deve ser "dot", "dash", "dashdot" ou uma sequência como "4 2"`);
+    },
+    marker: (v, k) => {
+      if (typeof v === 'string' && MARKERS.includes(v)) return v;
+      fail(`${k} deve ser um de: ${MARKERS.join(', ')}`);
+    },
+    label: (v) => (typeof v === 'string' ? v : showText(v)),
+  };
+  const attrsOf = (kw, skip = []) => {
+    const out = {};
+    for (const [k, v] of Object.entries(kw)) {
+      if (skip.includes(k) || v === undefined) continue;
+      if (!ATTRS[k]) fail(`atributo gráfico desconhecido: ${k}`);
+      out[k] = ATTRS[k](v, k);
+    }
+    return out;
+  };
+  const prim = (g, data, kw, skip, defaults = {}) => new Graphic([{ g, ...data, attrs: { ...defaults, ...attrsOf(kw, skip) } }]);
+  const graphic = (v, what = 'argumento') => asGraphic(v) ?? fail(`${what} deve ser um gráfico ou uma lista de gráficos`);
+  const distinct = (a, b) => {
+    if (a[0] === b[0] && a[1] === b[1]) fail('os dois pontos devem ser distintos');
+    return [a, b];
+  };
+
+  def('point', 1, ([p], kw) => prim('points', { pts: [pt(p)] }, kw), 'point(p): ponto (complexo ou tupla (x, y))');
+  def('points', 1, ([ps], kw) => prim('points', { pts: pts(ps, 0) }, kw), 'points(ps): vários pontos');
+  def('segment', 2, ([a, b], kw) => prim('line', { pts: [pt(a), pt(b)] }, kw), 'segment(a, b): segmento de a a b');
+  def('arrow', 2, ([a, b], kw) => prim('arrow', { pts: distinct(pt(a), pt(b)) }, kw), 'arrow(a, b): seta de a para b');
+  def('line', 1, ([ps], kw) => prim('line', { pts: pts(ps, 2, 'line'), closed: kw.closed === true }, kw, ['closed']),
+    'line([p₁, p₂, …], closed=false): poligonal');
+  def('polygon', 1, ([ps], kw) => prim('line', { pts: pts(ps, 3, 'polygon'), closed: true }, kw), 'polygon([p₁, p₂, …]): polígono');
+  def('rect', 2, ([a, b], kw) => {
+    const [[x0, y0], [x1, y1]] = [pt(a), pt(b)];
+    return prim('line', { pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], closed: true }, kw);
+  }, 'rect(a, b): retângulo de cantos opostos a e b');
+  def('infline', 2, ([a, b], kw) => prim('infline', { pts: distinct(pt(a), pt(b)) }, kw), 'infline(a, b): reta por a e b');
+  def('ray', 2, ([a, b], kw) => prim('ray', { pts: distinct(pt(a), pt(b)) }, kw), 'ray(a, b): semirreta de a passando por b');
+  def('circle', 2, ([c, r], kw) => prim('circle', { c: pt(c, 'centro'), r: positive(r, 'raio') }, kw), 'circle(c, r): circunferência');
+  def('disk', 2, ([c, r], kw) => prim('circle', { c: pt(c, 'centro'), r: positive(r, 'raio') }, kw, [], { fill: true }), 'disk(c, r): disco');
+  const arcData = (c, r, t0, t1) => {
+    const a0 = real(t0, 'ângulo'), a1 = real(t1, 'ângulo');
+    if (!(a1 > a0)) fail('o ângulo final deve ser maior que o inicial');
+    return { c: pt(c, 'centro'), r: positive(r, 'raio'), t0: a0, t1: Math.min(a1, a0 + 2 * Math.PI) };
+  };
+  def('arc', 4, ([c, r, t0, t1], kw) => prim('arc', arcData(c, r, t0, t1), kw), 'arc(c, r, θ₀, θ₁): arco de circunferência');
+  def('sector', 4, ([c, r, t0, t1], kw) => prim('arc', { ...arcData(c, r, t0, t1), sector: true }, kw, [], { fill: true }),
+    'sector(c, r, θ₀, θ₁): setor circular');
+  def('curve', 3, ([f, a, b], kw) => {
+    const n = kw.points !== undefined ? Math.min(20000, Math.max(2, toInt(kw.points))) : 400;
+    const lo = real(a, 'início'), hi = real(b, 'fim');
+    if (!(hi > lo)) fail('intervalo da curva inválido');
+    const out = [];
+    flint().withPrec(64, () => {
+      for (let k = 0; k <= n; k++) {
+        let p = null;
+        try {
+          p = pt(callValue(fn(f), [RR.fromNumber(lo + ((hi - lo) * k) / n)]));
+        } catch (e) {
+          if (e.name === 'CauchyError' && /recursão/.test(e.message)) throw e;
+        }
+        out.push(p);
+      }
+    });
+    return prim('line', { pts: out }, kw, ['points']);
+  }, 'curve(t -> z(t), a, b, points=400): curva paramétrica');
+  def('text', 2, ([str, p], kw) => {
+    const POS = ['c', 'n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+    const pos = kw.pos ?? 'c';
+    if (!POS.includes(pos)) fail(`pos deve ser um de: ${POS.join(', ')}`);
+    return prim('text', { s: typeof str === 'string' ? str : showText(str), p: pt(p), pos }, kw, ['pos']);
+  }, 'text(s, p, pos="c"): texto no ponto p');
+  def('group', null, (args, kw) => {
+    const g = graphic(args, 'group');
+    return new Graphic([{ g: 'group', items: g.items, attrs: attrsOf(kw) }], g.opts);
+  }, 'group(g₁, g₂, …, attrs): grupo; atributos valem para os filhos que não os definem');
+  def('style', 1, ([g], kw) => {
+    const a = attrsOf(kw);
+    const apply = (it) => ({ ...it, attrs: { ...it.attrs, ...a }, ...(it.items ? { items: it.items.map(apply) } : {}) });
+    const G = graphic(g, 'style');
+    return new Graphic(G.items.map(apply), G.opts);
+  }, 'style(g, attrs): impõe atributos a todas as primitivas de g');
+  def('draw', null, ([g], kw) => {
+    const G = graphic(g ?? [], 'draw');
+    const opts = { ...G.opts };
+    const lim = limits(kw);
+    if (lim.xlim) opts.xlim = lim.xlim;
+    if (lim.ylim) opts.ylim = lim.ylim;
+    for (const [k, v] of Object.entries(kw)) {
+      if (k === 'xlim' || k === 'ylim') continue;
+      if (k === 'aspect') {
+        if (v !== 'equal' && v !== 'auto') fail('aspect deve ser "equal" ou "auto"');
+        opts.aspect = v;
+      } else if (k === 'axes' || k === 'grid' || k === 'frame') opts[k] = toBool(v, k);
+      else if (k === 'title') opts.title = typeof v === 'string' ? v : showText(v);
+      else if (k === 'width' || k === 'height') opts[k] = Math.min(2000, Math.max(100, positive(v, k)));
+      else fail(`opção desconhecida de draw: ${k}`);
+    }
+    return new Graphic(G.items, opts);
+  }, 'draw(g, xlim=, ylim=, aspect="equal", axes=true, grid=true, frame=true, title=, width=, height=)');
+  const unit = (v, what) => {
+    const x = real(v, what);
+    if (x < 0 || x > 1) fail(`${what} deve estar entre 0 e 1`);
+    return x;
+  };
+  def('rgb', 3, ([r, g, b]) => `rgb(${[r, g, b].map((v) => Math.round(unit(v, 'componente de cor') * 255)).join(', ')})`,
+    'rgb(r, g, b): cor com componentes em [0, 1]');
+  def('hsl', 3, ([h, s, l]) => {
+    const hh = ((real(h, 'matiz') % 1) + 1) % 1;
+    return `hsl(${+(hh * 360).toFixed(2)}, ${+(unit(s, 'saturação') * 100).toFixed(2)}%, ${+(unit(l, 'luminosidade') * 100).toFixed(2)}%)`;
+  }, 'hsl(h, s, l): cor por matiz (h em voltas, 0 a 1), saturação e luminosidade');
+
+  // Gráficos de funções e dados: produzem primitivas marcadas como séries
+  // de dados (intervalo vertical robusto e leitura de coordenadas por x).
+  const PLOT_OPTS = ['points', 'xlim', 'ylim', 'title', 'joined'];
+  const plotOpts = (kw, aspect) => ({ aspect, title: kw.title ?? null, ...limits(kw) });
   def('plot', null, ([fs, a, b], kw) => {
     const funcs = Array.isArray(fs) ? fs : [fs];
     const n = kw.points ? toInt(kw.points) : 400;
-    const series = funcs.map((f, i) => ({ points: sample(fn(f), a, b, n), label: f.name ?? `f${funcs.length > 1 ? i + 1 : ''}` }));
-    return new Plot({ kind: 'line', series, title: kw.title ?? null, ...limits(kw) });
-  }, 'plot(f, a, b) ou plot([f, g], a, b, points=400, xlim=[lo, hi], ylim=[lo, hi])');
+    const extra = attrsOf(kw, PLOT_OPTS);
+    const items = funcs.map((f, i) => ({
+      g: 'line', data: true, pts: sample(fn(f), a, b, n),
+      attrs: { color: (i % 6) + 1, ...(funcs.length > 1 ? { label: f.name ?? `f${i + 1}` } : {}), ...extra },
+    }));
+    return new Graphic(items, plotOpts(kw, 'auto'));
+  }, 'plot(f, a, b) ou plot([f, g], a, b, points=400, xlim=[lo, hi], ylim=[lo, hi], attrs)');
   def('listplot', null, ([xs], kw) => {
-    const items = list(xs);
-    const points = items.map((p, i) => {
+    const points = list(xs).map((p, i) => {
       if (p instanceof Tuple) return [toNum(p.items[0]), toNum(p.items[1])];
       return [i + 1, toNum(p)];
-    });
-    return new Plot({ kind: kw.joined === true ? 'line' : 'scatter', series: [{ points, label: '' }], title: kw.title ?? null, ...limits(kw) });
-  }, 'listplot(ys) ou listplot([(x, y), ...], joined=false, xlim=, ylim=)');
+    }).map(([x, y]) => [x, Number.isFinite(y) ? y : null]);
+    const item = { g: kw.joined === true ? 'line' : 'points', data: true, pts: points, attrs: { color: 1, ...attrsOf(kw, PLOT_OPTS) } };
+    return new Graphic([item], plotOpts(kw, 'auto'));
+  }, 'listplot(ys) ou listplot([(x, y), ...], joined=false, xlim=, ylim=, attrs)');
   def('complexplot', null, ([zs], kw) => {
     const points = list(zs).map((z) => {
       const c = CC.coerce(elem(z));
       return [RR.mid(CC.re(c)), RR.mid(CC.im(c))];
     });
-    return new Plot({ kind: 'scatter', series: [{ points, label: '' }], equal: true, title: kw.title ?? null, ...limits(kw) });
-  }, 'complexplot(zs, xlim=, ylim=): pontos no plano complexo');
+    return new Graphic([{ g: 'points', pts: points, attrs: { color: 1, ...attrsOf(kw, PLOT_OPTS) } }], plotOpts(kw, 'equal'));
+  }, 'complexplot(zs, xlim=, ylim=, attrs): pontos no plano complexo');
 
   // --------------------------------------------------------- widgets
   const widget = (kind, spec, defVal, parse) => {
@@ -5413,6 +5620,7 @@ const STRINGS = {
     'fatal-restart': 'erro interno — reiniciando',
     'cell.run': 'Avaliar (Shift+Enter)', 'cell.up': 'Mover para cima', 'cell.down': 'Mover para baixo',
     'cell.add': 'Nova célula abaixo (Alt+Enter)', 'cell.del': 'Excluir célula', 'cell.code': 'código da célula',
+    graphicsTruncated: (n) => `só as primeiras ${n} primitivas foram desenhadas`,
     error: 'erro', digits: (n) => `${n} dígitos`, matrix: (r, c) => `matriz ${r}×${c}`,
     'link-copied': 'Link copiado para a área de transferência', 'link-in-url': 'Link no endereço da página',
     'bad-file': (m) => `Arquivo inválido: ${m}`, 'bad-link': 'Link de notebook inválido',
@@ -5442,6 +5650,7 @@ const STRINGS = {
     'fatal-restart': 'internal error — restarting',
     'cell.run': 'Evaluate (Shift+Enter)', 'cell.up': 'Move up', 'cell.down': 'Move down',
     'cell.add': 'New cell below (Alt+Enter)', 'cell.del': 'Delete cell', 'cell.code': 'cell code',
+    graphicsTruncated: (n) => `only the first ${n} primitives were drawn`,
     error: 'error', digits: (n) => `${n} digits`, matrix: (r, c) => `${r}×${c} matrix`,
     'link-copied': 'Link copied to the clipboard', 'link-in-url': 'Link is in the address bar',
     'bad-file': (m) => `Invalid file: ${m}`, 'bad-link': 'Invalid notebook link',
@@ -5460,6 +5669,11 @@ const SYNTAX_NOTES = {
 precisão não decide geram erro — aumente <code>prec</code>.</p>
 <p>Listas e matrizes são indexadas a partir de 1; <code>xs[-1]</code> é o último elemento.
 Um polinômio é também uma função: <code>p(3)</code>, <code>p(x + 1)</code>.</p>
+<p>Gráficos são valores: primitivas como <code>circle(c, r)</code> recebem pontos como
+complexos (<code>1 + 2i</code>) ou tuplas <code>(x, y)</code> e atributos nomeados
+(<code>color</code>, <code>fill</code>, <code>width</code>, <code>dash</code>, <code>opacity</code>,
+<code>size</code>, <code>marker</code>, <code>label</code>, <code>fontsize</code>). Combine com
+<code>+</code> ou numa lista; <code>draw</code> ajusta a janela.</p>
 <p><kbd>Shift</kbd>+<kbd>Enter</kbd> avalia · <kbd>Alt</kbd>+<kbd>Enter</kbd> nova célula ·
 <kbd>Ctrl</kbd>+<kbd>.</kbd> interrompe</p>`,
   en: `<p>Integers and rationals are exact. Decimals and transcendental functions produce
@@ -5467,6 +5681,11 @@ Um polinômio é também uma função: <code>p(3)</code>, <code>p(x + 1)</code>.
 current precision cannot decide raise an error — increase <code>prec</code>.</p>
 <p>Lists and matrices are 1-indexed; <code>xs[-1]</code> is the last element.
 A polynomial is also a function: <code>p(3)</code>, <code>p(x + 1)</code>.</p>
+<p>Graphics are values: primitives such as <code>circle(c, r)</code> take points as
+complex numbers (<code>1 + 2i</code>) or tuples <code>(x, y)</code> and keyword attributes
+(<code>color</code>, <code>fill</code>, <code>width</code>, <code>dash</code>, <code>opacity</code>,
+<code>size</code>, <code>marker</code>, <code>label</code>, <code>fontsize</code>). Combine them with
+<code>+</code> or in a list; <code>draw</code> sets the window.</p>
 <p><kbd>Shift</kbd>+<kbd>Enter</kbd> evaluates · <kbd>Alt</kbd>+<kbd>Enter</kbd> new cell ·
 <kbd>Ctrl</kbd>+<kbd>.</kbd> interrupts</p>`,
 };
@@ -5487,6 +5706,7 @@ R = QQ[x]; x = gen(R) # polinômios
 A = [1, 2; 3, 4]      # matriz
 F = GF(5^3); a = gen(F)
 k = slider(1, 10)     # entrada reativa
+circle(0, 1, color = "red") + point(1/2 + i/2)
 flint("arb_gamma", 1/3)   # FLINT direto`,
   en: `n = 2^64 + 1          # definition
 f(x) = x^2 + 1        # function
@@ -5503,6 +5723,7 @@ R = QQ[x]; x = gen(R) # polynomials
 A = [1, 2; 3, 4]      # matrix
 F = GF(5^3); a = gen(F)
 k = slider(1, 10)     # reactive input
+circle(0, 1, color = "red") + point(1/2 + i/2)
 flint("arb_gamma", 1/3)   # raw FLINT call`,
 };
 
@@ -5555,6 +5776,8 @@ const WORDS = {
   'operando de and': 'operand of and', 'operando de or': 'operand of or', 'operando de not': 'operand of not',
   filtro: 'filter', guarda: 'guard', predicado: 'predicate', 'fim da entrada': 'end of input',
   'quebra de linha': 'line break', fim: 'end',
+  'gráfico': 'graphic', ponto: 'point', centro: 'center', raio: 'radius', 'ângulo': 'angle', 'início': 'start',
+  matiz: 'hue', 'saturação': 'saturation', luminosidade: 'lightness', 'componente de cor': 'color component',
 };
 const w = (s) => WORDS[s] ?? s;
 
@@ -5682,6 +5905,21 @@ const RULES = [
   [/^valuation\(0, p\) é infinito$/, 'valuation(0, p) is infinite'],
   [/^Zmod\(n\) requer n > 1$/, 'Zmod(n) requires n > 1'],
   [/^(xlim|ylim) deve ser \[lo, hi\] com lo < hi$/, '$1 must be [lo, hi] with lo < hi'],
+  [/^(.+) deve ser um número complexo ou uma tupla \(x, y\)$/, (_, x) => `${w(x)} must be a complex number or a tuple (x, y)`],
+  [/^(.+): esperava pelo menos (\d+) pontos$/, '$1: expected at least $2 points'],
+  [/^(.+) deve ser um número real$/, (_, x) => `${w(x)} must be a real number`],
+  [/^(.+) deve ser positivo$/, (_, x) => `${w(x)} must be positive`],
+  [/^(.+) deve estar entre 0 e 1$/, (_, x) => `${w(x)} must be between 0 and 1`],
+  [/^(.+) deve ser uma cor: nome, "#rrggbb", rgb\(r, g, b\), hsl\(h, s, l\) ou índice de 1 a 6$/, '$1 must be a color: a name, "#rrggbb", rgb(r, g, b), hsl(h, s, l) or an index from 1 to 6'],
+  [/^(.+) deve ser "dot", "dash", "dashdot" ou uma sequência como "4 2"$/, '$1 must be "dot", "dash", "dashdot" or a sequence such as "4 2"'],
+  [/^(.+) deve ser um de: (.+)$/, '$1 must be one of: $2'],
+  [/^atributo gráfico desconhecido: (.+)$/, 'unknown graphics attribute: $1'],
+  [/^(.+) deve ser um gráfico ou uma lista de gráficos$/, (_, x) => `${w(x)} must be a graphic or a list of graphics`],
+  [/^os dois pontos devem ser distintos$/, 'the two points must be distinct'],
+  [/^o ângulo final deve ser maior que o inicial$/, 'the final angle must be greater than the initial one'],
+  [/^intervalo da curva inválido$/, 'invalid curve interval'],
+  [/^aspect deve ser "equal" ou "auto"$/, 'aspect must be "equal" or "auto"'],
+  [/^opção desconhecida de draw: (.+)$/, 'unknown draw option: $1'],
   [/^função FLINT desconhecida: (.+)$/, 'unknown FLINT function: $1'],
   [/^tipo FLINT desconhecido: (.+)$/, 'unknown FLINT type: $1'],
   [/^(.+) requer um anel Zmod\(n\)\/GF\(q\) como argumento$/, '$1 requires a Zmod(n)/GF(q) ring as an argument'],
@@ -5845,7 +6083,7 @@ function r(d, slots, inner) {
     case 'bool': return `<span class="bool">${d.v ? 'true' : 'false'}</span>`;
     case 'fn': return `<span class="fnv">ƒ${d.name ? ' ' + esc(d.name) : ''}${d.arity !== null && d.arity !== undefined ? `<span class="note">/${d.arity}</span>` : ''}</span>`;
     case 'ring': return `<span class="ring">${ringName(d.s)}</span>`;
-    case 'plot':
+    case 'graphics':
     case 'widget': {
       const k = slots.length;
       slots.push(d);
@@ -5861,13 +6099,17 @@ return { esc, SUP, ringName, render };
 })();
 // ---- src/ui/plot.js
 __m["src/ui/plot.js"] = (() => {
-// Gráficos em SVG sem dependências: linhas (funções) e dispersão (pontos).
+// Gráficos em SVG sem dependências. Recebe a árvore de primitivas montada no
+// worker ({t: 'graphics', items, opts}) e a desenha em coordenadas do plano.
+
+const { t } = __m["src/ui/i18n.js"];
 
 const NS = 'http://www.w3.org/2000/svg';
+const MAX_LEAVES = 20000;
 
 function el(name, attrs = {}, parent) {
   const e = document.createElementNS(NS, name);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  for (const [k, v] of Object.entries(attrs)) if (v !== undefined && v !== null) e.setAttribute(k, v);
   if (parent) parent.appendChild(e);
   return e;
 }
@@ -5880,21 +6122,21 @@ function ticks(lo, hi, n = 6) {
   const mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
   const out = [];
-  for (let t = Math.ceil(lo / step) * step; t <= hi + step * 1e-9; t += step) out.push(Math.abs(t) < step * 1e-9 ? 0 : t);
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
   return out;
 }
 
 function fmt(v) {
   if (v === 0) return '0';
   const a = Math.abs(v);
-  if (a >= 1e5 || a < 1e-3) return v.toExponential(1).replace('e', 'e');
+  if (a >= 1e5 || a < 1e-3) return v.toExponential(1);
   return String(+v.toPrecision(6));
 }
 
-// Intervalo robusto em y: ignora picos (polos) usando quantis.
+// Intervalo robusto em y para séries de dados: ignora picos (polos) usando quantis.
 function yRange(values) {
   const vs = values.filter((v) => v !== null && Number.isFinite(v)).sort((a, b) => a - b);
-  if (!vs.length) return [-1, 1];
+  if (!vs.length) return null;
   const q = (p) => vs[Math.min(vs.length - 1, Math.max(0, Math.round(p * (vs.length - 1))))];
   let lo = vs[0], hi = vs[vs.length - 1];
   const qlo = q(0.02), qhi = q(0.98);
@@ -5912,118 +6154,308 @@ function yRange(values) {
   return [lo - pad, hi + pad];
 }
 
-function renderPlot(d, width = 640) {
-  const height = Math.round(Math.min(420, Math.max(220, width * 0.55)));
-  const m = { l: 52, r: 16, t: d.title ? 28 : 12, b: 30 };
-  const W = width - m.l - m.r, H = height - m.t - m.b;
-  const all = d.series.flatMap((s) => s.points);
-  const xs = all.map((p) => p[0]).filter(Number.isFinite);
-  let [x0, x1] = d.xlim ?? (xs.length ? [Math.min(...xs), Math.max(...xs)] : [0, 1]);
-  if (x1 - x0 < 1e-12) { x0 -= 1; x1 += 1; }
-  let [y0, y1] = d.ylim ?? yRange(all.map((p) => p[1]));
-  if (d.equal) {
-    // Mesma escala nos dois eixos (plano complexo). Com limites dados, a
-    // janela pedida é mantida e só o outro eixo é ampliado (sem margem).
-    const sx = (x1 - x0) / W, sy = (y1 - y0) / H;
-    const s = Math.max(sx, sy) * (d.xlim || d.ylim ? 1 : 1.1);
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    x0 = cx - (s * W) / 2; x1 = cx + (s * W) / 2;
-    y0 = cy - (s * H) / 2; y1 = cy + (s * H) / 2;
-  } else if (d.kind === 'scatter' && !d.xlim) {
+// Achata grupos, resolvendo a herança de atributos (o filho prevalece).
+function flatten(items, inherited, out) {
+  for (const it of items) {
+    if (out.length >= MAX_LEAVES) { out.truncated = true; return out; }
+    const attrs = { ...inherited, ...it.attrs };
+    if (it.g === 'group') flatten(it.items, attrs, out);
+    else out.push({ ...it, attrs });
+  }
+  return out;
+}
+
+function arcPoints(it) {
+  const n = Math.max(8, Math.ceil((64 * (it.t1 - it.t0)) / (2 * Math.PI)));
+  const out = [];
+  for (let k = 0; k <= n; k++) {
+    const a = it.t0 + ((it.t1 - it.t0) * k) / n;
+    out.push([it.c[0] + it.r * Math.cos(a), it.c[1] + it.r * Math.sin(a)]);
+  }
+  return out;
+}
+
+// Caixa envolvente: [x0, x1, y0, y1] e se deve haver margem em x.
+function bounds(leaves) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const dataY = [];
+  const add = (x, y, data) => {
+    if (!Number.isFinite(x)) return;
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+    if (data) dataY.push(y);
+    else if (Number.isFinite(y)) { y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  };
+  for (const it of leaves) {
+    switch (it.g) {
+      case 'circle': add(it.c[0] - it.r, it.c[1] - it.r); add(it.c[0] + it.r, it.c[1] + it.r); break;
+      case 'arc': for (const p of arcPoints(it)) add(...p); if (it.sector) add(...it.c); break;
+      case 'text': add(...it.p); break;
+      default: for (const p of it.pts) if (p) add(p[0], p[1], it.data);
+    }
+  }
+  if (x0 > x1) return null;
+  const hasData = leaves.some((it) => it.data);
+  const onlyDataLines = leaves.every((it) => it.data && it.g === 'line');
+  let yr = null;
+  if (y0 <= y1) {
+    const pad = (y1 - y0) * 0.05;
+    yr = [y0 - pad, y1 + pad];
+  }
+  if (hasData) {
+    const dr = yRange(dataY);
+    if (dr) yr = yr ? [Math.min(yr[0], dr[0]), Math.max(yr[1], dr[1])] : dr;
+  }
+  if (!yr) yr = [-1, 1];
+  if (yr[1] - yr[0] < 1e-12) yr = [yr[0] - 1, yr[1] + 1];
+  if (x1 - x0 < 1e-12) { x0 -= 1; x1 += 1; } else if (!onlyDataLines) {
     const pad = (x1 - x0) * 0.04;
     x0 -= pad; x1 += pad;
   }
-  const X = (x) => m.l + ((x - x0) / (x1 - x0)) * W;
-  const Y = (y) => m.t + H - ((y - y0) / (y1 - y0)) * H;
+  return [x0, x1, yr[0], yr[1]];
+}
+
+// Cores: índice da paleta (1 a 6), "ink" ou cor CSS já validada no worker.
+function paint(c) {
+  if (typeof c === 'number') return `var(--s${(c - 1) % 6})`;
+  if (c === 'ink') return 'var(--ink)';
+  return c ?? 'var(--s0)';
+}
+
+function styleOf(a, { fill = false, width = 1.5 } = {}) {
+  const stroke = paint(a.color);
+  const f = a.fill === true ? stroke : a.fill ? paint(a.fill) : fill ? stroke : 'none';
+  return {
+    stroke,
+    fill: f,
+    'stroke-width': a.width ?? width,
+    'stroke-dasharray': a.dash ?? undefined,
+    opacity: a.opacity ?? undefined,
+    'stroke-linejoin': 'round',
+    'stroke-linecap': 'round',
+  };
+}
+
+// Caminho de marcadores (um só elemento para muitos pontos).
+function markerPath(points, kind, r) {
+  let d = '';
+  for (const [x, y] of points) {
+    switch (kind) {
+      case 'square': d += `M${x - r},${y - r}h${2 * r}v${2 * r}h${-2 * r}Z`; break;
+      case 'diamond': d += `M${x},${y - r * 1.3}l${r * 1.3},${r * 1.3}l${-r * 1.3},${r * 1.3}l${-r * 1.3},${-r * 1.3}Z`; break;
+      case 'cross': d += `M${x - r},${y - r}l${2 * r},${2 * r}M${x - r},${y + r}l${2 * r},${-2 * r}`; break;
+      case 'plus': d += `M${x - r},${y}h${2 * r}M${x},${y - r}v${2 * r}`; break;
+      default: d += `M${x - r},${y}a${r},${r} 0 1,0 ${2 * r},0a${r},${r} 0 1,0 ${-2 * r},0`;
+    }
+  }
+  return d;
+}
+
+function renderGraphics(d, avail = 640) {
+  const o = d.opts ?? {};
+  const leaves = flatten(d.items, {}, []);
+  const axes = o.axes !== false, grid = o.grid !== false, frame = o.frame !== false;
+  const width = Math.round(o.width ?? avail);
+  const m = axes ? { l: 52, r: 16, t: o.title ? 28 : 12, b: 30 } : { l: 12, r: 12, t: o.title ? 28 : 12, b: 12 };
+  const W = width - m.l - m.r;
+
+  let [x0, x1, y0, y1] = bounds(leaves) ?? [-1, 1, -1, 1];
+  if (o.xlim) [x0, x1] = o.xlim;
+  if (o.ylim) [y0, y1] = o.ylim;
+  const equal = o.aspect !== 'auto';
+  let height = o.height;
+  if (!height) {
+    // Em escala igual, a altura acompanha a proporção da região desenhada.
+    const H = equal ? (W * (y1 - y0)) / (x1 - x0) : width * 0.55;
+    height = Math.round(Math.min(equal ? 560 : 420, Math.max(220, H + m.t + m.b)));
+  }
+  const H = height - m.t - m.b;
+  if (equal) {
+    // Mesma escala nos dois eixos: a região pedida é mantida e só o outro
+    // eixo é ampliado.
+    const s = Math.max((x1 - x0) / W, (y1 - y0) / H);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    x0 = cx - (s * W) / 2; x1 = cx + (s * W) / 2;
+    y0 = cy - (s * H) / 2; y1 = cy + (s * H) / 2;
+  }
+  const kx = W / (x1 - x0), ky = H / (y1 - y0);
+  const clamp = (v) => Math.max(-1e5, Math.min(1e5, v));
+  const X = (x) => clamp(m.l + (x - x0) * kx);
+  const Y = (y) => clamp(m.t + H - (y - y0) * ky);
+  const P = (p) => `${X(p[0]).toFixed(2)},${Y(p[1]).toFixed(2)}`;
 
   const svg = el('svg', { viewBox: `0 0 ${width} ${height}`, width: '100%', class: 'plot', role: 'img' });
-  if (d.title) el('text', { x: m.l + W / 2, y: 18, class: 'ptitle', 'text-anchor': 'middle' }, svg).textContent = d.title;
+  svg.style.width = `${width}px`;
+  if (o.title) el('text', { x: m.l + W / 2, y: 18, class: 'ptitle', 'text-anchor': 'middle' }, svg).textContent = o.title;
   const clipId = 'c' + Math.random().toString(36).slice(2);
-  const defs = el('defs', {}, svg);
-  el('rect', { x: m.l, y: m.t, width: W, height: H }, el('clipPath', { id: clipId }, defs));
+  el('rect', { x: m.l, y: m.t, width: W, height: H }, el('clipPath', { id: clipId }, el('defs', {}, svg)));
 
-  const grid = el('g', { class: 'grid' }, svg);
-  for (const t of ticks(x0, x1)) {
-    el('line', { x1: X(t), x2: X(t), y1: m.t, y2: m.t + H }, grid);
-    el('text', { x: X(t), y: m.t + H + 18, 'text-anchor': 'middle', class: 'tick' }, svg).textContent = fmt(t);
+  const g = el('g', { class: 'grid' }, svg);
+  for (const v of ticks(x0, x1)) {
+    if (grid) el('line', { x1: X(v), x2: X(v), y1: m.t, y2: m.t + H }, g);
+    if (axes) el('text', { x: X(v), y: m.t + H + 18, 'text-anchor': 'middle', class: 'tick' }, svg).textContent = fmt(v);
   }
-  for (const t of ticks(y0, y1, 5)) {
-    el('line', { x1: m.l, x2: m.l + W, y1: Y(t), y2: Y(t) }, grid);
-    el('text', { x: m.l - 6, y: Y(t) + 4, 'text-anchor': 'end', class: 'tick' }, svg).textContent = fmt(t);
+  for (const v of ticks(y0, y1, 5)) {
+    if (grid) el('line', { x1: m.l, x2: m.l + W, y1: Y(v), y2: Y(v) }, g);
+    if (axes) el('text', { x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'tick' }, svg).textContent = fmt(v);
   }
-  const axes = el('g', { class: 'axes' }, svg);
-  if (y0 < 0 && y1 > 0) el('line', { x1: m.l, x2: m.l + W, y1: Y(0), y2: Y(0) }, axes);
-  if (x0 < 0 && x1 > 0) el('line', { x1: X(0), x2: X(0), y1: m.t, y2: m.t + H }, axes);
-  el('rect', { x: m.l, y: m.t, width: W, height: H, class: 'frame' }, svg);
+  if (axes) {
+    const ax = el('g', { class: 'axes' }, svg);
+    if (y0 < 0 && y1 > 0) el('line', { x1: m.l, x2: m.l + W, y1: Y(0), y2: Y(0) }, ax);
+    if (x0 < 0 && x1 > 0) el('line', { x1: X(0), x2: X(0), y1: m.t, y2: m.t + H }, ax);
+  }
+  if (frame) el('rect', { x: m.l, y: m.t, width: W, height: H, class: 'frame' }, svg);
 
   const body = el('g', { 'clip-path': `url(#${clipId})` }, svg);
-  d.series.forEach((s, k) => {
-    const cls = `series s${k % 6}`;
-    if (d.kind === 'scatter') {
-      const g = el('g', { class: cls }, body);
-      for (const [x, y] of s.points) if (y !== null && Number.isFinite(y)) el('circle', { cx: X(x), cy: Y(y), r: 2.8 }, g);
-    } else {
-      let path = '';
-      let pen = false;
-      const span = y1 - y0;
-      let prev = null;
-      for (const [x, y] of s.points) {
-        // Quebra a linha em descontinuidades (valores ausentes ou saltos enormes).
-        if (y === null || !Number.isFinite(y) || (prev !== null && Math.abs(y - prev) > span * 4)) {
-          pen = false;
-          prev = y === null || !Number.isFinite(y) ? null : y;
-          if (prev === null) continue;
-        }
-        const py = Math.max(-1e4, Math.min(1e4, Y(y)));
-        path += `${pen ? 'L' : 'M'}${X(x).toFixed(2)},${py.toFixed(2)}`;
-        pen = true;
-        prev = y;
-      }
-      el('path', { d: path, class: cls }, body);
-    }
-  });
+  for (const it of leaves) drawLeaf(it, body, { X, Y, P, kx, ky, W, H, m });
+  if (leaves.truncated) {
+    el('text', { x: m.l + W - 6, y: m.t + H - 6, 'text-anchor': 'end', class: 'tick' }, svg).textContent = t('graphicsTruncated', MAX_LEAVES);
+  }
 
-  if (d.series.length > 1) {
+  const labeled = leaves.filter((it) => it.attrs.label);
+  if (labeled.length) {
     const lg = el('g', { class: 'legend' }, svg);
-    d.series.forEach((s, k) => {
+    labeled.forEach((it, k) => {
       const y = m.t + 14 + k * 16;
-      el('line', { x1: m.l + W - 70, x2: m.l + W - 52, y1: y - 4, y2: y - 4, class: `series s${k % 6}` }, lg);
-      el('text', { x: m.l + W - 46, y, class: 'tick' }, lg).textContent = s.label || `f${k + 1}`;
+      const st = styleOf(it.attrs);
+      if (it.g === 'points') el('path', { d: markerPath([[m.l + W - 61, y - 4]], it.attrs.marker, 3), ...markerStyle(it.attrs) }, lg);
+      else el('line', { x1: m.l + W - 70, x2: m.l + W - 52, y1: y - 4, y2: y - 4, ...st, fill: undefined }, lg);
+      el('text', { x: m.l + W - 46, y, class: 'tick' }, lg).textContent = it.attrs.label;
     });
   }
 
-  // Leitura de coordenadas ao passar o mouse.
-  const hover = el('g', { class: 'hover', visibility: 'hidden' }, svg);
-  const vline = el('line', { y1: m.t, y2: m.t + H }, hover);
-  const dot = el('circle', { r: 3.5 }, hover);
-  const label = el('text', { class: 'tick hoverlabel' }, hover);
+  hover(svg, leaves, { width, height, x0, x1, y0, y1, X, Y, W, H, m });
+  return svg;
+}
+
+function markerStyle(a) {
+  const c = paint(a.color);
+  const hollow = a.marker === 'circle' || a.marker === 'cross' || a.marker === 'plus';
+  return { fill: hollow ? 'none' : c, stroke: hollow ? c : 'none', 'stroke-width': a.width ?? 1.4, opacity: a.opacity ?? undefined };
+}
+
+function drawLeaf(it, body, { X, Y, P, kx, ky, W, H }) {
+  const a = it.attrs;
+  switch (it.g) {
+    case 'points': {
+      const ps = it.pts.filter((p) => p && p[1] !== null && Number.isFinite(p[1])).map((p) => [+X(p[0]).toFixed(2), +Y(p[1]).toFixed(2)]);
+      el('path', { d: markerPath(ps, a.marker, a.size ?? 2.8), ...markerStyle(a) }, body);
+      return;
+    }
+    case 'line': {
+      let path = '';
+      let pen = false, prev = null, broken = false;
+      const span = H / ky;
+      for (const p of it.pts) {
+        const y = p ? p[1] : null;
+        // Quebra a linha em valores ausentes e, em séries de dados, em saltos enormes (polos).
+        if (y === null || !Number.isFinite(y) || (it.data && prev !== null && Math.abs(y - prev) > span * 4)) {
+          pen = false;
+          broken = true;
+          prev = y === null || !Number.isFinite(y) ? null : y;
+          if (prev === null) continue;
+        }
+        path += `${pen ? 'L' : 'M'}${P(p)}`;
+        pen = true;
+        prev = y;
+      }
+      if (it.closed && !broken && path) path += 'Z';
+      el('path', { d: path, ...styleOf(a, { width: it.data ? 1.8 : 1.5 }) }, body);
+      return;
+    }
+    case 'circle':
+      el('ellipse', { cx: X(it.c[0]), cy: Y(it.c[1]), rx: it.r * kx, ry: it.r * ky, ...styleOf(a) }, body);
+      return;
+    case 'arc': {
+      const ps = arcPoints(it);
+      let path = (it.sector ? `M${P(it.c)}L` : 'M') + ps.map(P).join('L');
+      if (it.sector) path += 'Z';
+      el('path', { d: path, ...styleOf(a) }, body);
+      return;
+    }
+    case 'arrow': {
+      const [ax, ay] = [X(it.pts[0][0]), Y(it.pts[0][1])];
+      const [bx, by] = [X(it.pts[1][0]), Y(it.pts[1][1])];
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const ux = (bx - ax) / len, uy = (by - ay) / len;
+      const h = Math.min(len, 7 + 2 * (a.width ?? 1.5)), w = h * 0.45;
+      const st = styleOf(a);
+      el('path', { d: `M${ax},${ay}L${bx - ux * h * 0.8},${by - uy * h * 0.8}`, ...st, fill: 'none' }, body);
+      el('path', {
+        d: `M${bx},${by}L${bx - ux * h - uy * w},${by - uy * h + ux * w}L${bx - ux * h + uy * w},${by - uy * h - ux * w}Z`,
+        ...st, fill: st.stroke, 'stroke-dasharray': undefined,
+      }, body);
+      return;
+    }
+    case 'infline':
+    case 'ray': {
+      const [ax, ay] = [X(it.pts[0][0]), Y(it.pts[0][1])];
+      const [bx, by] = [X(it.pts[1][0]), Y(it.pts[1][1])];
+      const len = Math.hypot(bx - ax, by - ay);
+      if (!(len > 0)) return;
+      const T = 2 * (W + H) + Math.hypot(ax, ay);
+      const ux = (bx - ax) / len, uy = (by - ay) / len;
+      const s = it.g === 'ray' ? 0 : -T;
+      el('path', { d: `M${ax + ux * s},${ay + uy * s}L${ax + ux * T},${ay + uy * T}`, ...styleOf(a), fill: 'none' }, body);
+      return;
+    }
+    case 'text': {
+      const off = 6;
+      const dx = it.pos.includes('e') ? off : it.pos.includes('w') ? -off : 0;
+      const dy = it.pos.includes('n') ? -off : it.pos.includes('s') ? off : 0;
+      const e = el('text', {
+        x: X(it.p[0]) + dx, y: Y(it.p[1]) + dy,
+        'text-anchor': dx > 0 ? 'start' : dx < 0 ? 'end' : 'middle',
+        'dominant-baseline': dy < 0 ? 'auto' : dy > 0 ? 'hanging' : 'central',
+        fill: a.color === undefined ? 'var(--ink)' : paint(a.color),
+        'font-size': a.fontsize ?? 13,
+        opacity: a.opacity ?? undefined,
+        class: 'gtext',
+      }, body);
+      e.textContent = it.s;
+    }
+  }
+}
+
+// Leitura de coordenadas ao passar o mouse: em séries de dados, o ponto mais
+// próximo em x; nos demais gráficos, a posição do cursor.
+function hover(svg, leaves, { width, height, x0, x1, y0, y1, X, Y, W, H, m }) {
+  const data = leaves.filter((it) => it.data).flatMap((it) => it.pts.filter((p) => p && p[1] !== null));
+  const box = el('g', { class: 'hover', visibility: 'hidden' }, svg);
+  const vline = el('line', { y1: m.t, y2: m.t + H }, box);
+  const dot = el('circle', { r: 3.5 }, box);
+  const label = el('text', { class: 'tick hoverlabel' }, box);
+  if (!data.length) { vline.remove(); dot.remove(); }
+  const place = (px, txt) => {
+    label.textContent = txt;
+    const right = px + 8 > m.l + W - 110;
+    label.setAttribute('x', right ? px - 8 : px + 8);
+    label.setAttribute('text-anchor', right ? 'end' : 'start');
+    label.setAttribute('y', m.t + 14);
+  };
   svg.addEventListener('pointermove', (ev) => {
     const rect = svg.getBoundingClientRect();
     const px = ((ev.clientX - rect.left) / rect.width) * width;
-    if (px < m.l || px > m.l + W) { hover.setAttribute('visibility', 'hidden'); return; }
+    const py = ((ev.clientY - rect.top) / rect.height) * height;
+    if (px < m.l || px > m.l + W || py < m.t || py > m.t + H) { box.setAttribute('visibility', 'hidden'); return; }
     const x = x0 + ((px - m.l) / W) * (x1 - x0);
-    let best = null;
-    for (const s of d.series) for (const p of s.points) {
-      if (p[1] === null) continue;
-      if (!best || Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p;
+    box.setAttribute('visibility', 'visible');
+    if (!data.length) {
+      const y = y1 - ((py - m.t) / H) * (y1 - y0);
+      place(px, `(${fmt(+x.toPrecision(4))}, ${fmt(+y.toPrecision(4))})`);
+      return;
     }
-    if (!best) return;
-    hover.setAttribute('visibility', 'visible');
+    let best = data[0];
+    for (const p of data) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p;
     vline.setAttribute('x1', X(best[0]));
     vline.setAttribute('x2', X(best[0]));
     dot.setAttribute('cx', X(best[0]));
     dot.setAttribute('cy', Math.max(m.t, Math.min(m.t + H, Y(best[1]))));
-    label.textContent = `(${fmt(best[0])}, ${fmt(best[1])})`;
-    const lx = X(best[0]) + 8;
-    label.setAttribute('x', lx > m.l + W - 110 ? X(best[0]) - 8 : lx);
-    label.setAttribute('text-anchor', lx > m.l + W - 110 ? 'end' : 'start');
-    label.setAttribute('y', m.t + 14);
+    place(X(best[0]), `(${fmt(best[0])}, ${fmt(best[1])})`);
   });
-  svg.addEventListener('pointerleave', () => hover.setAttribute('visibility', 'hidden'));
-  return svg;
+  svg.addEventListener('pointerleave', () => box.setAttribute('visibility', 'hidden'));
 }
 
-return { renderPlot };
+return { renderGraphics };
 })();
 // ---- src/ui/highlight.js
 __m["src/ui/highlight.js"] = (() => {
@@ -6136,6 +6568,19 @@ const EXAMPLES = [
     ],
   },
   {
+    title: { pt: 'Geometria', en: 'Geometry' },
+    cells: [
+      { pt: '# Primitivas gráficas: pontos são complexos ou tuplas (x, y);\n# atributos são argumentos nomeados.\nn = slider(3, 16, value = 5)', en: '# Graphics primitives: points are complex numbers or tuples (x, y);\n# attributes are keyword arguments.\nn = slider(3, 16, value = 5)' },
+      'vs = [exp(2pi*i*k/n) | k <- 1..n]',
+      'draw([\n  circle(0, 1, dash = "dot", color = "ink"),\n  polygon(vs, fill = true, opacity = 0.25),\n  [segment(0, v) | v <- vs] |> style(color = "gray", width = 0.5),\n  points(vs, color = 2, size = 4),\n  text(n, 0, fontsize = 18)\n], axes = false)',
+      { pt: '# Círculos de Ford: tangentes entre si, um para cada p/q\n[circle(p/q + i/(2q^2), 1/(2q^2)) | q <- 1..12, p <- 0..q, gcd(p, q) == 1] |> draw(xlim = [0, 1], ylim = [0, 1/2])', en: '# Ford circles: mutually tangent, one for each p/q\n[circle(p/q + i/(2q^2), 1/(2q^2)) | q <- 1..12, p <- 0..q, gcd(p, q) == 1] |> draw(xlim = [0, 1], ylim = [0, 1/2])' },
+      { pt: '# Imagem de uma grade por z -> z^2\n[curve(t -> (t + k*i/4)^2, -1, 1) | k <- -4..4] + [curve(t -> (k/4 + t*i)^2, -1, 1, color = 2) | k <- -4..4]', en: '# Image of a grid under z -> z^2\n[curve(t -> (t + k*i/4)^2, -1, 1) | k <- -4..4] + [curve(t -> (k/4 + t*i)^2, -1, 1, color = 2) | k <- -4..4]' },
+      { pt: '# Gráficos de funções se combinam com primitivas usando +\na = slider(-3, 3, 0.1, value = 1)', en: '# Function plots combine with primitives using +\na = slider(-3, 3, 0.1, value = 1)' },
+      'plot(sin, -4, 4) + infline((a, sin(a)), (a + 1, sin(a) + cos(a)), color = 2, dash = "dash") + point((a, sin(a)), size = 4, color = 2)',
+      '[disk(exp(2pi*i*k/12), 0.2, color = hsl(k/12, 0.8, 0.5)) | k <- 1..12] + [arrow(0, 0.75*exp(2pi*i*k/12)) | k <- 1..12]',
+    ],
+  },
+  {
     title: { pt: 'FLINT direto', en: 'Raw FLINT' },
     cells: [
       { pt: '# Qualquer função da aba FLINT da referência pode ser chamada\n# diretamente; prec e contexto são preenchidos automaticamente.\nflint("arb_gamma", 1/3)', en: '# Any function from the FLINT tab of the reference can be called\n# directly; prec and context are filled in automatically.\nflint("arb_gamma", 1/3)' },
@@ -6200,6 +6645,7 @@ const CATEGORIES = [
   ['ff', 'Corpos finitos e ℤ/nℤ', 'Finite fields and ℤ/nℤ'],
   ['list', 'Listas e funções de ordem superior', 'Lists and higher-order functions'],
   ['plot', 'Gráficos e widgets', 'Plots and widgets'],
+  ['draw', 'Desenho: primitivas e atributos', 'Drawing: primitives and attributes'],
   ['misc', 'Diversos', 'Miscellaneous'],
 ];
 
@@ -6451,9 +6897,29 @@ tuple ¦ list ¦ tuple(a, b, …), (a, b) ¦ Tupla. ¦ Tuple. ¦ tuple(1, 2) ¦
 list ¦ list ¦ list(x) ¦ Converte tupla ou string em lista. ¦ Converts a tuple or string to a list. ¦ list("abc") ¦
 apply ¦ list ¦ apply(f, xs) ¦ Chama f com os elementos de xs como argumentos. ¦ Calls f with the elements of xs as arguments. ¦ apply(gcd, [12, 18]) ¦
 id ¦ list ¦ id(x) ¦ Identidade. ¦ Identity. ¦ map([1, 2], id) ¦
-plot ¦ plot ¦ plot(f, a, b), plot([f, g], a, b, points=, xlim=, ylim=, title=) ¦ Gráfico de funções reais amostradas em [a, b]. xlim = [x₀, x₁] e ylim = [y₀, y₁] fixam a janela visível (sem eles, y é escolhido automaticamente ignorando polos). ¦ Plot of real functions sampled on [a, b]. xlim = [x₀, x₁] and ylim = [y₀, y₁] fix the visible window (without them, y is chosen automatically, ignoring poles). ¦ plot(t -> sin(t)/t, -20, 20) ;; plot([sin, cos], 0, 2pi) ;; plot(tan, -5, 5, ylim = [-4, 4]) ¦
-listplot ¦ plot ¦ listplot(ys), listplot([(x, y), …], joined=true, xlim=, ylim=) ¦ Gráfico de pontos; xlim e ylim fixam a janela visível. ¦ Point plot; xlim and ylim fix the visible window. ¦ listplot(map(1..50, k -> numdivisors(k))) ;; listplot(map(1..100, eulerphi), xlim = [0, 50], ylim = [0, 50]) ¦
-complexplot ¦ plot ¦ complexplot(zs), complexplot(zs, xlim=, ylim=) ¦ Pontos no plano complexo, com escala igual nos eixos. xlim (parte real) e ylim (parte imaginária) fixam a região; se as proporções não baterem com o quadro, o outro eixo é ampliado para manter a escala. ¦ Points in the complex plane, with equal axis scales. xlim (real part) and ylim (imaginary part) fix the region; if the proportions do not match the frame, the other axis is widened to keep the scale. ¦ x = gen(ZZ[x]); complexplot(roots(x^30 - x - 1)) ;; x = gen(ZZ[x]); complexplot(roots(x^60 - x - 1), xlim = [-1.5, 1.5], ylim = [-1.5, 1.5]) ¦
+plot ¦ plot ¦ plot(f, a, b), plot([f, g], a, b, points=, xlim=, ylim=, title=, atributos) ¦ Gráfico de funções reais amostradas em [a, b]. xlim = [x₀, x₁] e ylim = [y₀, y₁] fixam a janela visível (sem eles, y é escolhido automaticamente ignorando polos). Aceita atributos de desenho (color, width, dash…) e pode ser somado a primitivas com +. ¦ Plot of real functions sampled on [a, b]. xlim = [x₀, x₁] and ylim = [y₀, y₁] fix the visible window (without them, y is chosen automatically, ignoring poles). Accepts drawing attributes (color, width, dash…) and can be added to primitives with +. ¦ plot(t -> sin(t)/t, -20, 20) ;; plot([sin, cos], 0, 2pi) ;; plot(tan, -5, 5, ylim = [-4, 4]) ;; plot(sin, 0, 2pi, color = "red", dash = "dash") + point((pi, 0)) ¦
+listplot ¦ plot ¦ listplot(ys), listplot([(x, y), …], joined=true, xlim=, ylim=, atributos) ¦ Gráfico de pontos; xlim e ylim fixam a janela visível. Aceita atributos de desenho (color, marker, size…). ¦ Point plot; xlim and ylim fix the visible window. Accepts drawing attributes (color, marker, size…). ¦ listplot(map(1..50, k -> numdivisors(k))) ;; listplot(map(1..100, eulerphi), xlim = [0, 50], ylim = [0, 50]) ¦
+complexplot ¦ plot ¦ complexplot(zs), complexplot(zs, xlim=, ylim=, atributos) ¦ Pontos no plano complexo, com escala igual nos eixos. xlim (parte real) e ylim (parte imaginária) fixam a região; se as proporções não baterem com o quadro, o outro eixo é ampliado para manter a escala. ¦ Points in the complex plane, with equal axis scales. xlim (real part) and ylim (imaginary part) fix the region; if the proportions do not match the frame, the other axis is widened to keep the scale. ¦ x = gen(ZZ[x]); complexplot(roots(x^30 - x - 1)) ;; x = gen(ZZ[x]); complexplot(roots(x^60 - x - 1), xlim = [-1.5, 1.5], ylim = [-1.5, 1.5]) ¦
+point ¦ draw ¦ point(p, atributos) ¦ Um ponto. Pontos são números complexos (2 + i), reais (3) ou tuplas (x, y); bolas viram seu ponto médio. Atributos: color, size (raio em px), marker ("dot", "circle", "square", "diamond", "cross", "plus"), opacity, label. ¦ A point. Points are complex numbers (2 + i), reals (3) or tuples (x, y); balls become their midpoint. Attributes: color, size (radius in px), marker ("dot", "circle", "square", "diamond", "cross", "plus"), opacity, label. ¦ point(1 + i) ;; point((2, 3), size = 5, color = "red") ¦
+points ¦ draw ¦ points(ps, atributos) ¦ Vários pontos com o mesmo estilo (desenhados de uma vez, eficiente para milhares de pontos). ¦ Many points with the same style (drawn at once, efficient for thousands of points). ¦ points([exp(2pi*i*k/12) | k <- 1..12], marker = "square") ¦
+segment ¦ draw ¦ segment(a, b, atributos) ¦ Segmento de a até b. Atributos de traço: color, width (px), dash ("dot", "dash", "dashdot" ou "4 2"), opacity. ¦ Segment from a to b. Stroke attributes: color, width (px), dash ("dot", "dash", "dashdot" or "4 2"), opacity. ¦ segment(0, 1 + i) ;; segment((0, 0), (1, 2), width = 3, dash = "dash") ¦
+arrow ¦ draw ¦ arrow(a, b, atributos) ¦ Seta de a para b (o tamanho da ponta acompanha width). ¦ Arrow from a to b (the head size follows width). ¦ arrow(0, 1 + i) ;; [arrow(0, exp(i*k*pi/4), color = k) | k <- 1..6] ¦
+line ¦ draw ¦ line([p₁, p₂, …], closed=false, atributos) ¦ Poligonal pelos pontos dados; closed = true fecha o caminho. ¦ Polyline through the given points; closed = true closes the path. ¦ line([0, 1, 1 + i, 2i]) ;; line([(k, k^2) | k <- -3..3]) ¦
+polygon ¦ draw ¦ polygon([p₁, p₂, …], atributos) ¦ Polígono fechado. fill = true preenche com a cor do traço; fill = "cor" usa outra cor; opacity torna translúcido. ¦ Closed polygon. fill = true fills with the stroke color; fill = "color" uses another color; opacity makes it translucent. ¦ polygon([0, 1, i]) ;; polygon([exp(2pi*i*k/5) | k <- 1..5], fill = "gold", color = "ink") ¦
+rect ¦ draw ¦ rect(a, b, atributos) ¦ Retângulo de lados paralelos aos eixos com cantos opostos a e b. ¦ Axis-parallel rectangle with opposite corners a and b. ¦ rect(0, 2 + i, fill = true, opacity = 0.3) ¦
+infline ¦ draw ¦ infline(a, b, atributos) ¦ Reta infinita por a e b, cortada nas bordas da janela. ¦ Infinite line through a and b, clipped at the window edges. ¦ infline(0, 1 + i) + circle(0, 1) ¦
+ray ¦ draw ¦ ray(a, b, atributos) ¦ Semirreta que parte de a e passa por b. ¦ Ray starting at a through b. ¦ ray(0, 1 + i) + point(0) ¦
+circle ¦ draw ¦ circle(c, r, atributos) ¦ Circunferência de centro c e raio r (em unidades do plano). Com escala igual nos eixos (padrão de draw) é um círculo; com aspect = "auto", uma elipse. ¦ Circle with center c and radius r (in plane units). With equal axis scales (the draw default) it is round; with aspect = "auto", an ellipse. ¦ circle(0, 1) ;; [circle(0, r) | r <- 1..5] ;; circle(1 + i, 1/2, color = "red", dash = "dot") ¦
+disk ¦ draw ¦ disk(c, r, atributos) ¦ Disco (círculo preenchido); fill = "cor" escolhe o preenchimento. ¦ Disk (filled circle); fill = "color" chooses the fill. ¦ disk(0, 1, opacity = 0.3) + circle(0, 1) ¦
+arc ¦ draw ¦ arc(c, r, θ₀, θ₁, atributos) ¦ Arco de circunferência de θ₀ a θ₁ (radianos, sentido anti-horário). ¦ Circular arc from θ₀ to θ₁ (radians, counterclockwise). ¦ arc(0, 1, 0, pi) ;; arc(0, 1, 0, 3pi/2, width = 3) ¦
+sector ¦ draw ¦ sector(c, r, θ₀, θ₁, atributos) ¦ Setor circular ("fatia") de θ₀ a θ₁, preenchido. ¦ Circular sector ("slice") from θ₀ to θ₁, filled. ¦ sector(0, 1, 0, pi/3, color = 2) + sector(0, 1, pi/3, 2pi, color = 3, opacity = 0.4) ¦
+curve ¦ draw ¦ curve(t -> z(t), a, b, points=400, atributos) ¦ Curva paramétrica: z(t) devolve um complexo ou uma tupla (x, y). Pontos onde a função falha abrem lacunas. ¦ Parametric curve: z(t) returns a complex number or a tuple (x, y). Points where the function fails leave gaps. ¦ curve(t -> exp(i*t) + exp(7i*t)/2, 0, 2pi) ;; curve(t -> (sin(3t), sin(4t)), 0, 2pi, color = 4) ¦
+text ¦ draw ¦ text(s, p, pos="c", fontsize=13, color=) ¦ Texto no ponto p. pos indica onde o texto fica em relação ao ponto: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Valores que não são strings são exibidos como texto. ¦ Text at point p. pos says where the text sits relative to the point: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Non-string values are shown as text. ¦ point(1 + i) + text("1 + i", 1 + i, pos = "ne") ;; text(pi, 0, fontsize = 20) ¦
+group ¦ draw ¦ group(g₁, g₂, …, atributos) ¦ Agrupa gráficos; os atributos do grupo valem para as primitivas que não os definem (o filho prevalece). ¦ Groups graphics; the group's attributes apply to primitives that do not set them (the child wins). ¦ group(circle(0, 1), segment(-1, 1), color = "red", width = 2) ¦
+style ¦ draw ¦ style(g, atributos) ¦ Impõe atributos a todas as primitivas de g, sobrescrevendo os que elas já tinham. Útil com |>. ¦ Imposes attributes on every primitive of g, overriding those they already had. Handy with |>. ¦ [segment(0, exp(i*k*pi/6)) | k <- 1..12] |> style(color = "gray", width = 0.5) ¦
+draw ¦ draw ¦ draw(g, xlim=, ylim=, aspect="equal", axes=true, grid=true, frame=true, title=, width=, height=) ¦ Ajusta a janela de um gráfico (ou lista de gráficos). Sem draw, uma célula cujo valor é um gráfico ou uma lista só de gráficos já é desenhada. aspect = "equal" mantém a mesma escala nos eixos (padrão para primitivas; plot usa "auto"). width e height em px. ¦ Sets the window of a graphic (or list of graphics). Without draw, a cell whose value is a graphic or a list of graphics only is drawn anyway. aspect = "equal" keeps the same scale on both axes (the default for primitives; plot uses "auto"). width and height in px. ¦ draw([circle(0, 1), segment(-1, 1)], axes = false, grid = false) ;; draw(circle(0, 1), xlim = [0, 2], ylim = [0, 2]) ¦
+rgb ¦ draw ¦ rgb(r, g, b) ¦ Cor a partir de componentes em [0, 1], para usar em color e fill. Cores também podem ser nomes ("red", "steelblue"…), "#rrggbb", "ink" (cor do texto) ou índices 1 a 6 da paleta (que acompanham o tema claro/escuro). ¦ Color from components in [0, 1], for use in color and fill. Colors can also be names ("red", "steelblue"…), "#rrggbb", "ink" (text color) or palette indices 1 to 6 (which follow the light/dark theme). ¦ disk(0, 1, color = rgb(1, 0.5, 0)) ¦
+hsl ¦ draw ¦ hsl(h, s, l) ¦ Cor por matiz h (em voltas: 0 e 1 são vermelho), saturação s e luminosidade l em [0, 1]. Prático para colorir por fase: hsl(arg(z)/(2pi), 1, 0.5). ¦ Color by hue h (in turns: 0 and 1 are red), saturation s and lightness l in [0, 1]. Handy for coloring by phase: hsl(arg(z)/(2pi), 1, 0.5). ¦ [disk(exp(2pi*i*k/12), 0.2, color = hsl(k/12, 0.8, 0.5)) | k <- 1..12] ¦
 slider ¦ plot ¦ slider(a, b), slider(a, b, passo, value=, label=) ¦ Controle deslizante: a célula passa a valer o número escolhido. ¦ Slider: the cell's value becomes the chosen number. ¦ k = slider(1, 20) ¦
 checkbox ¦ plot ¦ checkbox(value=false, label=) ¦ Caixa de seleção (valor booleano). ¦ Checkbox (boolean value). ¦ show = checkbox() ¦
 textinput ¦ plot ¦ textinput(value="") ¦ Campo de texto (valor string). ¦ Text field (string value). ¦ name = textinput(value = "Cauchy") ¦
@@ -6510,7 +6976,7 @@ __m["src/ui/ui.js"] = (() => {
 // worker, persistência e painel de referência.
 
 const { render, ringName, esc } = __m["src/ui/render.js"];
-const { renderPlot } = __m["src/ui/plot.js"];
+const { renderGraphics } = __m["src/ui/plot.js"];
 const { highlight } = __m["src/ui/highlight.js"];
 const { EXAMPLES, pick } = __m["src/ui/examples.js"];
 const { t, setLang, getLang, detectLang, applyStatic, translateError, SYNTAX_CODE, SYNTAX_NOTES } = __m["src/ui/i18n.js"];
@@ -6866,11 +7332,9 @@ function showResult(c, res) {
 }
 
 function mountSlot(c, slot, d, res) {
-  if (d.t === 'plot') {
+  if (d.t === 'graphics') {
     const w = Math.max(300, Math.min(760, ($('#cells').clientWidth || 700) - 60));
-    const svg = renderPlot(d, w);
-    svg.style.width = `${w}px`;
-    slot.replaceWith(svg);
+    slot.replaceWith(renderGraphics(d, w));
     return;
   }
   if (d.t === 'widget') {
