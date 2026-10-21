@@ -3545,6 +3545,160 @@ function freeVars(stmts) {
 
 return { definedNames, freeVars };
 })();
+// ---- src/js/runtime/geom.js
+__m["src/js/runtime/geom.js"] = (() => {
+// Transformações de primitivas gráficas (dados em ponto flutuante).
+//
+// Afins: M = [a, b, c, d, e, f] leva (x, y) em (a x + b y + e, c x + d y + f).
+// Círculos e arcos continuam exatos quando M é uma semelhança; caso
+// contrário viram poligonais amostradas. Não lineares: tudo é amostrado e
+// cada ponto é mapeado por uma função.
+
+const { fail } = __m["src/js/runtime/errors.js"];
+
+const TAU = 2 * Math.PI;
+
+const affine = {
+  translate: (vx, vy) => [1, 0, 0, 1, vx, vy],
+  // Rotação de θ em torno de (cx, cy).
+  rotate: (t, cx, cy) => {
+    const c = Math.cos(t), s = Math.sin(t);
+    return [c, -s, s, c, cx - c * cx + s * cy, cy - s * cx - c * cy];
+  },
+  scale: (kx, ky, cx, cy) => [kx, 0, 0, ky, cx - kx * cx, cy - ky * cy],
+  // Reflexão na reta por (ax, ay) e (bx, by).
+  reflect: (ax, ay, bx, by) => {
+    const t = Math.atan2(by - ay, bx - ax);
+    const c = Math.cos(2 * t), s = Math.sin(2 * t);
+    return [c, s, s, -c, ax - c * ax - s * ay, ay - s * ax + c * ay];
+  },
+  linear: (a, b, c, d) => [a, b, c, d, 0, 0],
+};
+
+const apply = (M, p) => (p ? [M[0] * p[0] + M[1] * p[1] + M[4], M[2] * p[0] + M[3] * p[1] + M[5]] : p);
+
+// Semelhança: +1 (preserva orientação), -1 (inverte) ou 0 (não é).
+function similarity(M) {
+  const [a, b, c, d] = M;
+  const tol = 1e-12 * (Math.abs(a) + Math.abs(b) + Math.abs(c) + Math.abs(d));
+  if (Math.abs(a - d) <= tol && Math.abs(b + c) <= tol) return 1;
+  if (Math.abs(a + d) <= tol && Math.abs(b - c) <= tol) return -1;
+  return 0;
+}
+
+// Pontos de um arco (ou círculo completo) com n segmentos.
+function arcPts(c, r, t0, t1, n) {
+  const out = [];
+  for (let k = 0; k <= n; k++) {
+    const a = t0 + ((t1 - t0) * k) / n;
+    out.push([c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)]);
+  }
+  return out;
+}
+
+// Converte círculos e arcos em poligonais (fechadas quando apropriado).
+function toLine(it, n) {
+  const { g, c, r, attrs } = it;
+  if (g === 'circle') {
+    const pts = arcPts(c, r, 0, TAU, n);
+    pts.pop();
+    return { g: 'line', pts, closed: true, attrs };
+  }
+  const m = Math.max(4, Math.ceil((n * (it.t1 - it.t0)) / TAU));
+  const pts = arcPts(c, r, it.t0, it.t1, m);
+  if (it.sector) return { g: 'line', pts: [c, ...pts], closed: true, attrs };
+  return { g: 'line', pts, attrs };
+}
+
+function affineItems(items, M) {
+  const sim = similarity(M);
+  const axis = M[1] === 0 && M[2] === 0;
+  const det = Math.abs(M[0] * M[3] - M[1] * M[2]);
+  const map = (it) => {
+    if (it.g === 'group') return { ...it, items: it.items.map(map) };
+    if (it.g === 'text') return { ...it, p: apply(M, it.p) };
+    if (it.g === 'circle' || it.g === 'arc') {
+      if (!sim) return map(toLine(it, 128));
+      const out = { ...it, c: apply(M, it.c), r: it.r * Math.sqrt(det) };
+      if (it.g === 'arc') {
+        const phi = Math.atan2(M[2], M[0]);
+        [out.t0, out.t1] = sim > 0 ? [it.t0 + phi, it.t1 + phi] : [phi - it.t1, phi - it.t0];
+      }
+      return out;
+    }
+    const out = { ...it, pts: it.pts.map((p) => apply(M, p)) };
+    // Séries de dados só continuam séries se os eixos forem preservados.
+    if (!axis || M[0] <= 0) delete out.data;
+    return out;
+  };
+  return items.map(map);
+}
+
+// Subdivide cada segmento em k partes (preservando lacunas nulas).
+function densify(pts, k, closed) {
+  const out = [];
+  const seq = closed && pts.length > 1 && pts[0] ? [...pts, pts[0]] : pts;
+  for (let i = 0; i < seq.length; i++) {
+    const p = seq[i], q = seq[i + 1];
+    if (i === seq.length - 1) {
+      if (!closed) out.push(p);
+      break;
+    }
+    out.push(p);
+    if (!p || !q) continue;
+    for (let j = 1; j < k; j++) out.push([p[0] + ((q[0] - p[0]) * j) / k, p[1] + ((q[1] - p[1]) * j) / k]);
+  }
+  return out;
+}
+
+// Mapeia as primitivas por f: [x, y] -> [x, y] | null. `steps` fixa a
+// subdivisão de cada segmento; sem ela, cerca de `budget` pontos por primitiva.
+function mapItems(items, f, { steps = null, budget = 2000, maxTotal = 200000 } = {}) {
+  let total = 0;
+  const F = (p) => {
+    if (!p) return null;
+    if (++total > maxTotal) fail('transform: pontos demais');
+    return f(p);
+  };
+  const sub = (n) => steps ?? Math.max(1, Math.min(32, Math.ceil(budget / Math.max(1, n))));
+  const map = (it) => {
+    switch (it.g) {
+      case 'group': return { ...it, items: it.items.map(map) };
+      case 'text': {
+        const p = F(it.p);
+        return p ? { ...it, p } : null;
+      }
+      case 'points': {
+        const out = { ...it, pts: it.pts.map(F).filter(Boolean) };
+        delete out.data;
+        return out;
+      }
+      case 'circle': case 'arc': {
+        // Amostra a própria curva (e não cordas subdivididas, que sairiam dela).
+        const n = steps ? 256 * steps : budget;
+        const L = toLine(it, n);
+        if (it.sector) {
+          const arc = L.pts.slice(1);
+          const k = Math.max(8, Math.round(n / 16));
+          L.pts = [...densify([it.c, arc[0]], k, false).slice(0, -1), ...arc, ...densify([arc[arc.length - 1], it.c], k, false).slice(1, -1)];
+        }
+        return { ...L, pts: L.pts.map(F) };
+      }
+      case 'arrow': return { g: 'line', arrow: true, pts: densify(it.pts, steps ?? 64, false).map(F), attrs: it.attrs };
+      case 'infline': case 'ray': fail('transform não se aplica a retas infinitas (use segment)');
+      default: {
+        const n = it.pts.length - (it.closed ? 0 : 1);
+        const out = { ...it, pts: densify(it.pts, sub(n), it.closed).map(F) };
+        delete out.data;
+        return out;
+      }
+    }
+  };
+  return items.map(map).filter(Boolean);
+}
+
+return { affine, affineItems, mapItems };
+})();
 // ---- src/js/runtime/show.js
 __m["src/js/runtime/show.js"] = (() => {
 // Converte valores da linguagem em estruturas de exibição serializáveis
@@ -3778,6 +3932,7 @@ __m["src/js/lang/builtins.js"] = (() => {
 const { Elem, Ring, ZZ, QQ, RR, CC, ZmodRing, FiniteField, PolyRing, MatSpace, Zmod, GF, Poly, Mat, flint, commonRing, coerce, isScalarRing, finiteOr, add, sub, mul, div, neg, pow, compare, equal, divrem, inv, matInv, floor, ceil, sign, isZero } = __m["src/js/runtime/rings.js"];
 const { Tuple, Func, Factored, Graphic, Widget, UNIT, asGraphic } = __m["src/js/runtime/values.js"];
 const { fail } = __m["src/js/runtime/errors.js"];
+const { affine, affineItems, mapItems } = __m["src/js/runtime/geom.js"];
 const { showText } = __m["src/js/runtime/show.js"];
 const { Env, callValue, toInt, toBool, int, iterable, range, index, valuesEqual, typeName, matrixFromRows, setRingCall, setEvalPoly, setToStr, currentContext, binop } = __m["src/js/lang/eval.js"];
 
@@ -4884,6 +5039,15 @@ function makeGlobals() {
     }
     fail(`${what} deve ser um número complexo ou uma tupla (x, y)`);
   };
+  // Ponto calculado (curve/transform): bolas largas demais (perto de polos)
+  // não têm ponto médio confiável e viram lacunas.
+  const sharp = (v) => {
+    if (v instanceof Elem && (v.ring === RR || v.ring === CC)) {
+      const parts = v.ring === RR ? [v] : [CC.re(v), CC.im(v)];
+      if (parts.some((x) => !(RR.rad(x) <= 1e-9 * (1 + Math.abs(RR.mid(x)))))) return null;
+    }
+    return pt(v);
+  };
   const pts = (ps, min, what = 'pontos') => {
     const out = list(ps).map((p) => pt(p));
     if (out.length < min) fail(`${what}: esperava pelo menos ${min} pontos`);
@@ -4991,7 +5155,7 @@ function makeGlobals() {
       for (let k = 0; k <= n; k++) {
         let p = null;
         try {
-          p = pt(callValue(fn(f), [RR.fromNumber(lo + ((hi - lo) * k) / n)]));
+          p = sharp(callValue(fn(f), [RR.fromNumber(lo + ((hi - lo) * k) / n)]));
         } catch (e) {
           if (e.name === 'CauchyError' && /recursão/.test(e.message)) throw e;
         }
@@ -5045,6 +5209,49 @@ function makeGlobals() {
     const hh = ((real(h, 'matiz') % 1) + 1) % 1;
     return `hsl(${+(hh * 360).toFixed(2)}, ${+(unit(s, 'saturação') * 100).toFixed(2)}%, ${+(unit(l, 'luminosidade') * 100).toFixed(2)}%)`;
   }, 'hsl(h, s, l): cor por matiz (h em voltas, 0 a 1), saturação e luminosidade');
+
+  // Transformações: afins são exatas (círculos continuam círculos sob
+  // semelhanças); funções arbitrárias amostram e mapeiam cada ponto.
+  const withItems = (g, what, f) => {
+    const G = graphic(g, what);
+    return new Graphic(f(G.items), G.opts);
+  };
+  const center = (c) => (c === undefined ? [0, 0] : pt(c, 'centro'));
+  def('translate', 2, ([g, v]) => withItems(g, 'translate', (items) => affineItems(items, affine.translate(...pt(v, 'deslocamento')))),
+    'translate(g, v): desloca g pelo vetor v');
+  def('rotate', null, ([g, t, c]) => {
+    const th = real(t, 'ângulo');
+    return withItems(g, 'rotate', (items) => affineItems(items, affine.rotate(th, ...center(c))));
+  }, 'rotate(g, θ, c=0): gira g de θ radianos em torno de c');
+  def('scale', null, ([g, k, c]) => {
+    const [kx, ky] = k instanceof Tuple ? pt(k, 'fator') : [real(k, 'fator'), real(k, 'fator')];
+    if (kx === 0 || ky === 0) fail('fator de escala não pode ser zero');
+    return withItems(g, 'scale', (items) => affineItems(items, affine.scale(kx, ky, ...center(c))));
+  }, 'scale(g, k, c=0): homotetia de razão k (ou (kx, ky)) com centro c');
+  def('reflect', 3, ([g, a, b]) => {
+    const [p, q] = distinct(pt(a), pt(b));
+    return withItems(g, 'reflect', (items) => affineItems(items, affine.reflect(...p, ...q)));
+  }, 'reflect(g, a, b): reflexão na reta por a e b');
+  def('transform', null, ([g, f], kw) => {
+    if (f instanceof Elem && f.ring instanceof MatSpace) {
+      const rows = f.ring.rows(f);
+      if (rows.length !== 2 || rows[0].length !== 2) fail('transform espera uma matriz 2×2');
+      const [[a, b], [c, d]] = rows.map((r) => r.map((x) => real(x, 'entrada da matriz')));
+      if (a * d - b * c === 0) fail('a matriz de transform deve ser invertível');
+      return withItems(g, 'transform', (items) => affineItems(items, affine.linear(a, b, c, d)));
+    }
+    fn(f);
+    const steps = kw.steps !== undefined ? Math.max(1, Math.min(256, toInt(kw.steps, 'steps'))) : null;
+    const map = ([x, y]) => {
+      try {
+        return sharp(callValue(f, [CC.fromParts(RR.fromNumber(x), RR.fromNumber(y))]));
+      } catch (e) {
+        if (e.name === 'CauchyError' && /recursão/.test(e.message)) throw e;
+        return null;
+      }
+    };
+    return withItems(g, 'transform', (items) => flint().withPrec(64, () => mapItems(items, map, { steps })));
+  }, 'transform(g, z -> f(z), steps=) ou transform(g, A): imagem de g por uma função complexa ou matriz 2×2');
 
   // Gráficos de funções e dados: produzem primitivas marcadas como séries
   // de dados (intervalo vertical robusto e leitura de coordenadas por x).
@@ -5778,6 +5985,7 @@ const WORDS = {
   'quebra de linha': 'line break', fim: 'end',
   'gráfico': 'graphic', ponto: 'point', centro: 'center', raio: 'radius', 'ângulo': 'angle', 'início': 'start',
   matiz: 'hue', 'saturação': 'saturation', luminosidade: 'lightness', 'componente de cor': 'color component',
+  deslocamento: 'displacement', fator: 'factor', 'entrada da matriz': 'matrix entry',
 };
 const w = (s) => WORDS[s] ?? s;
 
@@ -5920,6 +6128,11 @@ const RULES = [
   [/^intervalo da curva inválido$/, 'invalid curve interval'],
   [/^aspect deve ser "equal" ou "auto"$/, 'aspect must be "equal" or "auto"'],
   [/^opção desconhecida de draw: (.+)$/, 'unknown draw option: $1'],
+  [/^fator de escala não pode ser zero$/, 'scale factor cannot be zero'],
+  [/^transform espera uma matriz 2×2$/, 'transform expects a 2×2 matrix'],
+  [/^a matriz de transform deve ser invertível$/, 'the transform matrix must be invertible'],
+  [/^transform: pontos demais$/, 'transform: too many points'],
+  [/^transform não se aplica a retas infinitas \(use segment\)$/, 'transform does not apply to infinite lines (use segment)'],
   [/^função FLINT desconhecida: (.+)$/, 'unknown FLINT function: $1'],
   [/^tipo FLINT desconhecido: (.+)$/, 'unknown FLINT type: $1'],
   [/^(.+) requer um anel Zmod\(n\)\/GF\(q\) como argumento$/, '$1 requires a Zmod(n)/GF(q) ring as an argument'],
@@ -6333,6 +6546,19 @@ function markerStyle(a) {
   return { fill: hollow ? 'none' : c, stroke: hollow ? c : 'none', 'stroke-width': a.width ?? 1.4, opacity: a.opacity ?? undefined };
 }
 
+// Ponta de seta em b, apontando de a para b (coordenadas de tela); devolve o
+// comprimento da ponta.
+function arrowHead(body, [ax, ay], [bx, by], a, st) {
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  const ux = (bx - ax) / len, uy = (by - ay) / len;
+  const h = Math.min(len, 7 + 2 * (a.width ?? 1.5)), w = h * 0.45;
+  el('path', {
+    d: `M${bx},${by}L${bx - ux * h - uy * w},${by - uy * h + ux * w}L${bx - ux * h + uy * w},${by - uy * h - ux * w}Z`,
+    ...st, fill: st.stroke, 'stroke-dasharray': undefined,
+  }, body);
+  return h;
+}
+
 function drawLeaf(it, body, { X, Y, P, kx, ky, W, H }) {
   const a = it.attrs;
   switch (it.g) {
@@ -6359,7 +6585,15 @@ function drawLeaf(it, body, { X, Y, P, kx, ky, W, H }) {
         prev = y;
       }
       if (it.closed && !broken && path) path += 'Z';
-      el('path', { d: path, ...styleOf(a, { width: it.data ? 1.8 : 1.5 }) }, body);
+      const st = styleOf(a, { width: it.data ? 1.8 : 1.5 });
+      el('path', { d: path, ...st }, body);
+      if (it.arrow) {
+        // Ponta na direção do último trecho (seta transformada).
+        const ps = it.pts.filter(Boolean);
+        const b = ps[ps.length - 1];
+        const q = [...ps].reverse().find((p) => Math.hypot(X(p[0]) - X(b[0]), Y(p[1]) - Y(b[1])) > 2);
+        if (b && q) arrowHead(body, [X(q[0]), Y(q[1])], [X(b[0]), Y(b[1])], a, st);
+      }
       return;
     }
     case 'circle':
@@ -6373,17 +6607,12 @@ function drawLeaf(it, body, { X, Y, P, kx, ky, W, H }) {
       return;
     }
     case 'arrow': {
+      const st = styleOf(a);
       const [ax, ay] = [X(it.pts[0][0]), Y(it.pts[0][1])];
       const [bx, by] = [X(it.pts[1][0]), Y(it.pts[1][1])];
+      const h = arrowHead(body, [ax, ay], [bx, by], a, st);
       const len = Math.hypot(bx - ax, by - ay) || 1;
-      const ux = (bx - ax) / len, uy = (by - ay) / len;
-      const h = Math.min(len, 7 + 2 * (a.width ?? 1.5)), w = h * 0.45;
-      const st = styleOf(a);
-      el('path', { d: `M${ax},${ay}L${bx - ux * h * 0.8},${by - uy * h * 0.8}`, ...st, fill: 'none' }, body);
-      el('path', {
-        d: `M${bx},${by}L${bx - ux * h - uy * w},${by - uy * h + ux * w}L${bx - ux * h + uy * w},${by - uy * h - ux * w}Z`,
-        ...st, fill: st.stroke, 'stroke-dasharray': undefined,
-      }, body);
+      el('path', { d: `M${ax},${ay}L${bx - ((bx - ax) / len) * h * 0.8},${by - ((by - ay) / len) * h * 0.8}`, ...st, fill: 'none' }, body);
       return;
     }
     case 'infline':
@@ -6578,6 +6807,9 @@ const EXAMPLES = [
       { pt: '# Gráficos de funções se combinam com primitivas usando +\na = slider(-3, 3, 0.1, value = 1)', en: '# Function plots combine with primitives using +\na = slider(-3, 3, 0.1, value = 1)' },
       'plot(sin, -4, 4) + infline((a, sin(a)), (a + 1, sin(a) + cos(a)), color = 2, dash = "dash") + point((a, sin(a)), size = 4, color = 2)',
       '[disk(exp(2pi*i*k/12), 0.2, color = hsl(k/12, 0.8, 0.5)) | k <- 1..12] + [arrow(0, 0.75*exp(2pi*i*k/12)) | k <- 1..12]',
+      { pt: '# Transformações afins: rotate, scale, translate, reflect\nq = rect(-1 - i, 1 + i)\n[style(rotate(scale(q, 0.9^k), k*pi/24), color = hsl(k/24, 0.7, 0.5)) | k <- 0..23]', en: '# Affine transformations: rotate, scale, translate, reflect\nq = rect(-1 - i, 1 + i)\n[style(rotate(scale(q, 0.9^k), k*pi/24), color = hsl(k/24, 0.7, 0.5)) | k <- 0..23]' },
+      { pt: '# Imagem de uma grade polar pela Möbius z -> (z - 1)/(z + 1)\npolar = [circle(0, r/2) | r <- 1..6] + [segment(0, 3*exp(i*k*pi/8), color = 2) | k <- 1..16]', en: '# Image of a polar grid under the Möbius map z -> (z - 1)/(z + 1)\npolar = [circle(0, r/2) | r <- 1..6] + [segment(0, 3*exp(i*k*pi/8), color = 2) | k <- 1..16]' },
+      'transform(polar, z -> (z - 1)/(z + 1)) |> draw(xlim = [-3, 3], ylim = [-2, 2])',
     ],
   },
   {
@@ -6918,6 +7150,11 @@ text ¦ draw ¦ text(s, p, pos="c", fontsize=13, color=) ¦ Texto no ponto p. po
 group ¦ draw ¦ group(g₁, g₂, …, atributos) ¦ Agrupa gráficos; os atributos do grupo valem para as primitivas que não os definem (o filho prevalece). ¦ Groups graphics; the group's attributes apply to primitives that do not set them (the child wins). ¦ group(circle(0, 1), segment(-1, 1), color = "red", width = 2) ¦
 style ¦ draw ¦ style(g, atributos) ¦ Impõe atributos a todas as primitivas de g, sobrescrevendo os que elas já tinham. Útil com |>. ¦ Imposes attributes on every primitive of g, overriding those they already had. Handy with |>. ¦ [segment(0, exp(i*k*pi/6)) | k <- 1..12] |> style(color = "gray", width = 0.5) ¦
 draw ¦ draw ¦ draw(g, xlim=, ylim=, aspect="equal", axes=true, grid=true, frame=true, title=, width=, height=) ¦ Ajusta a janela de um gráfico (ou lista de gráficos). Sem draw, uma célula cujo valor é um gráfico ou uma lista só de gráficos já é desenhada. aspect = "equal" mantém a mesma escala nos eixos (padrão para primitivas; plot usa "auto"). width e height em px. ¦ Sets the window of a graphic (or list of graphics). Without draw, a cell whose value is a graphic or a list of graphics only is drawn anyway. aspect = "equal" keeps the same scale on both axes (the default for primitives; plot uses "auto"). width and height in px. ¦ draw([circle(0, 1), segment(-1, 1)], axes = false, grid = false) ;; draw(circle(0, 1), xlim = [0, 2], ylim = [0, 2]) ¦
+translate ¦ draw ¦ translate(g, v) ¦ Desloca g pelo vetor v (complexo ou tupla). Como todas as transformações, aceita um gráfico ou lista de gráficos e combina com |>. ¦ Translates g by the vector v (complex or tuple). Like every transformation, it takes a graphic or list of graphics and combines with |>. ¦ translate(circle(0, 1), 2 + i) ;; [translate(circle(0, 1/2), k) | k <- 1..5] ¦
+rotate ¦ draw ¦ rotate(g, θ, c=0) ¦ Gira g de θ radianos (anti-horário) em torno de c. Círculos e arcos continuam exatos; o texto muda de lugar mas não gira. ¦ Rotates g by θ radians (counterclockwise) about c. Circles and arcs stay exact; text moves but is not rotated. ¦ [rotate(segment(0, 1), k*pi/8) | k <- 1..16] ;; rotate(rect(0, 2 + i), pi/6, 1 + i/2) + rect(0, 2 + i) ¦
+scale ¦ draw ¦ scale(g, k, c=0), scale(g, (kx, ky), c=0) ¦ Homotetia de razão k com centro c; com (kx, ky), escala cada eixo (círculos viram elipses, desenhadas como poligonais). ¦ Homothety with ratio k about c; with (kx, ky), scales each axis (circles become ellipses, drawn as polylines). ¦ [scale(polygon([1, i, -1, -i]), 0.8^k) | k <- 0..10] ;; scale(circle(0, 1), (2, 1)) ¦
+reflect ¦ draw ¦ reflect(g, a, b) ¦ Reflexão na reta que passa por a e b. ¦ Reflection in the line through a and b. ¦ g = polygon([1, 2, 2 + i]); g + reflect(g, 0, i) ;; arc(0, 1, 0, pi/2) + reflect(arc(0, 1, 0, pi/2), 0, 1 + i) ¦
+transform ¦ draw ¦ transform(g, z -> f(z), steps=), transform(g, A) ¦ Imagem de g por uma função complexa: segmentos são subdivididos e círculos e arcos amostrados antes de mapear cada ponto (steps fixa a subdivisão por segmento; pontos onde f falha abrem lacunas). Com uma matriz 2×2 A, aplica a transformação linear exata. Retas infinitas não são aceitas: use segment. ¦ Image of g under a complex function: segments are subdivided and circles and arcs sampled before each point is mapped (steps fixes the subdivision per segment; points where f fails leave gaps). With a 2×2 matrix A, applies the exact linear map. Infinite lines are not accepted: use segment. ¦ transform([segment(k/4 - i, k/4 + i) | k <- -4..4], z -> z^2) ;; transform([circle(0, r) | r <- 1..4] + [segment(0, 4*exp(i*k*pi/6)) | k <- 1..12], z -> (z - 1)/(z + 1)) ;; transform(circle(0, 1), [2, 1; 0, 1]) ¦
 rgb ¦ draw ¦ rgb(r, g, b) ¦ Cor a partir de componentes em [0, 1], para usar em color e fill. Cores também podem ser nomes ("red", "steelblue"…), "#rrggbb", "ink" (cor do texto) ou índices 1 a 6 da paleta (que acompanham o tema claro/escuro). ¦ Color from components in [0, 1], for use in color and fill. Colors can also be names ("red", "steelblue"…), "#rrggbb", "ink" (text color) or palette indices 1 to 6 (which follow the light/dark theme). ¦ disk(0, 1, color = rgb(1, 0.5, 0)) ¦
 hsl ¦ draw ¦ hsl(h, s, l) ¦ Cor por matiz h (em voltas: 0 e 1 são vermelho), saturação s e luminosidade l em [0, 1]. Prático para colorir por fase: hsl(arg(z)/(2pi), 1, 0.5). ¦ Color by hue h (in turns: 0 and 1 are red), saturation s and lightness l in [0, 1]. Handy for coloring by phase: hsl(arg(z)/(2pi), 1, 0.5). ¦ [disk(exp(2pi*i*k/12), 0.2, color = hsl(k/12, 0.8, 0.5)) | k <- 1..12] ¦
 slider ¦ plot ¦ slider(a, b), slider(a, b, passo, value=, label=) ¦ Controle deslizante: a célula passa a valer o número escolhido. ¦ Slider: the cell's value becomes the chosen number. ¦ k = slider(1, 20) ¦
