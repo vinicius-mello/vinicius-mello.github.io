@@ -6565,6 +6565,22 @@ function send(msg) {
   state.worker.postMessage(msg);
 }
 
+// Durante o arraste de um slider, só o valor mais recente importa: se o
+// worker está ocupado, guarda-o e envia quando a avaliação corrente terminar.
+const widgetQueue = new Map();
+
+function sendWidget(msg) {
+  if (state.ready && !state.busy) send(msg);
+  else widgetQueue.set(`${msg.id}:${msg.index}`, msg);
+}
+
+function flushWidgets() {
+  if (!widgetQueue.size || state.busy || !state.ready) return;
+  const msgs = [...widgetQueue.values()];
+  widgetQueue.clear();
+  for (const m of msgs) send(m);
+}
+
 function onWorker(msg) {
   switch (msg.type) {
     case 'ready':
@@ -6603,6 +6619,7 @@ function onWorker(msg) {
     case 'done':
       state.busy = false;
       setStatus('ready', 'ok');
+      flushWidgets();
       state.live = msg.live;
       $('#live').textContent = t('objects', msg.live);
       break;
@@ -6794,7 +6811,22 @@ function refreshHighlight(c) {
 
 // --------------------------------------------------------------- saída
 
+// Chave que identifica um widget: se não muda, o controle é mantido no DOM
+// (recriá-lo durante o arraste interromperia o gesto).
+function widgetKey(d) {
+  return d && d.t === 'widget' ? JSON.stringify([d.kind, d.spec]) : null;
+}
+
 function showResult(c, res) {
+  const key = res.status === 'ok' ? widgetKey(res.display) : null;
+  if (key && key === c.widgetKey && c.result?.status === 'ok' && !c.relang) {
+    c.result = res;
+    c.el.classList.remove('running', 'slow', 'stale');
+    const outv = $('.widget output', c.el);
+    if (outv && document.activeElement?.type !== 'range') outv.textContent = res.display.value;
+    return;
+  }
+  c.widgetKey = key;
   c.result = res;
   const el = c.el;
   el.classList.remove('running', 'slow', 'stale', 'ok', 'error', 'upstream');
@@ -6837,18 +6869,15 @@ function mountSlot(c, slot, d, res) {
     const sendValue = (v) => {
       c.widgets[idx] = { kind: d.kind, value: v };
       save();
-      send({ type: 'widget', id: c.id, index: idx, value: v });
+      sendWidget({ type: 'widget', id: c.id, index: idx, value: v });
     };
     if (d.kind === 'slider') {
       wrap.innerHTML = `<label><span class="wl">${esc(label)}</span><input type="range" min="${d.spec.min}" max="${d.spec.max}" step="${d.spec.step}" value="${d.value}"><output>${esc(d.value)}</output></label>`;
       const input = $('input', wrap);
       const outv = $('output', wrap);
-      let pending = null;
       input.addEventListener('input', () => {
         outv.textContent = input.value;
-        // Limita o envio enquanto o worker está ocupado.
-        clearTimeout(pending);
-        pending = setTimeout(() => sendValue(Number(input.value)), state.busy ? 120 : 0);
+        sendValue(Number(input.value));
       });
     } else if (d.kind === 'checkbox') {
       wrap.innerHTML = `<label><input type="checkbox" ${d.value ? 'checked' : ''}><span class="wl">${esc(label)}</span></label>`;
@@ -7102,7 +7131,7 @@ function applyLang(lang) {
   if (state.status) setStatus(...state.status);
   if (state.live !== undefined) $('#live').textContent = t('objects', state.live);
   buildReference();
-  for (const c of state.cells) if (c.result) showResult(c, c.result);
+  for (const c of state.cells) if (c.result) { c.relang = true; showResult(c, c.result); c.relang = false; }
 }
 
 // --------------------------------------------------------------- inicialização
