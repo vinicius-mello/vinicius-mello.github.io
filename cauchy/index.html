@@ -4051,6 +4051,196 @@ function mapItems(items, f, { steps = null, budget = 2000, maxTotal = 200000 } =
 
 return { affine, affineItems, mapItems };
 })();
+// ---- src/js/runtime/implicit.js
+__m["src/js/runtime/implicit.js"] = (() => {
+// Conjunto zero de um polinômio p(x, y) em ponto flutuante: quadtree com
+// aritmética intervalar (descarta caixas onde p não se anula), marching
+// squares nas folhas, raízes refinadas sobre as arestas e encadeamento dos
+// segmentos em poligonais.
+//
+// O polinômio chega como matriz densa C[i][j] = coeficiente de x^i y^j.
+
+const { fail } = __m["src/js/runtime/errors.js"];
+
+// p(x, y) por Horner em y com coeficientes que são polinômios em x.
+function evaluator(C) {
+  const dx = C.length - 1, dy = C[0].length - 1;
+  return (x, y) => {
+    let acc = 0;
+    for (let j = dy; j >= 0; j--) {
+      let q = 0;
+      for (let i = dx; i >= 0; i--) q = q * x + C[i][j];
+      acc = acc * y + q;
+    }
+    return acc;
+  };
+}
+
+// Intervalos [lo, hi]; a folga relativa cobre os arredondamentos.
+const imul = (a0, a1, b0, b1) => {
+  const p = a0 * b0, q = a0 * b1, r = a1 * b0, s = a1 * b1;
+  return [Math.min(p, q, r, s), Math.max(p, q, r, s)];
+};
+
+// Extensão intervalar de Horner: contém p(caixa) (a menos de arredondamentos).
+function intervalEvaluator(C) {
+  const dx = C.length - 1, dy = C[0].length - 1;
+  return (x0, x1, y0, y1) => {
+    let a0 = 0, a1 = 0;
+    for (let j = dy; j >= 0; j--) {
+      let q0 = 0, q1 = 0;
+      for (let i = dx; i >= 0; i--) {
+        [q0, q1] = imul(q0, q1, x0, x1);
+        q0 += C[i][j];
+        q1 += C[i][j];
+      }
+      [a0, a1] = imul(a0, a1, y0, y1);
+      a0 += q0;
+      a1 += q1;
+    }
+    const slack = 1e-12 * (Math.abs(a0) + Math.abs(a1)) + 1e-300;
+    return a0 - slack <= 0 && a1 + slack >= 0;
+  };
+}
+
+// Raiz de f no segmento [0, 1] com f(0)·f(1) < 0 (regula falsi de Illinois).
+function edgeRoot(f, fa, fb) {
+  let a = 0, b = 1, side = 0;
+  let t = 0.5;
+  for (let k = 0; k < 12; k++) {
+    t = (a * fb - b * fa) / (fb - fa);
+    if (!(t > a && t < b)) t = (a + b) / 2;
+    const ft = f(t);
+    if (ft === 0) return t;
+    if ((ft > 0) === (fb > 0)) {
+      b = t;
+      fb = ft;
+      if (side === 1) fa /= 2;
+      side = 1;
+    } else {
+      a = t;
+      fa = ft;
+      if (side === -1) fb /= 2;
+      side = -1;
+    }
+  }
+  return t;
+}
+
+// Poligonais que aproximam {p = 0} na janela; cada uma é {pts, closed}.
+// `resolution` é o número de células por lado no nível mais fino (potência de 2).
+function zeroSet(C, { xlim, ylim, resolution = 512, maxCells = 400000 }) {
+  const f = evaluator(C);
+  const contains0 = intervalEvaluator(C);
+  const depth = Math.round(Math.log2(resolution));
+  const N = 2 ** depth;
+  // Deslocamento irracional minúsculo: evita vértices da grade exatamente
+  // sobre retas como x = 0 ou y = x.
+  const hx = (xlim[1] - xlim[0]) / N, hy = (ylim[1] - ylim[0]) / N;
+  const ox = xlim[0] - hx * 1e-3 * Math.SQRT2, oy = ylim[0] - hy * 1e-3 * Math.PI / 3;
+  const X = (i) => ox + i * hx, Y = (j) => oy + j * hy;
+
+  // Quadtree: folhas (i, j) no nível mais fino cujo intervalo contém 0.
+  const leaves = [];
+  const visit = (i, j, size) => {
+    if (!contains0(X(i), X(i + size), Y(j), Y(j + size))) return;
+    if (size === 1) {
+      if (leaves.length >= maxCells) fail('implicitplot: curva complexa demais para a resolução; reduza resolution');
+      leaves.push(i, j);
+      return;
+    }
+    const h = size / 2;
+    visit(i, j, h);
+    visit(i + h, j, h);
+    visit(i, j + h, h);
+    visit(i + h, j + h, h);
+  };
+  visit(0, 0, N);
+
+  // Valores nos vértices (compartilhados entre células vizinhas).
+  const M = N + 1;
+  const vals = new Map();
+  const V = (i, j) => {
+    const k = i * M + j;
+    let v = vals.get(k);
+    if (v === undefined) {
+      v = f(X(i), Y(j));
+      if (v === 0) v = Number.MIN_VALUE; // zero conta como positivo
+      vals.set(k, v);
+    }
+    return v;
+  };
+
+  // Ponto da curva sobre cada aresta: horizontal (i, j)-(i+1, j) tem chave
+  // 2(iM + j); vertical (i, j)-(i, j+1), 2(iM + j) + 1.
+  const points = new Map();
+  const edgePoint = (key) => {
+    let p = points.get(key);
+    if (p) return p;
+    const base = key >> 1, i = Math.floor(base / M), j = base % M;
+    const [i2, j2] = key & 1 ? [i, j + 1] : [i + 1, j];
+    const ax = X(i), ay = Y(j), bx = X(i2), by = Y(j2);
+    const t = edgeRoot((s) => f(ax + s * (bx - ax), ay + s * (by - ay)), V(i, j), V(i2, j2));
+    p = [ax + t * (bx - ax), ay + t * (by - ay)];
+    points.set(key, p);
+    return p;
+  };
+  const H = (i, j) => 2 * (i * M + j), Vk = (i, j) => 2 * (i * M + j) + 1;
+
+  // Marching squares: segmentos como pares de chaves de aresta.
+  const adj = new Map();
+  const link = (a, b) => {
+    if (!adj.has(a)) adj.set(a, []);
+    if (!adj.has(b)) adj.set(b, []);
+    adj.get(a).push(b);
+    adj.get(b).push(a);
+  };
+  for (let k = 0; k < leaves.length; k += 2) {
+    const i = leaves[k], j = leaves[k + 1];
+    // Cantos em ordem: (i,j), (i+1,j), (i+1,j+1), (i,j+1); arestas entre eles.
+    const s = [V(i, j) > 0, V(i + 1, j) > 0, V(i + 1, j + 1) > 0, V(i, j + 1) > 0];
+    const e = [H(i, j), Vk(i + 1, j), H(i, j + 1), Vk(i, j)];
+    const cross = [0, 1, 2, 3].filter((q) => s[q] !== s[(q + 1) % 4]);
+    if (cross.length === 2) link(e[cross[0]], e[cross[1]]);
+    else if (cross.length === 4) {
+      // Sela: o sinal do centro decide quais cantos ficam ligados.
+      const c = f(X(i) + hx / 2, Y(j) + hy / 2) > 0;
+      if (c === s[0]) {
+        link(e[0], e[1]); // isola o canto 1
+        link(e[2], e[3]); // isola o canto 3
+      } else {
+        link(e[3], e[0]); // isola o canto 0
+        link(e[1], e[2]); // isola o canto 2
+      }
+    }
+  }
+
+  // Encadeia: primeiro as cadeias abertas (pontas de grau 1), depois os ciclos.
+  const used = new Set();
+  const lines = [];
+  const walk = (start) => {
+    const keys = [start];
+    used.add(start);
+    let prev = null, cur = start;
+    for (;;) {
+      const next = adj.get(cur).find((n) => n !== prev && !used.has(n));
+      if (next === undefined) {
+        const closed = keys.length > 2 && adj.get(cur).includes(start) && cur !== start;
+        return { keys, closed };
+      }
+      used.add(next);
+      keys.push(next);
+      prev = cur;
+      cur = next;
+    }
+  };
+  for (const [k, ns] of adj) if (ns.length === 1 && !used.has(k)) lines.push(walk(k));
+  for (const k of adj.keys()) if (!used.has(k)) lines.push(walk(k));
+  return lines.map(({ keys, closed }) => ({ pts: keys.map(edgePoint), closed }));
+}
+
+return { zeroSet };
+})();
 // ---- src/js/runtime/show.js
 __m["src/js/runtime/show.js"] = (() => {
 // Converte valores da linguagem em estruturas de exibição serializáveis
@@ -4296,6 +4486,7 @@ const { Elem, Ring, ZZ, QQ, RR, CC, ZmodRing, FiniteField, PolyRing, MPolyRing, 
 const { Tuple, Func, Factored, Graphic, Widget, UNIT, asGraphic } = __m["src/js/runtime/values.js"];
 const { fail } = __m["src/js/runtime/errors.js"];
 const { affine, affineItems, mapItems } = __m["src/js/runtime/geom.js"];
+const { zeroSet } = __m["src/js/runtime/implicit.js"];
 const { showText } = __m["src/js/runtime/show.js"];
 const { Env, callValue, toInt, toBool, int, iterable, range, index, valuesEqual, typeName, matrixFromRows, setRingCall, setEvalPoly, setToStr, currentContext, binop } = __m["src/js/lang/eval.js"];
 
@@ -5741,6 +5932,63 @@ function makeGlobals() {
     });
     return prim('line', { pts: out }, kw, ['points']);
   }, 'curve(t -> z(t), a, b, points=400): curva paramétrica');
+  // Conjunto zero de p(x, y): fatoração exata na FLINT (cada fator irredutível
+  // uma vez, sem multiplicidades) e traçado em ponto flutuante (implicit.js).
+  const IMPLICIT_OPTS = ['xlim', 'ylim', 'resolution', 'vars'];
+  def('implicitplot', 1, ([p], kw) => {
+    if (!isPoly(p)) fail('implicitplot espera um polinômio em x e y');
+    const R = p.ring;
+    if (R.base !== ZZ && R.base !== QQ) fail('implicitplot requer coeficientes em ZZ ou QQ');
+    const names = R instanceof MPolyRing ? R.vars : [R.v];
+    // Eixos: vars = [u, v], ou x e y se o anel os tem, ou as duas primeiras variáveis.
+    let axes;
+    if (kw.vars !== undefined) {
+      axes = iterable(kw.vars).map(varName);
+      if (axes.length !== 2 || axes[0] === axes[1]) fail('vars deve ser [u, v] com duas variáveis distintas');
+    } else if (names.includes('x') && names.includes('y')) axes = ['x', 'y'];
+    else if (names.length >= 2) axes = names.slice(0, 2);
+    else axes = names[0] === 'y' ? ['x', 'y'] : [names[0], 'y'];
+    const used = R instanceof MPolyRing ? R.usedVars(p).map((i) => R.vars[i]) : (R.degree(p) > 0 ? [R.v] : []);
+    const extra = used.filter((v) => !axes.includes(v));
+    if (extra.length) fail(`implicitplot: p deve depender só de ${axes.join(' e ')} (usa também ${extra.join(', ')})`);
+    if (isZero(p)) fail('implicitplot: o polinômio zero se anula em todo o plano');
+    const lim = limits(kw);
+    const xlim = lim.xlim ?? [-3, 3], ylim = lim.ylim ?? xlim;
+    const resolution = kw.resolution === undefined ? 512 : toInt(kw.resolution, 'resolution');
+    if (resolution < 8 || resolution > 4096) fail('resolution deve estar entre 8 e 4096');
+    const attrs = { color: 1, ...attrsOf(kw, IMPLICIT_OPTS) };
+    const items = [];
+    for (const t of factored0(p)) {
+      const C = denseFloat(t.items[0], axes);
+      if (!C) continue;
+      for (const { pts, closed } of zeroSet(C, { xlim, ylim, resolution })) {
+        items.push({ g: 'line', pts, closed, attrs });
+      }
+    }
+    return new Graphic(items, { xlim, ylim, aspect: 'equal' });
+  }, 'implicitplot(p, xlim=, ylim=, resolution=512): curva p(x, y) = 0');
+  // Fatores irredutíveis (com multiplicidade) de um polinômio de ZZ/QQ.
+  const factored0 = (p) => env.lookup('factor').impl([p]);
+  // Matriz C[i][j] (coeficiente de u^i v^j, normalizada) ou null se constante.
+  const denseFloat = (q, [u, v]) => {
+    const R = q.ring;
+    const terms = termsOf(q);
+    const iu = R instanceof MPolyRing ? R.index(u) : R.v === u ? 0 : -1;
+    const iv = R instanceof MPolyRing ? R.index(v) : R.v === v ? 0 : -1;
+    const eu = (e) => (iu < 0 ? 0 : e[iu]), ev = (e) => (iv < 0 ? 0 : e[iv]);
+    const dx = Math.max(...terms.map(({ e }) => eu(e))), dy = Math.max(...terms.map(({ e }) => ev(e)));
+    if (dx === 0 && dy === 0) return null;
+    const C = Array.from({ length: dx + 1 }, () => new Array(dy + 1).fill(0));
+    let big = 0;
+    for (const { c, e } of terms) {
+      const d = c.ring.toNumber(c);
+      if (!Number.isFinite(d)) fail('implicitplot: coeficientes grandes demais');
+      C[eu(e)][ev(e)] = d;
+      big = Math.max(big, Math.abs(d));
+    }
+    for (const row of C) for (let j = 0; j < row.length; j++) row[j] /= big;
+    return C;
+  };
   def('text', 2, ([str, p], kw) => {
     const POS = ['c', 'n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
     const pos = kw.pos ?? 'c';
@@ -6699,6 +6947,14 @@ const RULES = [
   [/^(\w+_mpoly) requer um polinômio de (.+)\[x, y, \.\.\.\] como argumento$/, '$1 requires a polynomial of $2[x, y, ...] as argument'],
   [/^(.+) requer um polinômio em várias variáveis como argumento$/, '$1 requires a multivariate polynomial as argument'],
   [/^avaliação grande demais$/, 'evaluation too large'],
+  [/^implicitplot espera um polinômio em x e y$/, 'implicitplot expects a polynomial in x and y'],
+  [/^implicitplot requer coeficientes em ZZ ou QQ$/, 'implicitplot requires coefficients in ZZ or QQ'],
+  [/^implicitplot: p deve depender só de (.+) e (.+) \(usa também (.+)\)$/, 'implicitplot: p must depend only on $1 and $2 (also uses $3)'],
+  [/^implicitplot: o polinômio zero se anula em todo o plano$/, 'implicitplot: the zero polynomial vanishes on the whole plane'],
+  [/^implicitplot: coeficientes grandes demais$/, 'implicitplot: coefficients too large'],
+  [/^implicitplot: curva complexa demais para a resolução; reduza resolution$/, 'implicitplot: curve too complex for the resolution; reduce resolution'],
+  [/^resolution deve estar entre (\d+) e (\d+)$/, 'resolution must be between $1 and $2'],
+  [/^vars deve ser \[u, v\] com duas variáveis distintas$/, 'vars must be [u, v] with two distinct variables'],
   [/^(fatoração|gcd|resultante|discriminante) falhou$/, (_, x) => `${{ 'fatoração': 'factorization', resultante: 'resultant', discriminante: 'discriminant' }[x] ?? x} failed`],
   [/^divisão por zero$/, 'division by zero'],
   [/^(.+) espera (\d+) argumentos?, recebeu (\d+)$/, (_, f, n, m) => `${w(f)} expects ${n} argument${n === '1' ? '' : 's'}, got ${m}`],
@@ -7519,8 +7775,10 @@ const EXAMPLES = [
       'gcd(x^3*y - x*y^3, x^2*y + 2x*y^2 + y^3)',
       { pt: '# Eliminação: o círculo encontra y = x³ onde a resultante se anula\nr = resultant(x^2 + y^2 - 1, y - x^3, y)', en: '# Elimination: the circle meets y = x³ where the resultant vanishes\nr = resultant(x^2 + y^2 - 1, y - x^3, y)' },
       'xs = realroots(r)',
-      'draw([circle(0, 1), curve(t -> t + i*t^3, -1.2, 1.2), points([a + i*a^3 | a <- xs], size = 6)])',
+      'implicitplot(x^2 + y^2 - 1) + implicitplot(y - x^3, color = 2) + points([a + i*a^3 | a <- xs], size = 6, color = "ink")',
       { pt: '# Discriminante da cúbica x³ + y·x + z\ndisc(x^3 + y*x + z, x)', en: '# Discriminant of the cubic x³ + y·x + z\ndisc(x^3 + y*x + z, x)' },
+      { pt: '# Curvas algébricas: y² = x³ − x + c muda de topologia em c = ±2/(3√3)\nc = slider(-1, 1, step = 0.05)', en: '# Algebraic curves: y² = x³ − x + c changes topology at c = ±2/(3√3)\nc = slider(-1, 1, step = 0.05)' },
+      'implicitplot(y^2 - x^3 + x - c, xlim = [-2.5, 2.5])',
       { pt: '# Derivadas parciais, substituição e avaliação\nf = x^2*y + y^3*z - z', en: '# Partial derivatives, substitution and evaluation\nf = x^2*y + y^3*z - z' },
       '(diff(f, x), diff(f, y), diff(f, z))',
       'subs(f, x = 1, y = z^2), f(1, 2, 1/3)',
@@ -7903,6 +8161,7 @@ disk ¦ draw ¦ disk(c, r, atributos) ¦ Disco (círculo preenchido); fill = "co
 arc ¦ draw ¦ arc(c, r, θ₀, θ₁, atributos) ¦ Arco de circunferência de θ₀ a θ₁ (radianos, sentido anti-horário). ¦ Circular arc from θ₀ to θ₁ (radians, counterclockwise). ¦ arc(0, 1, 0, pi) ;; arc(0, 1, 0, 3pi/2, width = 3) ¦
 sector ¦ draw ¦ sector(c, r, θ₀, θ₁, atributos) ¦ Setor circular ("fatia") de θ₀ a θ₁, preenchido. ¦ Circular sector ("slice") from θ₀ to θ₁, filled. ¦ sector(0, 1, 0, pi/3, color = 2) + sector(0, 1, pi/3, 2pi, color = 3, opacity = 0.4) ¦
 curve ¦ draw ¦ curve(t -> z(t), a, b, points=400, atributos) ¦ Curva paramétrica: z(t) devolve um complexo ou uma tupla (x, y). Pontos onde a função falha abrem lacunas. ¦ Parametric curve: z(t) returns a complex number or a tuple (x, y). Points where the function fails leave gaps. ¦ curve(t -> exp(i*t) + exp(7i*t)/2, 0, 2pi) ;; curve(t -> (sin(3t), sin(4t)), 0, 2pi, color = 4) ¦
+implicitplot ¦ draw ¦ implicitplot(p), implicitplot(p, xlim=, ylim=, resolution=512, vars=[u, v]) ¦ Curva p(x, y) = 0 de um polinômio com coeficientes em ℤ ou ℚ, como gráfico (aceita atributos como color e width). A FLINT fatora p e cada fator irredutível é traçado uma vez, então multiplicidades como (x² + y² − 1)² não atrapalham e componentes distintas se cruzam com nitidez. O traçado usa uma quadtree com aritmética intervalar, que descarta regiões sem zeros, e marching squares nas células de lado (janela)/resolution, com os pontos refinados sobre a curva. Janela padrão [−3, 3]². Ovais menores que uma célula e pontos isolados (como a origem em y² = x²(x − 1)) podem não aparecer. ¦ Curve p(x, y) = 0 of a polynomial with coefficients in ℤ or ℚ, as a graphic (accepts attributes such as color and width). FLINT factors p and each irreducible factor is traced once, so multiplicities such as (x² + y² − 1)² do no harm and distinct components cross cleanly. Tracing uses a quadtree with interval arithmetic, which discards regions without zeros, and marching squares on cells of side (window)/resolution, with points refined onto the curve. Default window [−3, 3]². Ovals smaller than a cell and isolated points (such as the origin on y² = x²(x − 1)) may not show. ¦ (x, y) = gens(QQ[x, y]); implicitplot(y^2 - x^3 + x) ;; (x, y) = gens(QQ[x, y]); implicitplot((x^2 + y^2)^2 - 2*(x^2 - y^2), xlim = [-2, 2], color = 2) ;; (x, y) = gens(QQ[x, y]); implicitplot(x^2 + y^2 - 4) + implicitplot(x*y - 1, color = 3) ¦ fmpq_mpoly_factor
 text ¦ draw ¦ text(s, p, pos="c", fontsize=13, color=) ¦ Texto no ponto p. pos indica onde o texto fica em relação ao ponto: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Valores que não são strings são exibidos como texto. ¦ Text at point p. pos says where the text sits relative to the point: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Non-string values are shown as text. ¦ point(1 + i) + text("1 + i", 1 + i, pos = "ne") ;; text(pi, 0, fontsize = 20) ¦
 group ¦ draw ¦ group(g₁, g₂, …, atributos) ¦ Agrupa gráficos; os atributos do grupo valem para as primitivas que não os definem (o filho prevalece). ¦ Groups graphics; the group's attributes apply to primitives that do not set them (the child wins). ¦ group(circle(0, 1), segment(-1, 1), color = "red", width = 2) ¦
 style ¦ draw ¦ style(g, atributos) ¦ Impõe atributos a todas as primitivas de g, sobrescrevendo os que elas já tinham. Útil com |>. ¦ Imposes attributes on every primitive of g, overriding those they already had. Handy with |>. ¦ [segment(0, exp(i*k*pi/6)) | k <- 1..12] |> style(color = "gray", width = 0.5) ¦
