@@ -186,6 +186,25 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-bottom-width
   outline: none;
 }
 .editor textarea::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); color: transparent; }
+/* espelho invisível para medir a posição do cursor */
+.editor pre.mirror { position: absolute; inset: 0; visibility: hidden; }
+
+/* sugestões e assinatura junto ao cursor */
+#assist {
+  position: fixed; z-index: 50; max-width: min(560px, calc(100vw - 8px));
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / .14); font: 13px/1.45 var(--mono);
+}
+#assist[hidden] { display: none; }
+#assist.completions { max-height: 260px; overflow-y: auto; padding: 3px 0; }
+#assist.signature { padding: 3px 8px; white-space: pre-wrap; }
+#assist.signature b { color: var(--accent); }
+.ac-item { padding: 1px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-item.sel { background: var(--accent-soft); white-space: normal; }
+.ac-name { font-weight: 500; }
+.ac-sig { color: var(--muted); margin-left: 10px; font-size: 12px; }
+.ac-desc { font: 12px/1.4 var(--sans); color: var(--muted); margin: 1px 0 3px; white-space: normal; }
+
 .t-kw { color: var(--t-kw); font-weight: 500; }
 .t-num { color: var(--t-num); }
 .t-s { color: var(--t-str); }
@@ -6982,13 +7001,18 @@ function makeGlobals() {
   };
   const snapTo = (q, snap) => (snap ? mul(int(Math.round(toNum(q) / toNum(snap))), snap) : q);
   // Ponto (cópia nova, para não marcar valores compartilhados) a partir do
-  // valor inicial ou da posição arrastada; aplica snap, limites e on.
-  const handlePoint = (init, at, o) => {
+  // valor inicial ou da posição arrastada; aplica snap, limites e on. Com
+  // tuple, o ponto é a tupla (x, y) e as posições arrastadas são racionais
+  // exatos (múltiplos de snap); senão, um complexo.
+  const handlePoint = (init, at, o, tuple) => {
     let z;
-    if (at) z = CC.fromParts(RR.coerce(snapTo(decimal(at[0], o.xlim), o.snap)), RR.coerce(snapTo(decimal(at[1], o.ylim), o.snap)));
-    else {
+    if (at) {
+      const x = snapTo(decimal(at[0], o.xlim), o.snap), y = snapTo(decimal(at[1], o.ylim), o.snap);
+      z = tuple ? new Tuple([x, y]) : CC.fromParts(RR.coerce(x), RR.coerce(y));
+    } else {
       pt(init, 'ponto inicial');
-      z = init instanceof Tuple ? CC.fromParts(RR.coerce(init.items[0]), RR.coerce(init.items[1])) : CC.op('acb_set', CC.coerce(init));
+      if (tuple) z = new Tuple([...init.items]);
+      else z = init instanceof Tuple ? CC.fromParts(RR.coerce(init.items[0]), RR.coerce(init.items[1])) : CC.op('acb_set', CC.coerce(init));
     }
     if (o.on) {
       const w = callValue(o.on, [z]);
@@ -7018,10 +7042,10 @@ function makeGlobals() {
     const prev = c.widgets[i];
     const raw = prev && prev.kind === 'handle' && prev.value && prev.value.from === from ? prev.value : null;
     c.widgets[i] = { kind: 'handle', value: raw };
-    const z = handlePoint(init, raw && raw.at, o);
+    const z = handlePoint(init, raw && raw.at, o, init instanceof Tuple);
     HANDLE_OF.set(z, { id: c.cellId, index: i, from, snap: o.snap ? toNum(o.snap) : null });
-    return new Widget('handle', { ...handleSpec(o, kw, from), index: i }, z, { text: pointText(pt(z)), at: pt(z) });
-  }, 'handle(z₀, snap=, xlim=, ylim=, on=): ponto de controle arrastável nos gráficos');
+    return new Widget('handle', { ...handleSpec(o, kw, from), index: i }, z, { text: z instanceof Tuple ? showText(z) : pointText(pt(z)), at: pt(z) });
+  }, 'handle(z₀, snap=, xlim=, ylim=, on=): ponto de controle arrastável nos gráficos; com z₀ = (x, y), devolve uma tupla de racionais');
   def('handles', 1, ([zs], kw) => {
     const c = currentContext();
     const o = handleOpts(kw);
@@ -7035,15 +7059,16 @@ function makeGlobals() {
     c.widgets[i] = { kind: 'handles', value: raw };
     // Entradas: número k = k-ésimo ponto inicial; [x, y] = posição arrastada.
     const entries = raw ? raw.pts : inits.map((_, k) => k);
+    const tuple = inits.length > 0 && inits.every((z) => z instanceof Tuple);
     const base = { id: c.cellId, index: i, from, entries, snap: o.snap ? toNum(o.snap) : null, min };
     const vs = entries.map((e, k) => {
-      const z = typeof e === 'number' ? handlePoint(inits[e], null, o) : handlePoint(null, e, o);
+      const z = typeof e === 'number' ? handlePoint(inits[e], null, o, tuple) : handlePoint(null, e, o, tuple);
       HANDLE_OF.set(z, { ...base, sub: k });
       return z;
     });
     HANDLE_OF.set(vs, { ...base, list: true, add: kw.add === true, max: Number.isFinite(max) ? max : null });
     const at = vs.map((z) => pt(z));
-    return new Widget('handles', { ...handleSpec(o, kw, from), index: i }, vs, { text: `[${at.map(pointText).join(', ')}]`, at });
+    return new Widget('handles', { ...handleSpec(o, kw, from), index: i }, vs, { text: tuple ? showText(vs) : `[${at.map(pointText).join(', ')}]`, at });
   }, 'handles([z₁, …], add=false, min=, max=, snap=, ...): lista de pontos de controle');
   def('checkbox', null, (args, kw) => widget('checkbox', { label: kw.label ?? null }, kw.value === true, (v) => !!v), 'checkbox(value=false)');
   def('textinput', null, (args, kw) => widget('text', { label: kw.label ?? null }, kw.value ?? '', (v) => String(v)), 'textinput(value=""): campo de texto');
@@ -7723,7 +7748,8 @@ complexos (<code>1 + 2i</code>) ou tuplas <code>(x, y)</code> e atributos nomead
 <code>p = handle(1 + i)</code> cria um ponto arrastável: todo gráfico que recebe <code>p</code>
 mostra um marcador que pode ser movido com o mouse, e as células dependentes acompanham.</p>
 <p><kbd>Shift</kbd>+<kbd>Enter</kbd> avalia · <kbd>Alt</kbd>+<kbd>Enter</kbd> nova célula ·
-<kbd>Ctrl</kbd>+<kbd>.</kbd> interrompe</p>`,
+<kbd>Ctrl</kbd>+<kbd>.</kbd> interrompe ·
+<kbd>Ctrl</kbd>+<kbd>Espaço</kbd> sugestões (<kbd>Tab</kbd> ou <kbd>Enter</kbd> aceita)</p>`,
   en: `<p>Integers and rationals are exact. Decimals and transcendental functions produce
 <em>balls</em>: approximations with a guaranteed error radius (Arb). Comparisons that the
 current precision cannot decide raise an error — increase <code>prec</code>.</p>
@@ -7744,7 +7770,8 @@ complex numbers (<code>1 + 2i</code>) or tuples <code>(x, y)</code> and keyword 
 <code>p = handle(1 + i)</code> creates a draggable point: every plot that receives <code>p</code>
 shows a marker you can move with the mouse, and dependent cells follow.</p>
 <p><kbd>Shift</kbd>+<kbd>Enter</kbd> evaluates · <kbd>Alt</kbd>+<kbd>Enter</kbd> new cell ·
-<kbd>Ctrl</kbd>+<kbd>.</kbd> interrupts</p>`,
+<kbd>Ctrl</kbd>+<kbd>.</kbd> interrupts ·
+<kbd>Ctrl</kbd>+<kbd>Space</kbd> suggestions (<kbd>Tab</kbd> or <kbd>Enter</kbd> accepts)</p>`,
 };
 
 const SYNTAX_CODE = {
@@ -8748,7 +8775,149 @@ function symbolAt(src, end) {
   return null;
 }
 
-return { highlight, symbolAt };
+return { KEYWORDS, highlight, symbolAt };
+})();
+// ---- src/ui/editing.js
+__m["src/ui/editing.js"] = (() => {
+// Edição no editor de células, em funções puras sobre (texto, seleção):
+// fechamento de delimitadores, indentação, palavra sob o cursor para
+// autocompletar e a chamada que envolve o cursor (para mostrar a assinatura).
+// Cada edição devolve {text, start, end, sel: [a, b]}: substituir
+// src[start, end) por text e deixar a seleção em [a, b], ou null.
+
+const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"' };
+const CLOSERS = new Set([')', ']', '}']);
+const WORD = /[\p{L}\p{N}_']/u;
+
+// Contexto em pos: dentro de string, de comentário ou código.
+function contextAt(src, pos) {
+  let str = false;
+  for (let k = 0; k < pos; k++) {
+    const ch = src[k];
+    if (str) {
+      if (ch === '\\') k++;
+      else if (ch === '"') str = false;
+      else if (ch === '\n') str = false;
+    } else if (ch === '"') str = true;
+    else if (ch === '#') {
+      const nl = src.indexOf('\n', k);
+      if (nl < 0 || nl >= pos) return 'comment';
+      k = nl;
+    }
+  }
+  return str ? 'string' : 'code';
+}
+
+// Digitação de ch com a seleção [s, e).
+function typeChar(src, s, e, ch) {
+  const ctx = contextAt(src, s);
+  if (ctx === 'comment') return null;
+  // Com seleção, delimitadores de abertura envolvem o trecho.
+  if (s !== e && PAIRS[ch] && ctx === 'code') {
+    return { text: ch + src.slice(s, e) + PAIRS[ch], start: s, end: e, sel: [s + 1, e + 1] };
+  }
+  if (s !== e) return null;
+  const next = src[s] ?? '';
+  // Fechamento já presente: só avança.
+  if ((CLOSERS.has(ch) && next === ch && ctx === 'code') || (ch === '"' && next === '"' && ctx === 'string')) {
+    return { text: '', start: s, end: s, sel: [s + 1, s + 1] };
+  }
+  if (ctx !== 'code' || !PAIRS[ch]) return null;
+  // Abre o par só antes de espaço, fim, fechamento ou separador.
+  if (next && !/[\s)\]},;]/.test(next)) return null;
+  if (ch === '"' && WORD.test(src[s - 1] ?? '')) return null;
+  return { text: ch + PAIRS[ch], start: s, end: s, sel: [s + 1, s + 1] };
+}
+
+// Backspace entre um par vazio apaga os dois.
+function backspace(src, s, e) {
+  if (s !== e || s === 0) return null;
+  const open = src[s - 1];
+  if (!PAIRS[open] || src[s] !== PAIRS[open]) return null;
+  if (contextAt(src, s - 1) !== 'code') return null;
+  return { text: '', start: s - 1, end: s + 1, sel: [s - 1, s - 1] };
+}
+
+// Enter mantém a indentação da linha; entre um par aberto, indenta mais e
+// leva o fechamento para a linha seguinte.
+function newline(src, s, e, unit = '  ') {
+  const lineStart = src.lastIndexOf('\n', s - 1) + 1;
+  const indent = /^[ \t]*/.exec(src.slice(lineStart, s))[0];
+  const before = src.slice(lineStart, s).trimEnd().slice(-1);
+  const after = src.slice(e).match(/^[ \t]*(.?)/)[1];
+  if (PAIRS[before] && before !== '"' && after === PAIRS[before]) {
+    const inner = '\n' + indent + unit;
+    return { text: inner + '\n' + indent, start: s, end: e, sel: [s + inner.length, s + inner.length] };
+  }
+  if (PAIRS[before] && before !== '"') {
+    const text = '\n' + indent + unit;
+    return { text, start: s, end: e, sel: [s + text.length, s + text.length] };
+  }
+  const text = '\n' + indent;
+  return { text, start: s, end: e, sel: [s + text.length, s + text.length] };
+}
+
+// Palavra (identificador) que termina no cursor: {word, start}, ou null.
+function wordBefore(src, pos) {
+  let a = pos;
+  while (a > 0 && WORD.test(src[a - 1])) a--;
+  if (a === pos || /\p{N}/u.test(src[a])) return null;
+  if (contextAt(src, a) !== 'code') return null;
+  return { word: src.slice(a, pos), start: a };
+}
+
+// Identificadores do texto (para sugerir nomes definidos no caderno).
+function identifiers(src) {
+  const out = new Set();
+  const re = /("(?:\\.|[^"\\\n])*"?)|(#[^\n]*)|([\p{L}_][\p{L}\p{N}_']*)/gu;
+  let m;
+  while ((m = re.exec(src))) if (m[3]) out.add(m[3]);
+  return out;
+}
+
+// Sugestões para o prefixo: primeiro as que começam com ele (com a mesma
+// caixa antes), depois as que o contêm; nomes mais curtos antes.
+function complete(prefix, names, limit = 12) {
+  const p = prefix.toLowerCase();
+  const exact = [], starts = [], inner = [];
+  for (const n of names) {
+    if (n === prefix) continue;
+    const l = n.toLowerCase();
+    if (n.startsWith(prefix)) exact.push(n);
+    else if (l.startsWith(p)) starts.push(n);
+    else if (p.length >= 2 && l.includes(p)) inner.push(n);
+  }
+  const order = (a, b) => a.length - b.length || a.localeCompare(b);
+  return [...exact.sort(order), ...starts.sort(order), ...inner.sort(order)].slice(0, limit);
+}
+
+// Chamada f( … ) aberta que contém o cursor: {name, arg} com o índice do
+// argumento corrente (a partir de 0), ou null.
+function callAt(src, pos) {
+  let depth = 0, arg = 0;
+  for (let k = pos - 1; k >= 0; k--) {
+    const ch = src[k];
+    if (ch === '\n' && depth === 0 && src[k - 1] !== ',' && src[k - 1] !== '(') {
+      // Linha anterior sem continuação: a chamada não passa daqui.
+      const prev = src.slice(0, k).trimEnd().slice(-1);
+      if (prev && !',(['.includes(prev)) return null;
+    }
+    if (')]}'.includes(ch)) depth++;
+    else if ('([{'.includes(ch)) {
+      if (depth > 0) { depth--; continue; }
+      if (ch !== '(') { arg = 0; continue; }
+      let b = k;
+      while (b > 0 && WORD.test(src[b - 1])) b--;
+      const name = src.slice(b, k);
+      if (!name || /\p{N}/u.test(name[0])) return null;
+      if (contextAt(src, b) !== 'code') return null;
+      return { name, arg };
+    } else if (ch === ',' && depth === 0) arg++;
+  }
+  return null;
+}
+
+return { contextAt, typeChar, backspace, newline, wordBefore, identifiers, complete, callAt };
 })();
 // ---- src/ui/examples.js
 __m["src/ui/examples.js"] = (() => {
@@ -9265,7 +9434,7 @@ sector ¦ draw ¦ sector(c, r, θ₀, θ₁, atributos) ¦ Setor circular ("fati
 curve ¦ draw ¦ curve(t -> z(t), a, b, points=400, atributos) ¦ Curva paramétrica: z(t) devolve um complexo ou uma tupla (x, y). Pontos onde a função falha abrem lacunas. ¦ Parametric curve: z(t) returns a complex number or a tuple (x, y). Points where the function fails leave gaps. ¦ curve(t -> exp(i*t) + exp(7i*t)/2, 0, 2pi) ;; curve(t -> (sin(3t), sin(4t)), 0, 2pi, color = 4) ¦
 implicitplot ¦ draw ¦ implicitplot(p), implicitplot(p, xlim=, ylim=, resolution=512, vars=[u, v]) ¦ Curva p(x, y) = 0 de um polinômio com coeficientes em ℤ ou ℚ, como gráfico (aceita atributos como color e width). A FLINT fatora p e cada fator irredutível é traçado uma vez, então multiplicidades como (x² + y² − 1)² não atrapalham e componentes distintas se cruzam com nitidez. O traçado usa uma quadtree com aritmética intervalar, que descarta regiões sem zeros, e marching squares nas células de lado (janela)/resolution, com os pontos refinados sobre a curva. Janela padrão [−3, 3]². Ovais menores que uma célula e pontos isolados (como a origem em y² = x²(x − 1)) podem não aparecer. ¦ Curve p(x, y) = 0 of a polynomial with coefficients in ℤ or ℚ, as a graphic (accepts attributes such as color and width). FLINT factors p and each irreducible factor is traced once, so multiplicities such as (x² + y² − 1)² do no harm and distinct components cross cleanly. Tracing uses a quadtree with interval arithmetic, which discards regions without zeros, and marching squares on cells of side (window)/resolution, with points refined onto the curve. Default window [−3, 3]². Ovals smaller than a cell and isolated points (such as the origin on y² = x²(x − 1)) may not show. ¦ (x, y) = gens(QQ[x, y]); implicitplot(y^2 - x^3 + x) ;; (x, y) = gens(QQ[x, y]); implicitplot((x^2 + y^2)^2 - 2*(x^2 - y^2), xlim = [-2, 2], color = 2) ;; (x, y) = gens(QQ[x, y]); implicitplot(x^2 + y^2 - 4) + implicitplot(x*y - 1, color = 3) ¦ fmpq_mpoly_factor
 text ¦ draw ¦ text(s, p, pos="c", fontsize=13, color=) ¦ Texto no ponto p. pos indica onde o texto fica em relação ao ponto: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Valores que não são strings são exibidos como texto. ¦ Text at point p. pos says where the text sits relative to the point: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Non-string values are shown as text. ¦ point(1 + i) + text("1 + i", 1 + i, pos = "ne") ;; text(pi, 0, fontsize = 20) ¦
-handle ¦ draw ¦ handle(z₀, snap=, xlim=, ylim=, on=, label=) ¦ Ponto de controle: um valor de entrada (como slider) que começa em z₀ e muda ao ser arrastado nos gráficos. Todo primitivo que recebe o próprio valor (point, segment, polygon, circle, text…, em qualquer célula) mostra um marcador arrastável naquele vértice; valores derivados, como (a + b)/2, não arrastam. A célula mostra o ponto e campos x e y editáveis; setas do teclado movem o marcador focado. snap = h arredonda à grade h (valores exatos); xlim/ylim limitam a região; on = f projeta a posição (on = z -> z/abs(z) prende ao círculo unitário). Editar z₀ no código reposiciona o ponto. ¦ Control point: an input value (like slider) that starts at z₀ and changes when dragged in plots. Every primitive that receives the value itself (point, segment, polygon, circle, text…, in any cell) shows a draggable marker at that vertex; derived values, such as (a + b)/2, do not drag. The cell shows the point and editable x and y fields; arrow keys move the focused marker. snap = h rounds to the grid h (exact values); xlim/ylim restrict the region; on = f projects the position (on = z -> z/abs(z) pins it to the unit circle). Editing z₀ in the code repositions the point. ¦ p = handle(1 + i); point(p) + circle(p, 1) ;; q = handle(0, snap = 1/4) ;; u = handle(1, on = z -> z/abs(z)) ¦
+handle ¦ draw ¦ handle(z₀, snap=, xlim=, ylim=, on=, label=) ¦ Ponto de controle: um valor de entrada (como slider) que começa em z₀ e muda ao ser arrastado nos gráficos. Todo primitivo que recebe o próprio valor (point, segment, polygon, circle, text…, em qualquer célula) mostra um marcador arrastável naquele vértice; valores derivados, como (a + b)/2, não arrastam. A célula mostra o ponto e campos x e y editáveis; setas do teclado movem o marcador focado. snap = h arredonda à grade h (valores exatos); xlim/ylim limitam a região; on = f projeta a posição (on = z -> z/abs(z) prende ao círculo unitário). Com z₀ = (x, y), o valor é uma tupla de coordenadas racionais exatas (com snap = 1/3, múltiplos de 1/3); com z₀ complexo, um número complexo. Editar z₀ no código reposiciona o ponto. ¦ Control point: an input value (like slider) that starts at z₀ and changes when dragged in plots. Every primitive that receives the value itself (point, segment, polygon, circle, text…, in any cell) shows a draggable marker at that vertex; derived values, such as (a + b)/2, do not drag. The cell shows the point and editable x and y fields; arrow keys move the focused marker. snap = h rounds to the grid h (exact values); xlim/ylim restrict the region; on = f projects the position (on = z -> z/abs(z) pins it to the unit circle). With z₀ = (x, y), the value is a tuple of exact rational coordinates (with snap = 1/3, multiples of 1/3); with complex z₀, a complex number. Editing z₀ in the code repositions the point. ¦ p = handle(1 + i); point(p) + circle(p, 1) ;; q = handle(0, snap = 1/4) ;; r = handle((0, 0), snap = 1/3) ;; u = handle(1, on = z -> z/abs(z)) ¦
 handles ¦ draw ¦ handles([z₁, …], add=false, min=, max=, snap=, …) ¦ Lista de pontos de controle. Cada ponto é arrastável como em handle; com add = true, clicar no fundo de um gráfico que recebe a lista inteira (points, line, polygon) acrescenta um ponto (numa poligonal, no segmento mais próximo) e Alt+clique num marcador o remove, respeitando min e max. ¦ List of control points. Each point drags as in handle; with add = true, clicking the background of a plot that receives the whole list (points, line, polygon) adds a point (on a polyline, at the nearest segment) and Alt+click on a marker removes it, within min and max. ¦ vs = handles([0, 1, i], add = true); polygon(vs) ;; ps = handles([-1, 0, 1]); interpolate(map(ps, re), map(ps, im)) ¦
 group ¦ draw ¦ group(g₁, g₂, …, atributos) ¦ Agrupa gráficos; os atributos do grupo valem para as primitivas que não os definem (o filho prevalece). ¦ Groups graphics; the group's attributes apply to primitives that do not set them (the child wins). ¦ group(circle(0, 1), segment(-1, 1), color = "red", width = 2) ¦
 style ¦ draw ¦ style(g, atributos) ¦ Impõe atributos a todas as primitivas de g, sobrescrevendo os que elas já tinham. Útil com |>. ¦ Imposes attributes on every primitive of g, overriding those they already had. Handy with |>. ¦ [segment(0, exp(i*k*pi/6)) | k <- 1..12] |> style(color = "gray", width = 0.5) ¦
@@ -9335,7 +9504,8 @@ __m["src/ui/ui.js"] = (() => {
 
 const { render, ringName, esc } = __m["src/ui/render.js"];
 const { renderGraphics, handleKey } = __m["src/ui/plot.js"];
-const { highlight, symbolAt } = __m["src/ui/highlight.js"];
+const { highlight, symbolAt, KEYWORDS } = __m["src/ui/highlight.js"];
+const { typeChar, backspace, newline, wordBefore, identifiers, complete, callAt } = __m["src/ui/editing.js"];
 const { EXAMPLES, pick } = __m["src/ui/examples.js"];
 const { t, setLang, getLang, detectLang, applyStatic, translateError, SYNTAX_CODE, SYNTAX_NOTES } = __m["src/ui/i18n.js"];
 const { REF, CATEGORIES, ALIASES, flintDocUrl } = __m["src/ui/reference.js"];
@@ -9423,6 +9593,7 @@ function onWorker(msg) {
       state.ready = true;
       state.docs = msg.docs;
       state.builtins = new Set(msg.docs.map(([n]) => n));
+      state.docMap = null;
       state.sigs = msg.sigs ?? {};
       $('#version').textContent = msg.version;
       buildReference();
@@ -9526,6 +9697,7 @@ function buildCellEl(c) {
   ta.addEventListener('input', (ev) => {
     if (symbolize(ta, ev)) return;
     c.src = ta.value;
+    assistOnInput(ta, ev);
     refreshHighlight(c);
     autosize(c);
     markStale(c);
@@ -9535,7 +9707,10 @@ function buildCellEl(c) {
       c.timer = setTimeout(() => evalCell(c), AUTORUN_MS);
     }
   });
-  ta.addEventListener('keydown', (ev) => onKey(ev, c));
+  ta.addEventListener('keydown', (ev) => { if (!assistKey(ev, ta) && !editKey(ev, ta)) onKey(ev, c); });
+  ta.addEventListener('click', () => showSignature(ta));
+  ta.addEventListener('keyup', (ev) => { if (ev.key.startsWith('Arrow') && !state.assist?.items) showSignature(ta); });
+  ta.addEventListener('blur', closeAssist);
   ta.addEventListener('scroll', () => { $('.hl', el).scrollTop = ta.scrollTop; });
   el.addEventListener('click', (ev) => {
     const b = ev.target.closest('button[data-act]');
@@ -10140,6 +10315,241 @@ function symbolize(ta, ev) {
   return false;
 }
 
+// --------------------------------------------------------------- assistência
+
+// Aplica uma edição de editing.js. Usa execCommand para que Ctrl+Z desfaça;
+// o evento de entrada resultante atualiza a célula.
+function applyEdit(ta, r) {
+  ta.setSelectionRange(r.start, r.end);
+  if (r.start !== r.end || r.text) {
+    const ok = document.execCommand && document.execCommand(r.text ? 'insertText' : 'delete', false, r.text);
+    if (!ok) {
+      ta.setRangeText(r.text, r.start, r.end, 'end');
+      ta.dispatchEvent(new Event('input'));
+    }
+  }
+  ta.setSelectionRange(...r.sel);
+}
+
+// Pares de delimitadores, Backspace num par vazio e Enter com indentação.
+function editKey(ev, ta) {
+  if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.isComposing) return false;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  let r = null;
+  if (ev.key.length === 1 && '()[]{}"'.includes(ev.key)) r = typeChar(ta.value, s, e, ev.key);
+  else if (ev.key === 'Backspace') r = backspace(ta.value, s, e);
+  else if (ev.key === 'Enter' && !ev.shiftKey) r = newline(ta.value, s, e);
+  if (!r) return false;
+  ev.preventDefault();
+  applyEdit(ta, r);
+  return true;
+}
+
+const docMap = () => (state.docMap ??= new Map(state.docs));
+
+// Assinatura de um nome: a da referência ou a do docstring da função.
+function signatureOf(name) {
+  const ref = REF.get(ALIASES[name] ?? name);
+  if (ref) return ref.sig;
+  const doc = docMap().get(name);
+  if (!doc) return null;
+  const k = doc.indexOf('): ');
+  return k >= 0 ? doc.slice(0, k + 1) : null;
+}
+
+// Elemento flutuante (lista de sugestões ou assinatura), junto ao cursor.
+function assistEl() {
+  let el = $('#assist');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'assist';
+    el.setAttribute('role', 'listbox');
+    el.hidden = true;
+    // Clicar numa sugestão não tira o foco do editor.
+    el.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      const li = ev.target.closest('[data-k]');
+      if (li && state.assist?.items) { state.assist.idx = +li.dataset.k; acceptCompletion(); }
+    });
+    document.body.append(el);
+  }
+  return el;
+}
+
+// Posição do cursor na tela: espelho do editor com um marcador no ponto.
+function caretRect(ta, pos) {
+  const pre = document.createElement('pre');
+  pre.className = 'mirror';
+  pre.textContent = ta.value.slice(0, pos);
+  const mark = document.createElement('span');
+  mark.textContent = '​';
+  pre.append(mark);
+  ta.parentElement.append(pre);
+  const r = mark.getBoundingClientRect();
+  pre.remove();
+  return r;
+}
+
+function placeAssist(ta, pos) {
+  const el = assistEl();
+  el.hidden = false;
+  const r = caretRect(ta, pos);
+  const h = el.offsetHeight, w = el.offsetWidth;
+  const below = r.bottom + 2 + h <= window.innerHeight || r.top - h - 2 < 0;
+  el.style.top = `${below ? r.bottom + 2 : r.top - h - 2}px`;
+  el.style.left = `${Math.max(4, Math.min(r.left, window.innerWidth - w - 4))}px`;
+}
+
+function closeAssist() {
+  state.assist = null;
+  const el = $('#assist');
+  if (el) el.hidden = true;
+}
+
+// Candidatos: palavras-chave, funções embutidas e nomes do caderno.
+function candidates() {
+  const kind = new Map();
+  for (const c of state.cells) for (const n of identifiers(c.src)) kind.set(n, 'var');
+  for (const n of state.builtins) kind.set(n, 'bi');
+  for (const n of KEYWORDS) kind.set(n, 'kw');
+  return kind;
+}
+
+function showCompletions(ta, explicit = false) {
+  const pos = ta.selectionStart;
+  if (pos !== ta.selectionEnd) return closeAssist();
+  const w = wordBefore(ta.value, pos) ?? (explicit ? { word: '', start: pos } : null);
+  if (!w || (!explicit && w.word.length < 2)) return closeAssist();
+  // Não sugere no meio de uma palavra.
+  if (/[\p{L}\p{N}_']/u.test(ta.value[pos] ?? '')) return closeAssist();
+  const kind = candidates();
+  const items = complete(w.word, kind.keys(), explicit ? 30 : 12);
+  if (!items.length) return explicit ? showSignature(ta) : closeAssist();
+  // Enter só aceita depois de escolher com as setas (ou com Ctrl+Espaço),
+  // para não atrapalhar quem só quer mudar de linha; Tab sempre aceita.
+  state.assist = { ta, start: w.start, items, idx: 0, kind, chosen: explicit };
+  drawCompletions();
+  placeAssist(ta, w.start);
+}
+
+function drawCompletions() {
+  const a = state.assist;
+  const el = assistEl();
+  el.className = 'completions';
+  const lang = getLang();
+  el.innerHTML = a.items.map((n, k) => {
+    const sig = a.kind.get(n) === 'bi' ? signatureOf(n) : null;
+    const ref = k === a.idx ? REF.get(ALIASES[n] ?? n) : null;
+    const desc = ref ? `<div class="ac-desc">${esc(ref[lang] ?? ref.pt)}</div>` : '';
+    return `<div class="ac-item${k === a.idx ? ' sel' : ''}" data-k="${k}" role="option" aria-selected="${k === a.idx}">` +
+      `<span class="ac-name t-${a.kind.get(n)}">${esc(n)}</span>` +
+      (sig && sig !== n ? `<span class="ac-sig">${esc(sig)}</span>` : '') + desc + '</div>';
+  }).join('');
+  el.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+}
+
+// Funções recebem parênteses (com o cursor dentro); constantes e anéis não.
+function isFunction(name) {
+  const sig = signatureOf(name);
+  return !!sig && sig.startsWith(name + '(');
+}
+
+function acceptCompletion() {
+  const a = state.assist;
+  const { ta } = a;
+  const name = a.items[a.idx];
+  const pos = ta.selectionStart;
+  if (wordBefore(ta.value, pos)?.start !== a.start) return closeAssist();
+  const call = a.kind.get(name) === 'bi' && isFunction(name) && ta.value[pos] !== '(';
+  const text = call ? name + '()' : name;
+  const at = a.start + name.length + (call ? 1 : 0);
+  closeAssist();
+  applyEdit(ta, { text, start: a.start, end: pos, sel: [at, at] });
+  closeAssist();
+  if (call) showSignature(ta);
+}
+
+// Navegação na lista de sugestões; Ctrl+Espaço abre a lista.
+function assistKey(ev, ta) {
+  if (ev.key === ' ' && (ev.ctrlKey || ev.metaKey)) {
+    ev.preventDefault();
+    showCompletions(ta, true);
+    return true;
+  }
+  const a = state.assist;
+  if (!a) return false;
+  if (ev.key === 'Escape') {
+    ev.preventDefault();
+    closeAssist();
+    return true;
+  }
+  if (!a.items) return false;
+  const mods = ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey;
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    const n = a.items.length;
+    a.idx = (a.idx + (ev.key === 'ArrowDown' ? 1 : n - 1)) % n;
+    a.chosen = true;
+    drawCompletions();
+    return true;
+  }
+  if (((ev.key === 'Enter' && a.chosen) || ev.key === 'Tab') && !mods) {
+    ev.preventDefault();
+    acceptCompletion();
+    return true;
+  }
+  if (ev.key === 'Enter' || ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') closeAssist();
+  return false;
+}
+
+// Assinatura da função cuja chamada contém o cursor, com o argumento
+// corrente em destaque.
+function showSignature(ta) {
+  const pos = ta.selectionStart;
+  const call = pos === ta.selectionEnd ? callAt(ta.value, pos) : null;
+  const sig = call && signatureOf(call.name);
+  if (!sig) return closeAssist();
+  const el = assistEl();
+  el.className = 'signature';
+  el.innerHTML = signatureHtml(sig, call.name, call.arg);
+  state.assist = { ta, sig: true };
+  placeAssist(ta, pos);
+}
+
+// Divide nas vírgulas de nível 0 (fora de parênteses e colchetes).
+function splitTop(s) {
+  const out = [];
+  let depth = 0, a = 0;
+  for (let k = 0; k < s.length; k++) {
+    if ('([{'.includes(s[k])) depth++;
+    else if (')]}'.includes(s[k])) depth--;
+    else if (s[k] === ',' && depth === 0) { out.push(s.slice(a, k)); a = k + 1; }
+  }
+  out.push(s.slice(a));
+  return out.map((x) => x.trim());
+}
+
+// A assinatura pode ter várias formas ("gen(R), gen(R, k)"): mostra a
+// primeira com argumentos suficientes.
+function signatureHtml(sig, name, arg) {
+  const forms = splitTop(sig).filter((f) => f.includes('('));
+  const parsed = forms.map((f) => {
+    const a = f.indexOf('('), b = f.lastIndexOf(')');
+    return { head: f.slice(0, a), args: b > a + 1 ? splitTop(f.slice(a + 1, b)) : [], tail: f.slice(b + 1) };
+  });
+  const form = parsed.find((p) => p.args.length > arg) ?? parsed[parsed.length - 1];
+  if (!form) return esc(sig);
+  const args = form.args.map((x, k) => (k === arg ? `<b>${esc(x)}</b>` : esc(x))).join(', ');
+  return `<span class="t-bi">${esc(form.head)}</span>(${args})${esc(form.tail)}`;
+}
+
+function assistOnInput(ta, ev) {
+  const typed = ev.inputType === 'insertText' && ev.data && /[\p{L}\p{N}_']$/u.test(ev.data);
+  if (typed || (ev.inputType?.startsWith('delete') && state.assist?.items)) showCompletions(ta);
+  else if (state.assist?.items) closeAssist();
+  if (!state.assist?.items) showSignature(ta);
+}
+
 // --------------------------------------------------------------- tema
 
 // Tema efetivo: escolha salva (data-theme) ou, sem ela, o do sistema.
@@ -10212,6 +10622,7 @@ async function main() {
     if (ev.key === '.' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); interrupt(); }
   });
   window.addEventListener('resize', () => state.cells.forEach(autosize));
+  window.addEventListener('scroll', closeAssist, true);
 
   startWorker();
   const nb = await initialNotebook();
