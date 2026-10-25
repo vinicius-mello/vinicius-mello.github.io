@@ -4939,13 +4939,28 @@ function makeGlobals() {
   }, 'lift(x): representante inteiro (ou polinomial)');
 
   // --------------------------------------------------------- aritmética
+  // |x|²: x² para reais, re² + im² para complexos e Σ |xᵢ|² para tuplas e
+  // listas (vetores); exato com coordenadas racionais.
+  const abs2 = (x) => {
+    if (x instanceof Tuple || Array.isArray(x)) {
+      const items = x instanceof Tuple ? x.items : x;
+      if (!items.length) fail('abs2 de vetor vazio');
+      return items.map(abs2).reduce((a, b) => add(a, b));
+    }
+    elem(x);
+    if (x.ring === ZZ || x.ring === QQ || x.ring === RR) return mul(x, x);
+    if (x.ring === CC) {
+      const re = CC.re(x), im = CC.im(x);
+      return add(mul(re, re), mul(im, im));
+    }
+    fail(`abs2 não definido em ${x.ring}`);
+  };
   // Norma euclidiana de uma tupla: √(Σ |xᵢ|²).
   const tupleNorm = (t) => {
     if (!t.items.length) fail('abs da tupla vazia');
-    const absf = env.lookup('abs').impl;
-    const s = t.items.reduce((acc, x) => add(acc, pow(absf([x]), int(2))), int(0));
-    return env.lookup('sqrt').impl([s]);
+    return env.lookup('sqrt').impl([abs2(t)]);
   };
+  def('abs2', 1, ([x]) => abs2(x), 'abs2(x) = |x|²: x², re² + im², ou Σ xᵢ² de uma tupla ou lista');
   def('abs', 1, ([x]) => vec((x) => {
     if (x instanceof Tuple) return tupleNorm(x);
     elem(x);
@@ -8093,6 +8108,8 @@ const RULES = [
   [/^operador (.+) entre tuplas: use \+ ou -, ou dot\(u, v\) para o produto escalar$/, 'operator $1 between tuples: use + or -, or dot(u, v) for the dot product'],
   [/^operador (.+) não se aplica à tupla vazia$/, 'operator $1 does not apply to the empty tuple'],
   [/^abs da tupla vazia$/, 'abs of the empty tuple'],
+  [/^abs2 de vetor vazio$/, 'abs2 of an empty vector'],
+  [/^abs2 não definido em (.+)$/, 'abs2 is not defined in $1'],
   [/^lista vazia$/, 'empty list'],
   [/^(min|max) de lista vazia$/, '$1 of an empty list'],
   [/^reduce de lista vazia sem valor inicial$/, 'reduce of an empty list without an initial value'],
@@ -9175,6 +9192,7 @@ base ¦ rings ¦ base(R) ¦ Anel de coeficientes de R[x], R[x, y, …] ou Mat(R)
 characteristic ¦ rings ¦ characteristic(R) ¦ Característica do anel. ¦ Characteristic of the ring. ¦ characteristic(GF(7^2)) ;; characteristic(QQ) ¦
 lift ¦ rings ¦ lift(x) ¦ Representante inteiro de um elemento de ℤ/nℤ, ou polinômio inteiro de um elemento de GF(q) (também para polinômios, inclusive em várias variáveis, e matrizes sobre ℤ/nℤ). ¦ Integer representative of an element of ℤ/nℤ, or integer polynomial of an element of GF(q) (also for polynomials, including multivariate ones, and matrices over ℤ/nℤ). ¦ lift(Zmod(7)(-1)) ;; F = GF(9); lift(gen(F)^5) ¦ fq_default_get_fmpz_poly fmpz_mod_poly_get_fmpz_poly
 abs ¦ arith ¦ abs(x) ¦ Valor absoluto (exato para inteiros e racionais; módulo para complexos). Para uma tupla (x, y, …), a norma euclidiana √(x² + y² + …): abs(p - q) é a distância entre os pontos p e q. ¦ Absolute value (exact for integers and rationals; modulus for complex numbers). For a tuple (x, y, …), the Euclidean norm √(x² + y² + …): abs(p - q) is the distance between points p and q. ¦ abs(-3/4) ;; abs(3 + 4i) ;; abs((1, 2) - (4, 6)) ¦ fmpz_abs fmpq_abs arb_abs acb_abs
+abs2 ¦ arith ¦ abs2(x) ¦ Quadrado do valor absoluto, |x|²: x² para reais, re² + im² para complexos e a soma dos quadrados das coordenadas de uma tupla ou lista (vetor). Com coordenadas racionais o resultado é exato, sem raiz: abs2(p - q) é o quadrado da distância entre os pontos p e q. ¦ Squared absolute value, |x|²: x² for reals, re² + im² for complex numbers and the sum of the squares of the coordinates of a tuple or list (vector). With rational coordinates the result is exact, with no square root: abs2(p - q) is the squared distance between points p and q. ¦ abs2((1, 2)) ;; abs2(3 + 4i) ;; abs2((1/2, 0) - (0, 1/3)) ¦
 sign ¦ arith ¦ sign(x) ¦ Sinal: −1, 0 ou 1. Para bolas, erro se o sinal não for decidível. ¦ Sign: −1, 0 or 1. For balls, an error if the sign is undecidable. ¦ sign(-7) ;; sign(pi - 3) ¦ fmpz_sgn fmpq_sgn arb_lt
 floor ¦ arith ¦ floor(x) ¦ Maior inteiro ≤ x. ¦ Largest integer ≤ x. ¦ floor(-7/2) ;; floor(pi^10) ¦ fmpz_fdiv_q arb_floor arb_get_unique_fmpz
 ceil ¦ arith ¦ ceil(x) ¦ Menor inteiro ≥ x. ¦ Smallest integer ≥ x. ¦ ceil(7/2) ;; ceil(exp(10)) ¦ arb_ceil arb_get_unique_fmpz
