@@ -1767,7 +1767,9 @@ const UNICODE_OPS = {
 };
 
 const isIdStart = (c) => /[\p{L}_]/u.test(c);
-const isIdPart = (c) => /[\p{L}\p{N}_']/u.test(c);
+// Expoentes sobrescritos (x², x⁻¹) não fazem parte de identificadores.
+const SUPERSCRIPT = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+const isIdPart = (c) => /[\p{L}\p{N}_']/u.test(c) && !SUPERSCRIPT[c];
 const isDigit = (c) => c >= '0' && c <= '9';
 
 // Tokens após os quais uma quebra de linha não termina a expressão.
@@ -1801,6 +1803,18 @@ function lex(src) {
       continue;
     }
     const start = i;
+    // Expoente sobrescrito: x² é x^2 e x⁻¹ é x^-1 (com a mesma precedência).
+    if (SUPERSCRIPT[c] || (c === '⁻' && SUPERSCRIPT[src[i + 1]])) {
+      toks.push({ t: 'op', v: '^', pos: i, end: i });
+      if (c === '⁻') toks.push({ t: 'op', v: '-', pos: i, end: ++i });
+      let d = '';
+      const s0 = i;
+      while (i < n && SUPERSCRIPT[src[i]]) d += SUPERSCRIPT[src[i++]];
+      toks.push({ t: 'num', v: d, pos: s0, end: i });
+      // Multiplicação implícita, como depois de um número: x²y, 3x²(x + 1).
+      if (i < n && (isIdStart(src[i]) || src[i] === '(')) toks.push({ t: 'op', v: '*', pos: i, end: i, implicit: true });
+      continue;
+    }
     if (isDigit(c)) {
       while (i < n && (isDigit(src[i]) || src[i] === '_')) i++;
       let t = 'num';
@@ -3771,6 +3785,7 @@ function evalBin(node, env) {
 function negate(v) {
   if (v instanceof Elem) return neg(v);
   if (Array.isArray(v)) return v.map(negate);
+  if (v instanceof Tuple && v.items.length) return new Tuple(v.items.map(negate));
   fail('negação de valor não numérico');
 }
 
@@ -3795,6 +3810,7 @@ function binop(op, l, r) {
     }
     fail(`operador ${op} não se aplica a strings`);
   }
+  if (l instanceof Tuple || r instanceof Tuple) return tupleOp(op, l, r);
   if (Array.isArray(l) || Array.isArray(r)) return listOp(op, l, r);
   if (!(l instanceof Elem) || !(r instanceof Elem)) {
     fail(`operador ${op} não se aplica a ${typeName(l)} e ${typeName(r)}`);
@@ -3810,6 +3826,24 @@ function binop(op, l, r) {
     case '<': case '<=': case '>': case '>=': return compare(l, r, op);
   }
   fail(`operador desconhecido ${op}`);
+}
+
+// Tuplas como vetores: + e - entre tuplas do mesmo tamanho, componente a
+// componente; *, /, //, % e ^ com um escalar.
+function tupleOp(op, l, r) {
+  const lt = l instanceof Tuple, rt = r instanceof Tuple;
+  if ((lt && !l.items.length) || (rt && !r.items.length)) fail(`operador ${op} não se aplica à tupla vazia`);
+  if (lt && rt) {
+    if (['<', '<=', '>', '>='].includes(op)) fail('tuplas não têm ordem; compare as coordenadas');
+    if (op !== '+' && op !== '-') fail(`operador ${op} entre tuplas: use + ou -, ou dot(u, v) para o produto escalar`);
+    if (l.items.length !== r.items.length) fail('tuplas de tamanhos diferentes');
+    return new Tuple(l.items.map((x, i) => binop(op, x, r.items[i])));
+  }
+  const scalar = lt ? r : l;
+  if (!(scalar instanceof Elem)) fail(`operador ${op} não se aplica a ${typeName(l)} e ${typeName(r)}`);
+  if (lt && ['*', '/', '//', '%', '^'].includes(op)) return new Tuple(l.items.map((x) => binop(op, x, r)));
+  if (rt && op === '*') return new Tuple(r.items.map((x) => binop(op, l, x)));
+  fail(`operador ${op} não se aplica a ${typeName(l)} e ${typeName(r)}`);
 }
 
 // Listas: + concatena; escalares operam elemento a elemento (vetorização).
@@ -4905,7 +4939,15 @@ function makeGlobals() {
   }, 'lift(x): representante inteiro (ou polinomial)');
 
   // --------------------------------------------------------- aritmética
+  // Norma euclidiana de uma tupla: √(Σ |xᵢ|²).
+  const tupleNorm = (t) => {
+    if (!t.items.length) fail('abs da tupla vazia');
+    const absf = env.lookup('abs').impl;
+    const s = t.items.reduce((acc, x) => add(acc, pow(absf([x]), int(2))), int(0));
+    return env.lookup('sqrt').impl([s]);
+  };
   def('abs', 1, ([x]) => vec((x) => {
+    if (x instanceof Tuple) return tupleNorm(x);
     elem(x);
     if (x.ring === ZZ) return ZZ.op('fmpz_abs', x);
     if (x.ring === QQ) return QQ.op('fmpq_abs', x);
@@ -6314,8 +6356,9 @@ function makeGlobals() {
   def('norm', 1, ([a]) => {
     if (a instanceof Elem && a.ring instanceof FiniteField) return a.ring.opTo(ZZ, 'fq_norm', a);
     if (Array.isArray(a)) return env.lookup('sqrt').impl([env.lookup('dot').impl([a, a])]);
+    if (a instanceof Tuple) return tupleNorm(a);
     return mul(a, env.lookup('conj').impl([a]));
-  }, 'norm(a): norma (corpo finito), norma euclidiana (vetor)');
+  }, 'norm(a): norma (corpo finito), norma euclidiana (vetor ou tupla)');
   def('isgenerator', 1, ([a]) => {
     const R = a.ring;
     if (!(R instanceof FiniteField)) fail('isgenerator espera elemento de GF(q)');
@@ -6375,7 +6418,8 @@ function makeGlobals() {
   def('sum', null, ([xs, f]) => {
     let items = list(xs);
     if (f) items = items.map((x) => callValue(fn(f), [x]));
-    return items.reduce((a, x) => binop('+', a, x), int(0));
+    // Começa no primeiro termo, para somar também tuplas (vetores).
+    return items.length ? items.slice(1).reduce((a, x) => binop('+', a, x), items[0]) : int(0);
   }, 'sum(xs) ou sum(xs, f): soma');
   alias('Σ', 'sum');
   def('prod', null, ([xs, f]) => {
@@ -7776,7 +7820,7 @@ shows a marker you can move with the mouse, and dependent cells follow.</p>
 
 const SYNTAX_CODE = {
   pt: `n = 2^64 + 1          # definição
-f(x) = x^2 + 1        # função
+f(x) = x² + 1         # função (x² = x^2)
 f(0) = 1; f(n) = n*f(n-1)   # cláusulas
 g = t -> sin(t)/t     # lambda
 [k^2 | k <- 1..10, isodd(k)]
@@ -7789,13 +7833,14 @@ with digits = 50: pi  # precisão local
 R = QQ[x]; x = gen(R) # polinômios
 (x, y) = gens(QQ[x, y])   # várias variáveis
 A = [1, 2; 3, 4]      # matriz
+u = (1, 2); v = 2u + (0, 1)   # tuplas como vetores
 F = GF(5^3); a = gen(F)
 k = slider(1, 10)     # entrada reativa
 p = handle(1 + i)     # ponto arrastável
 circle(0, 1, color = "red") + point(1/2 + i/2)
 flint("arb_gamma", 1/3)   # FLINT direto`,
   en: `n = 2^64 + 1          # definition
-f(x) = x^2 + 1        # function
+f(x) = x² + 1         # function (x² = x^2)
 f(0) = 1; f(n) = n*f(n-1)   # clauses
 g = t -> sin(t)/t     # lambda
 [k^2 | k <- 1..10, isodd(k)]
@@ -7808,6 +7853,7 @@ with digits = 50: pi  # local precision
 R = QQ[x]; x = gen(R) # polynomials
 (x, y) = gens(QQ[x, y])   # several variables
 A = [1, 2; 3, 4]      # matrix
+u = (1, 2); v = 2u + (0, 1)   # tuples as vectors
 F = GF(5^3); a = gen(F)
 k = slider(1, 10)     # reactive input
 p = handle(1 + i)     # draggable point
@@ -8042,6 +8088,11 @@ const RULES = [
   [/^linhas da matriz com tamanhos diferentes$/, 'matrix rows have different lengths'],
   [/^listas de tamanhos diferentes$/, 'lists of different lengths'],
   [/^vetores de tamanhos diferentes$/, 'vectors of different lengths'],
+  [/^tuplas de tamanhos diferentes$/, 'tuples of different lengths'],
+  [/^tuplas não têm ordem; compare as coordenadas$/, 'tuples have no order; compare the coordinates'],
+  [/^operador (.+) entre tuplas: use \+ ou -, ou dot\(u, v\) para o produto escalar$/, 'operator $1 between tuples: use + or -, or dot(u, v) for the dot product'],
+  [/^operador (.+) não se aplica à tupla vazia$/, 'operator $1 does not apply to the empty tuple'],
+  [/^abs da tupla vazia$/, 'abs of the empty tuple'],
   [/^lista vazia$/, 'empty list'],
   [/^(min|max) de lista vazia$/, '$1 of an empty list'],
   [/^reduce de lista vazia sem valor inicial$/, 'reduce of an empty list without an initial value'],
@@ -8713,7 +8764,7 @@ const { esc } = __m["src/ui/render.js"];
 const KEYWORDS = new Set(['let', 'in', 'if', 'then', 'else', 'match', 'with', 'and', 'or', 'not', 'true', 'false', 'by']);
 const RINGS = new Set(['ZZ', 'QQ', 'RR', 'CC', 'ℤ', 'ℚ', 'ℝ', 'ℂ']);
 
-const TOKEN = /(#[^\n]*)|("(?:\\.|[^"\\])*"?)|(\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?)|([\p{L}_][\p{L}\p{N}_']*)|(\|>|->|=>|<-|==|!=|<=|>=|\.\.\.|\.\.|\/\/|[-+*/^%!=<>|∘√·×≤≥≠→←⇒▷])|(\s+)|(.)/gsu;
+const TOKEN = /(#[^\n]*)|("(?:\\.|[^"\\])*"?)|(\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?)|([\p{L}_](?:(?![⁰¹²³⁴⁵⁶⁷⁸⁹])[\p{L}\p{N}_'])*)|(⁻?[⁰¹²³⁴⁵⁶⁷⁸⁹]+|\|>|->|=>|<-|==|!=|<=|>=|\.\.\.|\.\.|\/\/|[-+*/^%!=<>|∘√·×≤≥≠→←⇒▷])|(\s+)|(.)/gsu;
 
 function highlight(src, builtins = new Set(), err = null) {
   const segs = [];
@@ -8787,7 +8838,7 @@ __m["src/ui/editing.js"] = (() => {
 
 const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"' };
 const CLOSERS = new Set([')', ']', '}']);
-const WORD = /[\p{L}\p{N}_']/u;
+const WORD = /(?![⁰¹²³⁴⁵⁶⁷⁸⁹])[\p{L}\p{N}_']/u;
 
 // Contexto em pos: dentro de string, de comentário ou código.
 function contextAt(src, pos) {
@@ -8869,7 +8920,7 @@ function wordBefore(src, pos) {
 // Identificadores do texto (para sugerir nomes definidos no caderno).
 function identifiers(src) {
   const out = new Set();
-  const re = /("(?:\\.|[^"\\\n])*"?)|(#[^\n]*)|([\p{L}_][\p{L}\p{N}_']*)/gu;
+  const re = /("(?:\\.|[^"\\\n])*"?)|(#[^\n]*)|([\p{L}_](?:(?![⁰¹²³⁴⁵⁶⁷⁸⁹])[\p{L}\p{N}_'])*)/gu;
   let m;
   while ((m = re.exec(src))) if (m[3]) out.add(m[3]);
   return out;
@@ -9123,7 +9174,7 @@ ring ¦ rings ¦ ring(x) ¦ Anel ao qual o valor pertence. ¦ The ring a value b
 base ¦ rings ¦ base(R) ¦ Anel de coeficientes de R[x], R[x, y, …] ou Mat(R). ¦ Coefficient ring of R[x], R[x, y, …] or Mat(R). ¦ base(QQ[x]) ;; base(Zmod(5)[x, y]) ¦
 characteristic ¦ rings ¦ characteristic(R) ¦ Característica do anel. ¦ Characteristic of the ring. ¦ characteristic(GF(7^2)) ;; characteristic(QQ) ¦
 lift ¦ rings ¦ lift(x) ¦ Representante inteiro de um elemento de ℤ/nℤ, ou polinômio inteiro de um elemento de GF(q) (também para polinômios, inclusive em várias variáveis, e matrizes sobre ℤ/nℤ). ¦ Integer representative of an element of ℤ/nℤ, or integer polynomial of an element of GF(q) (also for polynomials, including multivariate ones, and matrices over ℤ/nℤ). ¦ lift(Zmod(7)(-1)) ;; F = GF(9); lift(gen(F)^5) ¦ fq_default_get_fmpz_poly fmpz_mod_poly_get_fmpz_poly
-abs ¦ arith ¦ abs(x) ¦ Valor absoluto (exato para inteiros e racionais; módulo para complexos). ¦ Absolute value (exact for integers and rationals; modulus for complex numbers). ¦ abs(-3/4) ;; abs(3 + 4i) ¦ fmpz_abs fmpq_abs arb_abs acb_abs
+abs ¦ arith ¦ abs(x) ¦ Valor absoluto (exato para inteiros e racionais; módulo para complexos). Para uma tupla (x, y, …), a norma euclidiana √(x² + y² + …): abs(p - q) é a distância entre os pontos p e q. ¦ Absolute value (exact for integers and rationals; modulus for complex numbers). For a tuple (x, y, …), the Euclidean norm √(x² + y² + …): abs(p - q) is the distance between points p and q. ¦ abs(-3/4) ;; abs(3 + 4i) ;; abs((1, 2) - (4, 6)) ¦ fmpz_abs fmpq_abs arb_abs acb_abs
 sign ¦ arith ¦ sign(x) ¦ Sinal: −1, 0 ou 1. Para bolas, erro se o sinal não for decidível. ¦ Sign: −1, 0 or 1. For balls, an error if the sign is undecidable. ¦ sign(-7) ;; sign(pi - 3) ¦ fmpz_sgn fmpq_sgn arb_lt
 floor ¦ arith ¦ floor(x) ¦ Maior inteiro ≤ x. ¦ Largest integer ≤ x. ¦ floor(-7/2) ;; floor(pi^10) ¦ fmpz_fdiv_q arb_floor arb_get_unique_fmpz
 ceil ¦ arith ¦ ceil(x) ¦ Menor inteiro ≥ x. ¦ Smallest integer ≥ x. ¦ ceil(7/2) ;; ceil(exp(10)) ¦ arb_ceil arb_get_unique_fmpz
@@ -9372,7 +9423,7 @@ expm ¦ mat ¦ expm(A) ¦ Exponencial de matriz. ¦ Matrix exponential. ¦ expm(
 kron ¦ mat ¦ kron(A, B) ¦ Produto de Kronecker A ⊗ B. ¦ Kronecker product A ⊗ B. ¦ kron([1, 2; 3, 4], [0, 1; 1, 0]) ;; kron(identity(2), [1, 1; 1, -1]) ¦
 eigenvectors ¦ mat ¦ eigenvectors(A) ¦ Pares (λ, v) com A·v = λ·v, para autovalores simples (certificados); v é normalizado com a maior componente igual a 1. Para matrizes reais, autovalores provadamente reais vêm como bolas reais. ¦ Pairs (λ, v) with A·v = λ·v, for simple (certified) eigenvalues; v is normalized with its largest component equal to 1. For real matrices, provably real eigenvalues come as real balls. ¦ eigenvectors([2, 1; 1, 2]) ;; A = [1, 2; 3, 4]; [A*v - l*v | (l, v) <- eigenvectors(A)] ¦ acb_mat_approx_eig_qr acb_mat_eig_simple
 dot ¦ mat ¦ dot(u, v) ¦ Produto escalar de listas. ¦ Dot product of lists. ¦ dot([1, 2, 3], [4, 5, 6]) ¦
-norm ¦ mat ¦ norm(x) ¦ Norma euclidiana (lista), norma absoluta (GF(q)), ou z·z̄. ¦ Euclidean norm (list), absolute norm (GF(q)), or z·z̄. ¦ norm([3, 4]) ;; norm(gen(GF(5^3))) ¦ fq_default_norm
+norm ¦ mat ¦ norm(x) ¦ Norma euclidiana (lista ou tupla), norma absoluta (GF(q)), ou z·z̄. ¦ Euclidean norm (list or tuple), absolute norm (GF(q)), or z·z̄. ¦ norm([3, 4]) ;; norm(gen(GF(5^3))) ¦ fq_default_norm
 order ¦ ff ¦ order(F), order(a) ¦ Número de elementos de um corpo/anel finito, ou ordem multiplicativa de um elemento. ¦ Number of elements of a finite field/ring, or multiplicative order of an element. ¦ order(GF(3^5)) ;; order(Zmod(101)(2)) ¦ fq_default_ctx_order fmpz_factor fq_default_pow
 modulus ¦ ff ¦ modulus(R) ¦ n de ℤ/nℤ ou polinômio de definição de GF(q). ¦ n of ℤ/nℤ or the defining polynomial of GF(q). ¦ modulus(GF(2^8)) ¦ fq_default_ctx_modulus
 frobenius ¦ ff ¦ frobenius(a), frobenius(a, e) ¦ Automorfismo de Frobenius a ↦ a^(pᵉ). ¦ Frobenius automorphism a ↦ a^(pᵉ). ¦ F = GF(7^3); a = gen(F); frobenius(a) == a^7 ¦ fq_default_frobenius
@@ -9384,7 +9435,7 @@ map ¦ list ¦ map(xs, f) ¦ [f(x) | x <- xs]. ¦ [f(x) | x <- xs]. ¦ map(1..5,
 filter ¦ list ¦ filter(xs, p) ¦ Elementos que satisfazem p. ¦ Elements satisfying p. ¦ filter(1..100, isprime) ¦
 reduce ¦ list ¦ reduce(xs, f), reduce(xs, f, init) ¦ Dobra à esquerda. Também: fold. ¦ Left fold. Also: fold. ¦ reduce(1..10, (a, b) -> a * b) ¦
 scan ¦ list ¦ scan(xs, f), scan(xs, f, init) ¦ Acumulações parciais. ¦ Partial accumulations. ¦ scan(1..10, (a, b) -> a + b) ¦
-sum ¦ list ¦ sum(xs), sum(xs, f) ¦ Soma. Também: Σ. ¦ Sum. Also: Σ. ¦ sum(1..100) ;; sum(1..20, k -> 1/k^2) ¦
+sum ¦ list ¦ sum(xs), sum(xs, f) ¦ Soma. Também: Σ. Soma também tuplas, como vetores. ¦ Sum. Also: Σ. Also sums tuples, as vectors. ¦ sum(1..100) ;; sum(1..20, k -> 1/k^2) ;; ps = [(0, 0), (2, 0), (1, 3)]; sum(ps)/len(ps) ¦
 prod ¦ list ¦ prod(xs), prod(xs, f) ¦ Produto. Também: Π. ¦ Product. Also: Π. ¦ prod(primes(30)) ¦
 range ¦ list ¦ a..b, a..b by s, range(n), range(a, b, s) ¦ Intervalo inclusivo de números. ¦ Inclusive range of numbers. ¦ 1..10 by 3 ;; 0..1 by 1/4 ¦
 first ¦ list ¦ first(xs) ¦ Primeiro elemento. Também: head. ¦ First element. Also: head. ¦ first(primes(100)) ¦
@@ -10421,7 +10472,7 @@ function showCompletions(ta, explicit = false) {
   const w = wordBefore(ta.value, pos) ?? (explicit ? { word: '', start: pos } : null);
   if (!w || (!explicit && w.word.length < 2)) return closeAssist();
   // Não sugere no meio de uma palavra.
-  if (/[\p{L}\p{N}_']/u.test(ta.value[pos] ?? '')) return closeAssist();
+  if (/(?![⁰¹²³⁴⁵⁶⁷⁸⁹])[\p{L}\p{N}_']/u.test(ta.value[pos] ?? '')) return closeAssist();
   const kind = candidates();
   const items = complete(w.word, kind.keys(), explicit ? 30 : 12);
   if (!items.length) return explicit ? showSignature(ta) : closeAssist();
@@ -10544,7 +10595,7 @@ function signatureHtml(sig, name, arg) {
 }
 
 function assistOnInput(ta, ev) {
-  const typed = ev.inputType === 'insertText' && ev.data && /[\p{L}\p{N}_']$/u.test(ev.data);
+  const typed = ev.inputType === 'insertText' && ev.data && /(?![⁰¹²³⁴⁵⁶⁷⁸⁹])[\p{L}\p{N}_']$/u.test(ev.data);
   if (typed || (ev.inputType?.startsWith('delete') && state.assist?.items)) showCompletions(ta);
   else if (state.assist?.items) closeAssist();
   if (!state.assist?.items) showSignature(ta);
