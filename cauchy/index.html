@@ -233,6 +233,13 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-bottom-width
 .tools button { border: 0; padding: 0 7px; font-size: 13px; color: var(--muted); }
 .tools button:hover { color: var(--ink); }
 .cell.slow .tools button[data-act="run"] { color: var(--run); }
+/* Código oculto: só a saída; sem saída, um aviso que mostra o código. */
+.cell.hide-src .editor { display: none; }
+.cell.hide-src .out { border-top: 0; margin-top: 0; }
+.hidden-note { display: none; border: 0; background: none; padding: 8px 6px; font: 12px var(--mono); color: var(--muted); cursor: pointer; }
+.hidden-note:hover { color: var(--ink); }
+.cell.hide-src .out:empty + .hidden-note { display: block; }
+.cell.hide-src .tools button[data-act="hide"] { color: var(--accent); }
 
 /* ---------------------------------------------------------------- matemática */
 .n { font-variant-numeric: lining-nums; overflow-wrap: anywhere; word-break: break-all; }
@@ -7815,6 +7822,7 @@ const STRINGS = {
     'fatal-restart': 'erro interno — reiniciando',
     'cell.run': 'Avaliar (Shift+Enter)', 'cell.up': 'Mover para cima', 'cell.down': 'Mover para baixo',
     'cell.add': 'Nova célula abaixo (Alt+Enter)', 'cell.del': 'Excluir célula', 'cell.code': 'código da célula',
+    'cell.hide': 'Esconder código', 'cell.show': 'Mostrar código', 'cell.hidden': '‹› código oculto',
     graphicsTruncated: (n) => `só as primeiras ${n} primitivas foram desenhadas`,
     error: 'erro', digits: (n) => `${n} dígitos`, matrix: (r, c) => `matriz ${r}×${c}`,
     'link-copied': 'Link copiado para a área de transferência', 'link-in-url': 'Link no endereço da página',
@@ -7847,6 +7855,7 @@ const STRINGS = {
     'fatal-restart': 'internal error — restarting',
     'cell.run': 'Evaluate (Shift+Enter)', 'cell.up': 'Move up', 'cell.down': 'Move down',
     'cell.add': 'New cell below (Alt+Enter)', 'cell.del': 'Delete cell', 'cell.code': 'cell code',
+    'cell.hide': 'Hide code', 'cell.show': 'Show code', 'cell.hidden': '‹› hidden code',
     graphicsTruncated: (n) => `only the first ${n} primitives were drawn`,
     error: 'error', digits: (n) => `${n} digits`, matrix: (r, c) => `${r}×${c} matrix`,
     'link-copied': 'Link copied to the clipboard', 'link-in-url': 'Link is in the address bar',
@@ -9826,9 +9835,11 @@ function buildCellEl(c) {
         <textarea spellcheck="false" autocapitalize="off" autocomplete="off" rows="1" data-i18n-aria="cell.code"></textarea>
       </div>
       <div class="out" aria-live="polite"></div>
+      <button class="hidden-note" data-act="hide" data-i18n="cell.hidden"></button>
     </div>
     <div class="tools">
       <button data-act="run" data-i18n-title="cell.run">▶</button>
+      <button data-act="hide" data-i18n-title="cell.hide">‹›</button>
       <button data-act="up" data-i18n-title="cell.up">↑</button>
       <button data-act="down" data-i18n-title="cell.down">↓</button>
       <button data-act="add" data-i18n-title="cell.add">+</button>
@@ -9872,6 +9883,7 @@ function cellAction(c, act) {
   const i = state.cells.indexOf(c);
   switch (act) {
     case 'run': evalCell(c, true); break;
+    case 'hide': setHidden(c, !c.hidden); save(); break;
     case 'add': createCell('', c, true); break;
     case 'del': deleteCell(c); break;
     case 'up':
@@ -9890,6 +9902,21 @@ function cellAction(c, act) {
         save();
       }
       break;
+  }
+}
+
+// Esconde (ou mostra) o código da célula, deixando só a saída.
+function setHidden(c, hidden) {
+  c.hidden = hidden;
+  c.el.classList.toggle('hide-src', hidden);
+  const b = $('.tools button[data-act="hide"]', c.el);
+  b.dataset.i18nTitle = hidden ? 'cell.show' : 'cell.hide';
+  b.title = t(b.dataset.i18nTitle);
+  const ta = $('textarea', c.el);
+  if (hidden) ta.blur();
+  else {
+    autosize(c);
+    ta.focus();
   }
 }
 
@@ -10267,7 +10294,7 @@ function setStatus(key, kind, cancellable = false, arg) {
 // --------------------------------------------------------------- persistência
 
 function serialize() {
-  return { title: state.title, cells: state.cells.map((c) => ({ src: c.src, widgets: c.widgets })) };
+  return { title: state.title, cells: state.cells.map((c) => ({ src: c.src, widgets: c.widgets, ...(c.hidden ? { hidden: true } : {}) })) };
 }
 
 function save() {
@@ -10289,6 +10316,7 @@ function load(nb) {
   for (const cell of nb.cells ?? []) {
     const c = createCell(typeof cell === 'string' || !('src' in cell) ? pick(cell, getLang()) : cell.src);
     c.widgets = cell.widgets ?? [];
+    if (cell.hidden) setHidden(c, true);
   }
   if (!state.cells.length) createCell('');
   save();
