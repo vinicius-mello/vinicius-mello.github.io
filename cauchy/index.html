@@ -9191,6 +9191,45 @@ const EXAMPLES = [
     ],
   },
   {
+    title: { pt: 'Problema de Apolônio', en: 'Problem of Apollonius' },
+    cells: [
+      {
+        pt: '# Problema de Apolônio: os círculos tangentes a três círculos dados,\n# que também podem ser retas ou pontos. Arraste os pontos e troque os tipos.\n#\n# O ciclo a(x² + y²) + b·x + c·y + d = 0 é o vetor (a, b, c, d), e Q é a\n# forma bilinear com Q(u, u) = b² + c² − 4ad (= 4r² num círculo com a = 1).\nQ((a, b, c, d), (a2, b2, c2, d2)) = b*b2 + c*c2 - 2*(a*d2 + d*a2)',
+        en: '# Problem of Apollonius: the circles tangent to three given circles,\n# which may also be lines or points. Drag the points and change the kinds.\n#\n# The cycle a(x² + y²) + b·x + c·y + d = 0 is the vector (a, b, c, d), and Q is\n# the bilinear form with Q(u, u) = b² + c² − 4ad (= 4r² for a circle with a = 1).\nQ((a, b, c, d), (a2, b2, c2, d2)) = b*b2 + c*c2 - 2*(a*d2 + d*a2)',
+      },
+      {
+        pt: '# Círculo de centro O por A, reta por O e A, ou o ponto O. Círculos e retas\n# são normalizados para Q(u, u) = 1, e o sinal de u escolhe uma orientação;\n# pontos são círculos de raio 0, com Q(u, u) = 0. O raio em geral é\n# irracional: rationalize o aproxima por uma fração, e tudo segue exato em QQ.\ncycle(kind, O, A) = match kind {\n  "Círculo" ⇒ (1, -2*O[1], -2*O[2], abs2(O) - abs2(A - O)) / rationalize(2*sqrt(abs2(A - O)));\n  "Reta" ⇒ (0, O[2] - A[2], A[1] - O[1], O[1]*A[2] - O[2]*A[1]) / rationalize(sqrt(abs2(A - O)));\n  "Ponto" ⇒ (1, -2*O[1], -2*O[2], abs2(O))\n}',
+        en: '# Circle centered at O through A, line through O and A, or the point O.\n# Circles and lines are normalized to Q(u, u) = 1, and the sign of u picks an\n# orientation; points are circles of radius 0, with Q(u, u) = 0. The radius is\n# usually irrational: rationalize approximates it by a fraction, and everything\n# stays exact in QQ.\ncycle(kind, O, A) = match kind {\n  "Circle" ⇒ (1, -2*O[1], -2*O[2], abs2(O) - abs2(A - O)) / rationalize(2*sqrt(abs2(A - O)));\n  "Line" ⇒ (0, O[2] - A[2], A[1] - O[1], O[1]*A[2] - O[2]*A[1]) / rationalize(sqrt(abs2(A - O)));\n  "Point" ⇒ (1, -2*O[1], -2*O[2], abs2(O))\n}',
+      },
+      {
+        pt: '# Para círculos normalizados, Q(u, X) = (r² + s² − D²)/(2rs), com raios\n# orientados r, s e distância D entre os centros: vale 1 exatamente quando\n# u e X se tocam com orientações compatíveis. Se u é um ponto, Q(u, X) = 0\n# diz que X passa por ele. Então X é tangente a u₁, u₂, u₃ quando\n# Q(uᵢ, X) = Q(uᵢ, uᵢ): três equações lineares, mais Q(X, X) = 1.\n# Escrevendo X = Y/e, as equações lineares definem um núcleo de dimensão 2,\n# e a quadrática restrita a ele tem até duas raízes.\napollonius(us) = let\n  H((a, b, c, d, e), (a2, b2, c2, d2, e2)) = Q((a, b, c, d), (a2, b2, c2, d2)) - e*e2,\n  P((a, b, c, d, e)) = (a, b, c, d)/e,\n  rows = [[-2*u[4], u[2], u[3], -2*u[1], -Q(u, u)] | u ← us],\n  ks = map(nullspace(matrix(rows)), k → apply(tuple, k)),\n  s = gen(QQ[s]),\n  f = H(ks[1], ks[1]) + 2*H(ks[1], ks[2])*s + H(ks[2], ks[2])*s^2,\n  Ys = [ks[1] + r*ks[2] | r ← realroots(f)] + (if deg(f) < 2 then [ks[2]] else [])\n  in if len(ks) != 2 then [] else [P(Y) | Y ← Ys, not contains(Y[5], 0)]',
+        en: '# For normalized circles, Q(u, X) = (r² + s² − D²)/(2rs), with oriented\n# radii r, s and distance D between the centers: it equals 1 exactly when\n# u and X touch with compatible orientations. If u is a point, Q(u, X) = 0\n# says X passes through it. So X is tangent to u₁, u₂, u₃ when\n# Q(uᵢ, X) = Q(uᵢ, uᵢ): three linear equations, plus Q(X, X) = 1.\n# Writing X = Y/e, the linear equations cut out a 2-dimensional kernel,\n# and the quadratic restricted to it has at most two roots.\napollonius(us) = let\n  H((a, b, c, d, e), (a2, b2, c2, d2, e2)) = Q((a, b, c, d), (a2, b2, c2, d2)) - e*e2,\n  P((a, b, c, d, e)) = (a, b, c, d)/e,\n  rows = [[-2*u[4], u[2], u[3], -2*u[1], -Q(u, u)] | u ← us],\n  ks = map(nullspace(matrix(rows)), k → apply(tuple, k)),\n  s = gen(QQ[s]),\n  f = H(ks[1], ks[1]) + 2*H(ks[1], ks[2])*s + H(ks[2], ks[2])*s^2,\n  Ys = [ks[1] + r*ks[2] | r ← realroots(f)] + (if deg(f) < 2 then [ks[2]] else [])\n  in if len(ks) != 2 then [] else [P(Y) | Y ← Ys, not contains(Y[5], 0)]',
+      },
+      {
+        pt: '# Os ciclos dados, com seus pontos de controle\ndrawcycle(kind, O, A) = match kind {\n  "Círculo" ⇒ circle(O, abs(A - O)) + point(O) + point(A);\n  "Reta" ⇒ infline(O, A) + point(O) + point(A);\n  "Ponto" ⇒ point(O)\n}',
+        en: '# The given cycles, with their control points\ndrawcycle(kind, O, A) = match kind {\n  "Circle" ⇒ circle(O, abs(A - O)) + point(O) + point(A);\n  "Line" ⇒ infline(O, A) + point(O) + point(A);\n  "Point" ⇒ point(O)\n}',
+      },
+      {
+        pt: '# Uma solução (a, b, c, d) com Q = 1 tem centro −(b, c)/2a e raio 1/2|a|;\n# com a = 0 é a reta b·x + c·y + d = 0\nsolution((a, b, c, d), k) = let p = -d*(b, c)/(b^2 + c^2) in\n  if contains(a, 0) then infline(p, p + (-c, b), color = k)\n  else circle((-b, -c)/(2*a), 1/(2*abs(a)), color = k)',
+        en: '# A solution (a, b, c, d) with Q = 1 has center −(b, c)/2a and radius 1/2|a|;\n# with a = 0 it is the line b·x + c·y + d = 0\nsolution((a, b, c, d), k) = let p = -d*(b, c)/(b^2 + c^2) in\n  if contains(a, 0) then infline(p, p + (-c, b), color = k)\n  else circle((-b, -c)/(2*a), 1/(2*abs(a)), color = k)',
+      },
+      { pt: 'O1 = handle((-2, -1))\nA1 = handle((-1, -1))\nt1 = select(["Círculo", "Reta", "Ponto"])', en: 'O1 = handle((-2, -1))\nA1 = handle((-1, -1))\nt1 = select(["Circle", "Line", "Point"])' },
+      { pt: 'O2 = handle((2, -1/2))\nA2 = handle((2, 1/4))\nt2 = select(["Círculo", "Reta", "Ponto"])', en: 'O2 = handle((2, -1/2))\nA2 = handle((2, 1/4))\nt2 = select(["Circle", "Line", "Point"])' },
+      { pt: 'O3 = handle((0, 2))\nA3 = handle((1/2, 2))\nt3 = select(["Círculo", "Reta", "Ponto"])', en: 'O3 = handle((0, 2))\nA3 = handle((1/2, 2))\nt3 = select(["Circle", "Line", "Point"])' },
+      'us = [cycle(t1, O1, A1), cycle(t2, O2, A2), cycle(t3, O3, A3)]',
+      {
+        pt: '# Inverter todos os uᵢ só inverte X: fixamos o sinal do primeiro círculo\n# ou reta, e o sinal de um ponto não importa. Sobram até 4 combinações de\n# orientações, cada uma com até 2 soluções: os 8 círculos de Apolônio.\nsigns = let\n  fixed(k) = Q(us[k], us[k]) == 0 or all([Q(us[j], us[j]) == 0 | j ← 1..k-1]),\n  s(k) = if fixed(k) then [1] else [1, -1]\n  in [(e1, e2, e3) | e1 ← s(1), e2 ← s(2), e3 ← s(3)]',
+        en: '# Flipping every uᵢ just flips X: we fix the sign of the first circle or\n# line, and the sign of a point does not matter. That leaves up to 4\n# combinations of orientations, each with up to 2 solutions: the 8 Apollonius circles.\nsigns = let\n  fixed(k) = Q(us[k], us[k]) == 0 or all([Q(us[j], us[j]) == 0 | j ← 1..k-1]),\n  s(k) = if fixed(k) then [1] else [1, -1]\n  in [(e1, e2, e3) | e1 ← s(1), e2 ← s(2), e3 ← s(3)]',
+      },
+      {
+        pt: '# Soluções numeradas pela combinação de orientações (a cor no gráfico).\n# Com três pontos o círculo aparece com as duas orientações; basta uma.\nsols = let xs = [(k, X) | (k, e) ← enumerate(signs), X ← apollonius([e[j]*us[j] | j ← 1..3])]\n  in if all(us, u → Q(u, u) == 0) then take(xs, 1) else xs',
+        en: '# Solutions numbered by the combination of orientations (the color in the plot).\n# With three points the circle shows up with both orientations; one is enough.\nsols = let xs = [(k, X) | (k, e) ← enumerate(signs), X ← apollonius([e[j]*us[j] | j ← 1..3])]\n  in if all(us, u → Q(u, u) == 0) then take(xs, 1) else xs',
+      },
+      'len(sols)',
+      'draw([solution(X, k) | (k, X) ← sols] + style(drawcycle(t1, O1, A1) + drawcycle(t2, O2, A2) + drawcycle(t3, O3, A3), color = "ink"), xlim = [-6, 6], ylim = [-5, 5])',
+    ],
+  },
+  {
     title: { pt: 'FLINT direto', en: 'Raw FLINT' },
     cells: [
       { pt: '# Qualquer função da aba FLINT da referência pode ser chamada\n# diretamente; prec e contexto são preenchidos automaticamente.\nflint("arb_gamma", 1/3)', en: '# Any function from the FLINT tab of the reference can be called\n# directly; prec and context are filled in automatically.\nflint("arb_gamma", 1/3)' },
