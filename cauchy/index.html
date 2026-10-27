@@ -10097,7 +10097,7 @@ const EXAMPLES = [
         pt: '# Superfície mínima de Costa (1982): toro furado em três pontos, dada pela\n# representação de Weierstrass com ℘ e ζ do reticulado quadrado (1, i).\n# Os polos em 0, 1/2 e i/2 são os três fins; o recorte xlim/ylim/zlim os apara.\ne1 = re(weierstrassp(1/2, i))',
         en: '# Costa\'s minimal surface (1982): a torus punctured at three points, given by\n# the Weierstrass representation with ℘ and ζ of the square lattice (1, i).\n# The poles at 0, 1/2 and i/2 are the three ends; xlim/ylim/zlim trim them.\ne1 = re(weierstrassp(1/2, i))',
       },
-      'costa(u, v) =\n  let w = u + v*i,\n      c = weierstrasszeta(w, i),\n      ab = weierstrasszeta(w - 1/2, i) - weierstrasszeta(w - i/2, i),\n      p = weierstrassp(w, i)\n  in (re(pi*(u + pi/(4e1)) - c + pi/(2e1)*ab),\n      re(pi*(v + pi/(4e1)) - i*c - i*pi/(2e1)*ab),\n      sqrt(pi/2)*log(abs((p - e1)/(p + e1))))',
+      'costa(u, v) =\n  let w = u + v*i,\n      c = weierstrasszeta(w, i),\n      ab = weierstrasszeta(w - 1/2, i) - weierstrasszeta(w - i/2, i),\n      p = weierstrassp(w, i)\n  in (re(pi*(u + pi/(4*e1)) - c + pi/(2*e1)*ab),\n      re(pi*(v + pi/(4*e1)) - i*c - i*pi/(2*e1)*ab),\n      sqrt(pi/2)*log(abs((p - e1)/(p + e1))))',
       'surface(costa, [0, 1], [0, 1], points = 80, xlim = [-5, 5], ylim = [-5, 5], zlim = [-4, 4], colormap = "z")',
       {
         pt: '# Pontos de Fibonacci: n pontos quase igualmente espaçados na esfera\nn = slider(50, 1000, 50, value = 400)',
