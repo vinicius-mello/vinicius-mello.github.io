@@ -6028,6 +6028,159 @@ function makeGlobals() {
     const f = polyFactor(p);
     return f.length === 1 && toInt(f[0].items[1]) === 1;
   }, 'isirreducible(p)');
+
+  // ------------------------------------------- conjuntos característicos (Wu–Ritt)
+  // Tudo em QQ[...]. A ordem das variáveis vai da menor para a maior: a do
+  // anel, ou vars = [...]; as variáveis fora da lista vêm antes (parâmetros).
+  // A classe de p é a posição da maior variável que aparece em p (0 se p é
+  // constante), e essa variável é a principal; o inicial é o coeficiente
+  // líder na variável principal.
+  const wuRings = new Map();
+  const wuSetup = (ps, kw, name) => {
+    let R = null;
+    for (const p of ps) {
+      if (p instanceof Elem && (p.ring === ZZ || p.ring === QQ)) continue;
+      if (!isPoly(elem(p))) fail(`${name} espera polinômios (recebeu ${typeName(p)})`);
+      R = R ? commonRing(R, p.ring) : p.ring;
+    }
+    if (!ps.length) fail(`${name}: lista de polinômios vazia`);
+    if (!R) R = QQ;
+    if (R.base !== ZZ && R.base !== QQ && R !== QQ) fail(`${name} requer coeficientes em ZZ ou QQ`);
+    // Uma variável: as contas usam um anel R[x] em várias variáveis com uma
+    // só, e out devolve os resultados em QQ[x].
+    let out = (p) => p;
+    if (!(R instanceof MPolyRing)) {
+      const v = R instanceof PolyRing ? R.v : 'x';
+      if (!wuRings.has(v)) wuRings.set(v, new MPolyRing(QQ, [v], 'degrevlex'));
+      const S = Poly(QQ, v), x = S.gen();
+      out = (p) => p.ring.terms(p).reduce((a, { c, e }) => add(a, mul(c, S.pow(x, e[0]))), S.zero());
+      R = wuRings.get(v);
+    }
+    if (R.base === ZZ) R = MPoly(QQ, R.vars, R.order);
+    let order = R.vars.map((_, j) => j);
+    if (kw.vars !== undefined) {
+      const listed = iterable(kw.vars).map((x) => {
+        const j = R.index(varName(x));
+        if (j < 0) fail(`${varName(x)} não é variável de ${R}`);
+        return j;
+      });
+      if (new Set(listed).size !== listed.length) fail('vars não pode repetir variáveis');
+      order = [...order.filter((j) => !listed.includes(j)), ...listed];
+    }
+    const pos = new Array(R.nvars);
+    order.forEach((j, k) => { pos[j] = k + 1; });
+    const cls = (p) => R.usedVars(p).reduce((m, j) => Math.max(m, pos[j]), 0);
+    const mvar = (p) => order[cls(p) - 1];
+    const deg = (p, j) => (R.isZero(p) ? -1 : R.degreeIn(p, j));
+    const coeffIn = (p, j, k) => R.fromTerms(R.terms(p).filter(({ e }) => e[j] === k).map(({ c, e }) => ({ c, e: e.map((x, i) => (i === j ? 0 : x)) })));
+    const lcIn = (p, j) => coeffIn(p, j, deg(p, j));
+    // Múltiplo racional com coeficientes inteiros primos entre si e inicial
+    // com termo líder positivo.
+    const normal = (p) => {
+      const t = R.terms(p);
+      if (!t.length) return p;
+      let n = int(0), d = int(1);
+      for (const { c } of t) {
+        n = ZZ.op('fmpz_gcd', n, QQ.num(c));
+        d = ZZ.op('fmpz_lcm', d, QQ.den(c));
+      }
+      let s = QQ.frac(d, n);
+      const lead = cls(p) > 0 ? R.terms(lcIn(p, mvar(p)))[0].c : t[0].c;
+      if (compare(lead, int(0), '<')) s = neg(s);
+      return R.scalarMul(p, s);
+    };
+    // Tira de p o conteúdo na variável principal (mdc dos coeficientes, um
+    // polinômio nas variáveis menores) e o guarda em conds: p = 0 vira
+    // p' = 0 fora de conteúdo = 0.
+    const clean = (p, conds) => {
+      if (!conds || cls(p) === 0) return p;
+      const j = mvar(p);
+      let c = R.zero();
+      for (let k = deg(p, j); k >= 0; k--) c = R.op(`${R.tag}_gcd`, c, coeffIn(p, j, k));
+      if (cls(c) === 0) return p;
+      conds.push(c);
+      return normal(div(p, c));
+    };
+    const prem1 = (f, g, j) => {
+      const d = deg(g, j);
+      if (d < 1) fail(`prem: o divisor não depende de ${R.vars[j]}`);
+      const I = lcIn(g, j), x = R.gen(j);
+      for (let df = deg(f, j); df >= d; df = deg(f, j)) f = sub(mul(I, f), mul(mul(lcIn(f, j), R.pow(x, df - d)), g));
+      return f;
+    };
+    // Pseudo-resto pela cadeia, da maior classe para a menor.
+    const premChain = (f, cs) => {
+      for (const A of [...cs].sort((a, b) => cls(b) - cls(a))) if (cls(A) > 0) f = prem1(f, A, mvar(A));
+      return normal(f);
+    };
+    const lower = (p, q) => cls(p) < cls(q) || (cls(p) === cls(q) && cls(p) > 0 && deg(p, mvar(p)) < deg(q, mvar(q)));
+    const basicSet = (P) => {
+      const B = [];
+      let Q = P;
+      while (Q.length) {
+        const p = Q.reduce((a, q) => (lower(q, a) ? q : a));
+        B.push(p);
+        if (cls(p) === 0) return [p];
+        const j = mvar(p), dp = deg(p, j);
+        Q = Q.filter((q) => cls(q) > cls(p) && deg(q, j) < dp);
+      }
+      return B;
+    };
+    const addNew = (P, ps) => {
+      for (const p of ps) if (!R.isZero(p) && !P.some((q) => equal(q, p))) P.push(p);
+      return P;
+    };
+    const charset = (ps, conds) => {
+      let P = addNew([], ps.map((p) => clean(normal(toR(p)), conds)));
+      for (;;) {
+        const B = basicSet(P);
+        if (cls(B[0]) === 0) return [R.one()];
+        const rs = addNew([], P.filter((p) => !B.includes(p)).map((p) => clean(premChain(p, B), conds)));
+        if (!rs.length) return B;
+        P = addNew(P, rs);
+      }
+    };
+    const initials = (cs) => addNew([], cs.filter((A) => cls(A) > 0).map((A) => normal(lcIn(A, mvar(A))))).filter((I) => cls(I) > 0);
+    const toR = (p) => (p.ring instanceof PolyRing ? R.fromTerms(p.ring.coeffs(p).map((c, i) => ({ c, e: [i] }))) : coerce(p, R));
+    return { R, cls, mvar, prem1, premChain, charset, initials, normal, out, toR };
+  };
+  const polyList = (x, name) => {
+    if (!Array.isArray(x)) fail(`${name} espera uma lista de polinômios`);
+    return x;
+  };
+  def('prem', null, ([f, g, x], kw) => {
+    if (Array.isArray(g)) {
+      const W = wuSetup([elem(f), ...g], kw, 'prem');
+      return W.out(W.premChain(W.toR(f), g.map(W.toR)));
+    }
+    if (x === undefined) fail('use prem(f, g, x) ou prem(f, cadeia)');
+    const W = wuSetup([elem(f), elem(g)], {}, 'prem');
+    const j = W.R.index(varName(x));
+    if (j < 0) fail(`${varName(x)} não é variável de ${W.R}`);
+    return W.out(W.prem1(W.toR(f), W.toR(g), j));
+  }, 'prem(f, g, x): pseudo-resto em x; prem(f, cs, vars=): pela cadeia cs');
+  def('charset', 1, ([ps], kw) => {
+    const W = wuSetup(polyList(ps, 'charset'), kw, 'charset');
+    return W.charset(ps).map(W.out);
+  }, 'charset(ps, vars=): conjunto característico de Wu–Ritt (cadeia ascendente)');
+  def('initials', 1, ([cs], kw) => {
+    const W = wuSetup(polyList(cs, 'initials'), kw, 'initials');
+    return W.initials(cs.map(W.toR)).map(W.out);
+  }, 'initials(cs, vars=): iniciais (coeficientes líderes nas variáveis principais)');
+  def('wuprove', 2, ([hs, g], kw) => {
+    const W = wuSetup([...polyList(hs, 'wuprove'), elem(g)], kw, 'wuprove');
+    const contents = [];
+    const cs = W.charset(hs, contents);
+    const r = W.premChain(W.toR(g), cs);
+    const conds = [];
+    for (const I of [...W.initials(cs), ...contents]) {
+      for (const t of mpolyFactor(I)) {
+        const b = W.normal(t.items[0]);
+        if (W.cls(b) > 0 && !conds.some((c) => equal(c, b))) conds.push(b);
+      }
+    }
+    return new Tuple([W.out(r), conds.map(W.out)]);
+  }, 'wuprove(hs, g, vars=): (resto, condições): g segue das hipóteses hs se resto = 0 e as condições ≠ 0');
   def('roots', null, ([p], kw) => {
     const F = flint();
     const go = () => {
@@ -8034,6 +8187,14 @@ const RULES = [
   [/^(.+) tem (\d+) variáveis: use gens\(R\) ou gen\(R, k\)$/, '$1 has $2 variables: use gens(R) or gen(R, k)'],
   [/^(.+) não é variável de (.+)$/, '$1 is not a variable of $2'],
   [/^(.+) não é a variável de (.+)$/, '$1 is not the variable of $2'],
+  [/^(prem|charset|initials|wuprove) espera polinômios \(recebeu (.+)\)$/, '$1 expects polynomials (got $2)'],
+  [/^(prem|charset|initials|wuprove) espera uma lista de polinômios$/, '$1 expects a list of polynomials'],
+  [/^(prem|charset|initials|wuprove): lista de polinômios vazia$/, '$1: empty list of polynomials'],
+  [/^(prem|charset|initials|wuprove) espera polinômios num mesmo anel$/, '$1 expects polynomials in a common ring'],
+  [/^(prem|charset|initials|wuprove) requer coeficientes em ZZ ou QQ$/, '$1 requires coefficients in ZZ or QQ'],
+  [/^vars não pode repetir variáveis$/, 'vars cannot repeat variables'],
+  [/^prem: o divisor não depende de (.+)$/, 'prem: the divisor does not depend on $1'],
+  [/^use prem\(f, g, x\) ou prem\(f, cadeia\)$/, 'use prem(f, g, x) or prem(f, chain)'],
   [/^gen\(R, k\) requer 1 ≤ k ≤ (\d+)$/, 'gen(R, k) requires 1 ≤ k ≤ $1'],
   [/^(.+) deve ser um polinômio em uma variável \(usa (.+)\)$/, (_, x, v) => `${w(x)} must be a univariate polynomial (uses ${v})`],
   [/^esperava uma variável, como x \(recebeu (.+)\)$/, 'expected a variable, such as x (got $1)'],
@@ -9233,6 +9394,66 @@ const EXAMPLES = [
     ],
   },
   {
+    title: { pt: 'Teorema de Simson (método de Wu)', en: "Simson's theorem (Wu's method)" },
+    cells: [
+      {
+        pt: '# Teorema de Simson pelo método de Wu: os pés das perpendiculares baixadas de\n# um ponto P do círculo circunscrito aos lados de um triângulo são colineares.\n#\n# Coordenadas: A = (0, 0), B = (u1, 0), C = (u2, u3) e P = (u4, x3). Os u são\n# livres e os x ficam determinados por eles. A ordem das variáveis no anel é\n# a usada pelo método: parâmetros primeiro, depois as incógnitas.\n(u1, u2, u3, u4, x1, x2, x3, x4, x5, x6, x7) = gens(QQ[u1, u2, u3, u4, x1, x2, x3, x4, x5, x6, x7])',
+        en: '# Simson\'s theorem by Wu\'s method: the feet of the perpendiculars dropped from\n# a point P on the circumcircle to the sides of a triangle are collinear.\n#\n# Coordinates: A = (0, 0), B = (u1, 0), C = (u2, u3) and P = (u4, x3). The u are\n# free and the x are determined by them. The order of the variables in the ring\n# is the one the method uses: parameters first, then the unknowns.\n(u1, u2, u3, u4, x1, x2, x3, x4, x5, x6, x7) = gens(QQ[u1, u2, u3, u4, x1, x2, x3, x4, x5, x6, x7])',
+      },
+      {
+        pt: '# Hipóteses: O = (x1, x2) é o circuncentro, P está no círculo, e D = (x4, x5)\n# e E = (x6, x7) são os pés em BC e CA. O pé em AB é simplesmente F = (u4, 0).\nhs = [\n  2*u1*x1 - u1^2,                            # |OA| = |OB|\n  2*u2*x1 + 2*u3*x2 - u2^2 - u3^2,           # |OA| = |OC|\n  (u4 - x1)^2 + (x3 - x2)^2 - x1^2 - x2^2,   # |OP| = |OA|\n  (x4 - u1)*u3 - x5*(u2 - u1),               # D em BC\n  (x4 - u4)*(u2 - u1) + (x5 - x3)*u3,        # PD ⊥ BC\n  x6*u3 - x7*u2,                             # E em CA\n  (x6 - u4)*u2 + (x7 - x3)*u3                # PE ⊥ CA\n]',
+        en: '# Hypotheses: O = (x1, x2) is the circumcenter, P lies on the circle, and\n# D = (x4, x5) and E = (x6, x7) are the feet on BC and CA. The foot on AB is\n# simply F = (u4, 0).\nhs = [\n  2*u1*x1 - u1^2,                            # |OA| = |OB|\n  2*u2*x1 + 2*u3*x2 - u2^2 - u3^2,           # |OA| = |OC|\n  (u4 - x1)^2 + (x3 - x2)^2 - x1^2 - x2^2,   # |OP| = |OA|\n  (x4 - u1)*u3 - x5*(u2 - u1),               # D on BC\n  (x4 - u4)*(u2 - u1) + (x5 - x3)*u3,        # PD ⊥ BC\n  x6*u3 - x7*u2,                             # E on CA\n  (x6 - u4)*u2 + (x7 - x3)*u3                # PE ⊥ CA\n]',
+      },
+      {
+        pt: '# Conclusão: D, E e F colineares (um determinante 2×2)\ng = (x4 - u4)*x7 - (x6 - u4)*x5',
+        en: '# Conclusion: D, E and F are collinear (a 2×2 determinant)\ng = (x4 - u4)*x7 - (x6 - u4)*x5',
+      },
+      {
+        pt: '# O conjunto característico é uma cadeia triangular, como num escalonamento\ncs = charset(hs)',
+        en: '# The characteristic set is a triangular chain, as in row reduction\ncs = charset(hs)',
+      },
+      {
+        pt: '# Cada polinômio da cadeia introduz uma variável principal nova\n[last(vars(p)) | p ← cs]',
+        en: '# Each polynomial of the chain introduces a new main variable\n[last(vars(p)) | p ← cs]',
+      },
+      {
+        pt: '# Os iniciais (coeficientes líderes): onde eles se anulam, a cadeia degenera\ninitials(cs)',
+        en: '# The initials (leading coefficients): where they vanish, the chain degenerates\ninitials(cs)',
+      },
+      {
+        pt: '# Pseudo-reduzindo g pela cadeia, o resto é 0: o teorema vale sempre que as\n# condições não se anulam. São u3 ≠ 0 e u1 ≠ 0 (triângulo não degenerado),\n# |BC|² ≠ 0, |CA|² ≠ 0, e ainda u2 ≠ 0 e u2 ≠ u1.\n(r, conds) = wuprove(hs, g)',
+        en: '# Pseudo-reducing g by the chain leaves remainder 0: the theorem holds whenever\n# the conditions do not vanish. They are u3 ≠ 0 and u1 ≠ 0 (non-degenerate\n# triangle), |BC|² ≠ 0, |CA|² ≠ 0, and also u2 ≠ 0 and u2 ≠ u1.\n(r, conds) = wuprove(hs, g)',
+      },
+      {
+        pt: '# As condições do método são suficientes, mas nem sempre necessárias:\n# com u2 = 0 (ângulo reto em A) o resto também é 0\nwuprove([subs(h, u2 = 0) | h ← hs], subs(g, u2 = 0))',
+        en: '# The method\'s conditions are sufficient but not always necessary:\n# with u2 = 0 (right angle at A) the remainder is 0 as well\nwuprove([subs(h, u2 = 0) | h ← hs], subs(g, u2 = 0))',
+      },
+      {
+        pt: '# A recíproca: sem a hipótese de P no círculo, o resto não se anula, mas fatora.\n# Além dos fatores degenerados, sobra a equação do círculo por A, B e C em\n# P = (u4, x3): os pés só são colineares quando P está no círculo.\nfactor(prem(g, charset(take(hs, 2) + drop(hs, 3))))',
+        en: '# The converse: without the hypothesis that P lies on the circle, the remainder\n# does not vanish, but it factors. Besides the degenerate factors, what is left\n# is the equation of the circle through A, B and C at P = (u4, x3): the feet are\n# collinear only when P is on the circle.\nfactor(prem(g, charset(take(hs, 2) + drop(hs, 3))))',
+      },
+      {
+        pt: '# A figura: arraste A, B, C e P, ou desmarque a caixa para soltar P do círculo\nA = handle(-2 - i)\nB = handle(2 - i)\nC = handle(1/2 + 3i/2)',
+        en: '# The figure: drag A, B, C and P, or untick the box to free P from the circle\nA = handle(-2 - i)\nB = handle(2 - i)\nC = handle(1/2 + 3i/2)',
+      },
+      {
+        pt: '# Circuncentro e pé da perpendicular, com pontos como números complexos\ncircumcenter(a, b, c) = (abs2(a)*(b - c) + abs2(b)*(c - a) + abs2(c)*(a - b)) / (conj(a)*(b - c) + conj(b)*(c - a) + conj(c)*(a - b))\nfoot(p, a, b) = a + re((p - a)*conj(b - a))/abs2(b - a)*(b - a)',
+        en: '# Circumcenter and foot of the perpendicular, with points as complex numbers\ncircumcenter(a, b, c) = (abs2(a)*(b - c) + abs2(b)*(c - a) + abs2(c)*(a - b)) / (conj(a)*(b - c) + conj(b)*(c - a) + conj(c)*(a - b))\nfoot(p, a, b) = a + re((p - a)*conj(b - a))/abs2(b - a)*(b - a)',
+      },
+      'o = circumcenter(A, B, C)',
+      {
+        pt: 'oncircle = checkbox(value = true, label = "P no círculo")\nP = handle(-2 + 3i/2, on = z → if oncircle then o + abs(A - o)*(z - o)/abs(z - o) else z)',
+        en: 'oncircle = checkbox(value = true, label = "P on the circle")\nP = handle(-2 + 3i/2, on = z → if oncircle then o + abs(A - o)*(z - o)/abs(z - o) else z)',
+      },
+      '(D, E, F) = (foot(P, B, C), foot(P, C, A), foot(P, A, B))',
+      {
+        pt: '# A área do triângulo pedal DEF é |R² − OP²|/4R² vezes a de ABC (Euler):\n# zero exatamente quando P está no círculo\narea(a, b, c) = abs(im((b - a)*conj(c - a)))/2\n(area(D, E, F), abs(abs2(A - o) - abs2(P - o))/(4*abs2(A - o)) * area(A, B, C))',
+        en: '# The area of the pedal triangle DEF is |R² − OP²|/4R² times that of ABC\n# (Euler): zero exactly when P is on the circle\narea(a, b, c) = abs(im((b - a)*conj(c - a)))/2\n(area(D, E, F), abs(abs2(A - o) - abs2(P - o))/(4*abs2(A - o)) * area(A, B, C))',
+      },
+      'draw([\n  [infline(A, B), infline(B, C), infline(C, A)] |> style(color = "gray", width = 0.5),\n  circle(o, abs(A - o), dash = "dot", color = "ink"),\n  polygon([A, B, C], color = "ink"),\n  [segment(P, X, dash = "dash", color = 3) | X ← [D, E, F]],\n  polygon([D, E, F], color = 2, width = 2, fill = true, opacity = 0.3),\n  points([D, E, F], color = 2, size = 4),\n  point(P, color = 3),\n  [text(s, X, pos = "ne") | (s, X) ← [("A", A), ("B", B), ("C", C), ("P", P)]]\n], xlim = [-4, 4], ylim = [-3, 3.5], axes = false)',
+    ],
+  },
+  {
     title: { pt: 'FLINT direto', en: 'Raw FLINT' },
     cells: [
       { pt: '# Qualquer função da aba FLINT da referência pode ser chamada\n# diretamente; prec e contexto são preenchidos automaticamente.\nflint("arb_gamma", 1/3)', en: '# Any function from the FLINT tab of the reference can be called\n# directly; prec and context are filled in automatically.\nflint("arb_gamma", 1/3)' },
@@ -9527,6 +9748,10 @@ monomials ¦ mpoly ¦ monomials(p) ¦ Monômios de p (sem coeficientes), na orde
 exponents ¦ mpoly ¦ exponents(p) ¦ Vetores de expoentes dos termos de p, na ordem das variáveis do anel. ¦ Exponent vectors of the terms of p, in the order of the ring's variables. ¦ (x, y) = gens(QQ[x, y]); exponents(x^3*y + y^2) ¦ fmpz_mpoly_get_term_exp_ui
 lm ¦ mpoly ¦ lm(p) ¦ Monômio líder na ordem monomial do anel. ¦ Leading monomial in the ring's monomial order. ¦ (x, y) = gens(QQ[x, y, order = "lex"]); lm(x*y + y^5) ;; (x, y) = gens(QQ[x, y]); lm(x*y + y^5) ¦
 lt ¦ mpoly ¦ lt(p) ¦ Termo líder (coeficiente vezes monômio líder). ¦ Leading term (coefficient times leading monomial). ¦ (x, y) = gens(QQ[x, y]); lt(3x*y^2 - x^2) ¦
+prem ¦ mpoly ¦ prem(f, g, x), prem(f, cs, vars=[…]) ¦ Pseudo-resto de f por g na variável x: r com lc(g)ᵏ·f = q·g + r e grau em x menor que o de g (lc é o coeficiente líder em x, um polinômio nas demais variáveis). Com uma cadeia cs (como a de charset), reduz f por cada polinômio, da maior variável principal para a menor. ¦ Pseudo-remainder of f by g in the variable x: r with lc(g)ᵏ·f = q·g + r and degree in x smaller than g's (lc is the leading coefficient in x, a polynomial in the other variables). With a chain cs (such as charset's), reduces f by each polynomial, from the highest main variable down. ¦ (x, y) = gens(QQ[x, y]); prem(x^3 + y, x^2*y - 1, x) ;; (x, y) = gens(QQ[x, y]); prem(y^2 - x, charset([x^2 - 2, y^2 - x])) ¦
+charset ¦ mpoly ¦ charset(ps), charset(ps, vars=[…]) ¦ Conjunto característico de Wu–Ritt: uma cadeia triangular cujos zeros contêm os de ps e que pseudo-reduz todo polinômio de ps a 0. As variáveis vão da menor para a maior na ordem do anel ou na lista vars (as que ficam fora vêm antes, como parâmetros); cada polinômio da cadeia introduz uma variável principal nova. Devolve [1] se o sistema não tem solução. ¦ Wu–Ritt characteristic set: a triangular chain whose zeros contain those of ps and which pseudo-reduces every polynomial of ps to 0. Variables go from lowest to highest in the ring's order or in the list vars (those left out come first, as parameters); each polynomial of the chain introduces a new main variable. Returns [1] if the system has no solution. ¦ (x, y) = gens(QQ[x, y]); charset([x^2 + y^2 - 1, x*y - 1/2]) ;; (x, y) = gens(QQ[x, y]); charset([x^2 + y^2 - 1, x*y - 1/2], vars = [y, x]) ¦
+initials ¦ mpoly ¦ initials(cs), initials(cs, vars=[…]) ¦ Iniciais de uma cadeia: o coeficiente líder de cada polinômio na sua variável principal (as constantes ficam de fora). Fora dos zeros dos iniciais, a cadeia descreve o conjunto de soluções. ¦ Initials of a chain: the leading coefficient of each polynomial in its main variable (constants are left out). Away from the zeros of the initials, the chain describes the solution set. ¦ (x, y) = gens(QQ[x, y]); initials(charset([x^2 + y^2 - 1, x*y - 2])) ¦
+wuprove ¦ mpoly ¦ wuprove(hs, g), wuprove(hs, g, vars=[…]) ¦ Método de Wu para demonstrar teoremas: calcula o conjunto característico das hipóteses hs e pseudo-reduz a conclusão g por ele. Devolve (r, conds): se r = 0, g se anula em toda solução de hs em que nenhum polinômio de conds se anula (condições de não degenerescência, suficientes mas nem sempre necessárias). ¦ Wu's method for proving theorems: computes the characteristic set of the hypotheses hs and pseudo-reduces the conclusion g by it. Returns (r, conds): if r = 0, g vanishes at every solution of hs where no polynomial in conds vanishes (non-degeneracy conditions, sufficient but not always necessary). ¦ (u1, u2, u3, x1, x2) = gens(QQ[u1, u2, u3, x1, x2]); wuprove([2*u1*x1 - u1^2, 2*u2*x1 + 2*u3*x2 - u2^2 - u3^2], (x1 - u1)^2 + x2^2 - (x1 - u2)^2 - (x2 - u3)^2) ¦
 cyclotomic ¦ poly ¦ cyclotomic(n), cyclotomic(n, var="t") ¦ Polinômio ciclotômico Φₙ. ¦ Cyclotomic polynomial Φₙ. ¦ cyclotomic(105) ¦ fmpz_poly_cyclotomic
 chebyshevt ¦ poly ¦ chebyshevt(n), chebyshevt(n, z) ¦ Polinômio de Chebyshev Tₙ; com z, o valor Tₙ(z) = cos(n·arccos z), também para n não inteiro (se z é um polinômio, compõe). ¦ Chebyshev polynomial Tₙ; with z, the value Tₙ(z) = cos(n·arccos z), also for non-integer n (if z is a polynomial, composes). ¦ chebyshevt(8) ;; chebyshevt(5, 1/2) ;; chebyshevt(1/2, 1/2) ¦ fmpz_poly_chebyshev_t acb_hypgeom_chebyshev_t
 chebyshevu ¦ poly ¦ chebyshevu(n), chebyshevu(n, z) ¦ Polinômio de Chebyshev Uₙ; com z, o valor Uₙ(z). ¦ Chebyshev polynomial Uₙ; with z, the value Uₙ(z). ¦ chebyshevu(5) ;; chebyshevu(5, 1/3) ¦ fmpz_poly_chebyshev_u acb_hypgeom_chebyshev_u
