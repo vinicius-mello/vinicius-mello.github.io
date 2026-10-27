@@ -7379,23 +7379,83 @@ function makeGlobals() {
     });
     return pos;
   };
-  const MESH_OPTS = ['points', 'xlim', 'ylim', 'zlim'];
+  // exclude = "arb": avalia f na bola que cobre cada célula da grade; se o
+  // resultado não é finito (ou a avaliação falha), a célula pode conter um
+  // polo e não é desenhada. Rigoroso, mas exclui também células grandes
+  // demais para a bola ficar finita.
+  const finiteBall = (w) => {
+    if (w instanceof Tuple) return w.items.every(finiteBall);
+    if (!(w instanceof Elem)) return true;
+    if (w.ring === RR) return bool(RR.op('arb_is_finite', w));
+    if (w.ring === CC) return bool(CC.op('acb_is_finite', w));
+    return true;
+  };
+  const cutCells = (f, [u0, u1], [v0, v1], [nu, nv], DEPTH = 1) => {
+    const cut = new Uint8Array(nu * nv);
+    const F = flint();
+    const ball = (a, b) => RR.op('arb_set_interval', RR.fromNumber(a), RR.fromNumber(b));
+    F.withPrec(64, () => {
+      const saved = F.intervalMode;
+      F.intervalMode = true;
+      try {
+        // Célula rejeitada é dividida em quatro (até DEPTH vezes): só fica de
+        // fora se algum pedaço continuar sem valor finito.
+        const finite = (a0, a1, b0, b1, depth) => {
+          let ok;
+          try {
+            ok = finiteBall(callValue(f, [ball(a0, a1), ball(b0, b1)]));
+          } catch (e) {
+            if (e.name === 'CauchyError' && /recursão/.test(e.message)) throw e;
+            ok = false;
+          }
+          if (ok || depth === 0) return ok;
+          const am = (a0 + a1) / 2, bm = (b0 + b1) / 2;
+          return finite(a0, am, b0, bm, depth - 1) && finite(am, a1, b0, bm, depth - 1)
+            && finite(a0, am, bm, b1, depth - 1) && finite(am, a1, bm, b1, depth - 1);
+        };
+        for (let i = 0; i < nu; i++) {
+          for (let j = 0; j < nv; j++) {
+            const ok = finite(u0 + ((u1 - u0) * i) / nu, u0 + ((u1 - u0) * (i + 1)) / nu,
+              v0 + ((v1 - v0) * j) / nv, v0 + ((v1 - v0) * (j + 1)) / nv, DEPTH);
+            if (!ok) cut[i * nv + j] = 1;
+          }
+        }
+      } finally {
+        F.intervalMode = saved;
+      }
+    });
+    return cut;
+  };
+  const excludeOpt = (kw) => {
+    const e = kw.exclude;
+    if (e === undefined || e === true) return 'auto';
+    if (e === false) return false;
+    if (e === 'arb') return 'arb';
+    fail('exclude deve ser true, false ou "arb"');
+  };
+  const MESH_OPTS = ['points', 'xlim', 'ylim', 'zlim', 'exclude'];
   // Só os limites dados: os ausentes continuam vindo dos dados.
   const lims3 = (kw) => Object.fromEntries(Object.entries(limits(kw)).filter(([, v]) => v));
+  const mesh = (f, ur, vr, n, exclude, pos, extra) => ({
+    g: 'mesh', d3: true, nu: n[0], nv: n[1], pos, exclude,
+    ...(exclude === 'arb' ? { cut: cutCells(f, ur, vr, n) } : {}), ...extra,
+  });
   def('surface', 3, ([f, ur, vr], kw) => {
-    const [nu, nv] = gridSize(kw, 40);
-    const pos = grid3(fn(f), range2(ur, 'intervalo de u'), range2(vr, 'intervalo de v'), [nu, nv], (w) => {
+    const n = gridSize(kw, 40), ex = excludeOpt(kw);
+    const F = fn(f), U = range2(ur, 'intervalo de u'), V = range2(vr, 'intervalo de v');
+    const pos = grid3(F, U, V, n, (w) => {
       if (!(w instanceof Tuple && w.items.length === 3)) fail('surface: a função deve devolver uma tupla (x, y, z)');
       return sharp(w);
     });
-    return new Graphic([{ g: 'mesh', d3: true, nu, nv, pos, attrs: { color: 1, ...attrsOf(kw, MESH_OPTS) } }], { aspect: 'equal', ...lims3(kw) });
-  }, 'surface((u, v) -> (x, y, z), [u₀, u₁], [v₀, v₁], points=40): superfície paramétrica');
+    return new Graphic([mesh(F, U, V, n, ex, pos, { attrs: { color: 1, ...attrsOf(kw, MESH_OPTS) } })], { aspect: 'equal', ...lims3(kw) });
+  }, 'surface((u, v) -> (x, y, z), [u₀, u₁], [v₀, v₁], points=40, exclude=true): superfície paramétrica');
   def('plot3d', 3, ([f, xr, yr], kw) => {
-    const [nu, nv] = gridSize(kw, 50);
-    const pos = grid3(fn(f), range2(xr, 'intervalo de x'), range2(yr, 'intervalo de y'), [nu, nv], (w, x, y) => (isSharp(w) ? [x, y, toNum(w)] : null));
-    return new Graphic([{ g: 'mesh', d3: true, data: true, nu, nv, pos, attrs: { color: 1, colormap: 'z', ...attrsOf(kw, MESH_OPTS) } }],
+    const n = gridSize(kw, 50), ex = excludeOpt(kw);
+    const F = fn(f), X = range2(xr, 'intervalo de x'), Y = range2(yr, 'intervalo de y');
+    const pos = grid3(F, X, Y, n, (w, x, y) => (isSharp(w) ? [x, y, toNum(w)] : null));
+    return new Graphic([mesh(F, X, Y, n, ex, pos, { data: true, attrs: { color: 1, colormap: 'z', ...attrsOf(kw, MESH_OPTS) } })],
       { aspect: 'auto', ...lims3(kw) });
-  }, 'plot3d((x, y) -> z, [x₀, x₁], [y₀, y₁], points=50, zlim=): gráfico de função de duas variáveis');
+  }, 'plot3d((x, y) -> z, [x₀, x₁], [y₀, y₁], points=50, zlim=, exclude=true): gráfico de função de duas variáveis');
 
   // --------------------------------------------------------- widgets
   const widget = (kind, spec, defVal, parse) => {
@@ -8561,6 +8621,7 @@ const RULES = [
   [/^surface: a função deve devolver uma tupla \(x, y, z\)$/, 'surface: the function must return a tuple (x, y, z)'],
   [/^(zlim|box) só vale para gráficos 3D$/, '$1 only applies to 3D graphics'],
   [/^(.+) deve ser "z" \(cor pela altura\) ou false$/, '$1 must be "z" (color by height) or false'],
+  [/^exclude deve ser true, false ou "arb"$/, 'exclude must be true, false or "arb"'],
   [/^points deve ser n ou \[nu, nv\]$/, 'points must be n or [nu, nv]'],
   [/^(.+) deve ser um número complexo ou uma tupla \(x, y\)$/, (_, x) => `${w(x)} must be a complex number or a tuple (x, y)`],
   [/^(.+): esperava pelo menos (\d+) pontos$/, '$1: expected at least $2 points'],
@@ -9465,7 +9526,7 @@ class Figure {
           scene.add(m);
           break;
         }
-        case 'mesh': scene.add(...meshObjects(it, S, mat, clip, box[2])); break;
+        case 'mesh': scene.add(...meshObjects(it, S, mat, clip, box)); break;
         case 'text': this.labels.push({ p: S(it.p), s: it.s, cls: 'text3d', color: a.color, pos: it.pos }); break;
       }
     }
@@ -9580,8 +9641,9 @@ function dotTexture() {
 // Superfície: triângulos nas células da grade com os 4 vértices definidos,
 // normais pela média das faces, cor pela altura dentro da caixa [z0, z1]
 // (colormap) e linhas da malha (mesh, até ~24 em cada direção).
-function meshObjects(it, S, mat, clip, [z0, z1]) {
-  const { nu, nv, pos } = it;
+function meshObjects(it, S, mat, clip, box) {
+  const { nu, nv, pos, cut } = it;
+  const [z0, z1] = box[2];
   const a = it.attrs;
   const n = (nu + 1) * (nv + 1);
   const P = new Float32Array(n * 3);
@@ -9592,12 +9654,35 @@ function meshObjects(it, S, mat, clip, [z0, z1]) {
     ok[k] = 1;
     S(p).toArray(P, 3 * k);
   }
-  const idx = [];
+  // Polo entre amostras (exclude = true): numa das coordenadas, o salto pela
+  // aresta tem sinal oposto ao das arestas vizinhas na mesma direção e é
+  // maior que elas, como em 1/x de −51 para +51. Uma função contínua, mesmo
+  // íngreme, não inverte o sentido dos dois lados.
   const at = (i, j) => i * (nv + 1) + j;
+  const val = (i, j, c) => (i < 0 || j < 0 || i > nu || j > nv || !ok[at(i, j)] ? NaN : pos[3 * at(i, j) + c]);
+  // Saltos menores que 5% da caixa (ruído numérico, por exemplo) não contam.
+  const jump = (i, j, di, dj) => {
+    for (let c = 0; c < 3; c++) {
+      const d = val(i + di, j + dj, c) - val(i, j, c);
+      if (!(Math.abs(d) > 0.05 * (box[c][1] - box[c][0]))) continue;
+      const l = val(i, j, c) - val(i - di, j - dj, c), r = val(i + 2 * di, j + 2 * dj, c) - val(i + di, j + dj, c);
+      const side = (e) => Math.sign(e) === -Math.sign(d) && Math.abs(d) > Math.abs(e);
+      if (side(l) && side(r)) return true;
+    }
+    return false;
+  };
+  const poleU = new Uint8Array(nu * (nv + 1)), poleV = new Uint8Array((nu + 1) * nv);
+  if (it.exclude === 'auto') {
+    for (let i = 0; i < nu; i++) for (let j = 0; j <= nv; j++) poleU[i * (nv + 1) + j] = jump(i, j, 1, 0);
+    for (let i = 0; i <= nu; i++) for (let j = 0; j < nv; j++) poleV[i * nv + j] = jump(i, j, 0, 1);
+  }
+  const isCut = (i, j) => (!!cut && cut[i * nv + j] === 1)
+    || poleU[i * (nv + 1) + j] || poleU[i * (nv + 1) + j + 1] || poleV[i * nv + j] || poleV[(i + 1) * nv + j];
+  const idx = [];
   for (let i = 0; i < nu; i++) {
     for (let j = 0; j < nv; j++) {
       const q = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
-      if (q.every((k) => ok[k])) idx.push(q[0], q[1], q[2], q[0], q[2], q[3]);
+      if (!isCut(i, j) && q.every((k) => ok[k])) idx.push(q[0], q[1], q[2], q[0], q[2], q[3]);
     }
   }
   const g = new THREE.BufferGeometry();
@@ -9618,9 +9703,13 @@ function meshObjects(it, S, mat, clip, [z0, z1]) {
     const L = [];
     const every = (len) => Math.max(1, Math.round(len / 24));
     const su = every(nu), sv = every(nv);
-    const seg = (k1, k2) => { if (ok[k1] && ok[k2]) L.push(...P.subarray(3 * k1, 3 * k1 + 3), ...P.subarray(3 * k2, 3 * k2 + 3)); };
-    for (let i = 0; i <= nu; i += su) for (let j = 0; j < nv; j++) seg(at(i, j), at(i, j + 1));
-    for (let j = 0; j <= nv; j += sv) for (let i = 0; i < nu; i++) seg(at(i, j), at(i + 1, j));
+    // Linha da malha some se cruza um polo ou se as células dos dois lados
+    // foram excluídas.
+    const cutSide = (a, b) => (a === null || a) && (b === null || b);
+    const seg = (k1, k2, side) => { if (ok[k1] && ok[k2] && !side) L.push(...P.subarray(3 * k1, 3 * k1 + 3), ...P.subarray(3 * k2, 3 * k2 + 3)); };
+    const c = (i, j) => (i < 0 || j < 0 || i >= nu || j >= nv ? null : isCut(i, j));
+    for (let i = 0; i <= nu; i += su) for (let j = 0; j < nv; j++) seg(at(i, j), at(i, j + 1), poleV[i * nv + j] || cutSide(c(i - 1, j), c(i, j)));
+    for (let j = 0; j <= nv; j += sv) for (let i = 0; i < nu; i++) seg(at(i, j), at(i + 1, j), poleU[i * (nv + 1) + j] || cutSide(c(i, j - 1), c(i, j)));
     const lg = new THREE.BufferGeometry();
     lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(L), 3));
     out.push(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: color('ink'), transparent: true, opacity: 0.22, clippingPlanes: clip })));
@@ -10534,8 +10623,8 @@ handles ¦ draw ¦ handles([z₁, …], add=false, min=, max=, snap=, …) ¦ Li
 group ¦ draw ¦ group(g₁, g₂, …, atributos) ¦ Agrupa gráficos; os atributos do grupo valem para as primitivas que não os definem (o filho prevalece). ¦ Groups graphics; the group's attributes apply to primitives that do not set them (the child wins). ¦ group(circle(0, 1), segment(-1, 1), color = "red", width = 2) ¦
 style ¦ draw ¦ style(g, atributos) ¦ Impõe atributos a todas as primitivas de g, sobrescrevendo os que elas já tinham. Útil com |>. ¦ Imposes attributes on every primitive of g, overriding those they already had. Handy with |>. ¦ [segment(0, exp(i*k*pi/6)) | k <- 1..12] |> style(color = "gray", width = 0.5) ¦
 draw ¦ draw ¦ draw(g, xlim=, ylim=, zlim=, aspect="equal", axes=true, grid=true, frame=true, box=true, title=, width=, height=) ¦ Ajusta a janela de um gráfico (ou lista de gráficos). Sem draw, uma célula cujo valor é um gráfico ou uma lista só de gráficos já é desenhada. aspect = "equal" mantém a mesma escala nos eixos (padrão para primitivas; plot usa "auto"). width e height em px. Em gráficos 3D: zlim fixa o intervalo de z, box = false esconde a caixa e aspect = "auto" leva os três eixos a proporções fixas. ¦ Sets the window of a graphic (or list of graphics). Without draw, a cell whose value is a graphic or a list of graphics only is drawn anyway. aspect = "equal" keeps the same scale on both axes (the default for primitives; plot uses "auto"). width and height in px. In 3D graphics: zlim fixes the z range, box = false hides the box and aspect = "auto" brings the three axes to fixed proportions. ¦ draw([circle(0, 1), segment(-1, 1)], axes = false, grid = false) ;; draw(circle(0, 1), xlim = [0, 2], ylim = [0, 2]) ¦
-surface ¦ 3d ¦ surface((u, v) -> (x, y, z), [u₀, u₁], [v₀, v₁], points=40, xlim=, ylim=, zlim=, mesh=true, colormap=, atributos) ¦ Superfície paramétrica, amostrada numa grade (points = n ou [nu, nv]); onde a função falha a superfície tem buracos. xlim, ylim e zlim fixam a caixa, e o que sai dela é cortado (útil perto de polos). Arraste para girar; clique na figura e use a roda para aproximar; duplo clique volta à vista inicial. mesh = false esconde as linhas da malha; colormap = "z" colore pela altura; color e opacity como nas outras primitivas. ¦ Parametric surface, sampled on a grid (points = n or [nu, nv]); where the function fails the surface has holes. xlim, ylim and zlim fix the box, and whatever leaves it is clipped (useful near poles). Drag to rotate; click the figure and use the wheel to zoom; double-click goes back to the initial view. mesh = false hides the mesh lines; colormap = "z" colors by height; color and opacity as for the other primitives. ¦ surface((u, v) -> ((2 + cos(v))*cos(u), (2 + cos(v))*sin(u), sin(v)), [0, 2pi], [0, 2pi]) ;; surface((u, v) -> (u - u^3/3 + u*v^2, v - v^3/3 + v*u^2, u^2 - v^2), [-2, 2], [-2, 2], colormap = "z") ¦
-plot3d ¦ 3d ¦ plot3d((x, y) -> z, [x₀, x₁], [y₀, y₁], points=50, xlim=, ylim=, zlim=, mesh=true, colormap="z", atributos) ¦ Gráfico de uma função de duas variáveis, colorido pela altura. Os eixos ficam em proporções fixas (como aspect = "auto"); o intervalo de z ignora polos, ou é fixado por zlim, e o que sai da caixa é cortado. ¦ Graph of a function of two variables, colored by height. The axes have fixed proportions (as aspect = "auto"); the z range ignores poles, or is fixed by zlim, and whatever leaves the box is clipped. ¦ plot3d((x, y) -> sin(x)*cos(y), [-3, 3], [-3, 3]) ;; plot3d((x, y) -> x*y/(x^2 + y^2), [-1, 1], [-1, 1], colormap = false) ¦
+surface ¦ 3d ¦ surface((u, v) -> (x, y, z), [u₀, u₁], [v₀, v₁], points=40, xlim=, ylim=, zlim=, exclude=true, mesh=true, colormap=, atributos) ¦ Superfície paramétrica, amostrada numa grade (points = n ou [nu, nv]); onde a função falha a superfície tem buracos. xlim, ylim e zlim fixam a caixa, e o que sai dela é cortado (útil perto de polos). Um polo entre amostras ligaria os dois lados por uma parede falsa: exclude = true (padrão) descarta as células onde o salto inverte o sentido das vizinhas; exclude = "arb" avalia f em bolas que cobrem cada célula e descarta as que podem conter um polo (rigoroso e mais lento; funções como weierstrassp dão bolas largas e perdem células demais); exclude = false desenha tudo. Arraste para girar; clique na figura e use a roda para aproximar; duplo clique volta à vista inicial. mesh = false esconde as linhas da malha; colormap = "z" colore pela altura; color e opacity como nas outras primitivas. ¦ Parametric surface, sampled on a grid (points = n or [nu, nv]); where the function fails the surface has holes. xlim, ylim and zlim fix the box, and whatever leaves it is clipped (useful near poles). A pole between samples would join both sides by a spurious wall: exclude = true (the default) drops the cells where the jump reverses the direction of its neighbors; exclude = "arb" evaluates f on balls covering each cell and drops those that may contain a pole (rigorous and slower; functions such as weierstrassp give wide balls and lose too many cells); exclude = false draws everything. Drag to rotate; click the figure and use the wheel to zoom; double-click goes back to the initial view. mesh = false hides the mesh lines; colormap = "z" colors by height; color and opacity as for the other primitives. ¦ surface((u, v) -> ((2 + cos(v))*cos(u), (2 + cos(v))*sin(u), sin(v)), [0, 2pi], [0, 2pi]) ;; surface((u, v) -> (u - u^3/3 + u*v^2, v - v^3/3 + v*u^2, u^2 - v^2), [-2, 2], [-2, 2], colormap = "z") ¦
+plot3d ¦ 3d ¦ plot3d((x, y) -> z, [x₀, x₁], [y₀, y₁], points=50, xlim=, ylim=, zlim=, exclude=true, mesh=true, colormap="z", atributos) ¦ Gráfico de uma função de duas variáveis, colorido pela altura. Os eixos ficam em proporções fixas (como aspect = "auto"); o intervalo de z ignora polos, ou é fixado por zlim, e o que sai da caixa é cortado. exclude como em surface: sem ele, 1/x teria uma parede em x = 0. ¦ Graph of a function of two variables, colored by height. The axes have fixed proportions (as aspect = "auto"); the z range ignores poles, or is fixed by zlim, and whatever leaves the box is clipped. exclude as in surface: without it, 1/x would have a wall at x = 0. ¦ plot3d((x, y) -> sin(x)*cos(y), [-3, 3], [-3, 3]) ;; plot3d((x, y) -> x*y/(x^2 + y^2), [-1, 1], [-1, 1], colormap = false) ;; plot3d((x, y) -> tan(x*y), [-3, 3], [-3, 3], zlim = [-5, 5], exclude = "arb") ¦
 sphere ¦ 3d ¦ sphere(c, r, atributos) ¦ Esfera de centro c (tupla (x, y, z)) e raio r. Atributos: color, opacity. ¦ Sphere with center c (a tuple (x, y, z)) and radius r. Attributes: color, opacity. ¦ sphere((0, 0, 0), 1) ;; sphere((0, 0, 0), 1, opacity = 0.4) + point((0, 0, 1)) ¦
 plane ¦ 3d ¦ plane(p, n, atributos) ¦ Plano por p com vetor normal n, cortado pela caixa da cena; translúcido por padrão (opacity = 0.5). ¦ Plane through p with normal vector n, clipped by the scene box; translucent by default (opacity = 0.5). ¦ sphere((0, 0, 0), 1) + plane((0, 0, 1/2), (0, 0, 1)) ;; plane((0, 0, 0), (1, 1, 1)) + infline((0, 0, 0), (1, 1, 1)) ¦
 translate ¦ draw ¦ translate(g, v) ¦ Desloca g pelo vetor v (complexo ou tupla). Como todas as transformações, aceita um gráfico ou lista de gráficos e combina com |>. ¦ Translates g by the vector v (complex or tuple). Like every transformation, it takes a graphic or list of graphics and combines with |>. ¦ translate(circle(0, 1), 2 + i) ;; [translate(circle(0, 1/2), k) | k <- 1..5] ¦
