@@ -6113,7 +6113,14 @@ function makeGlobals() {
       for (const A of [...cs].sort((a, b) => cls(b) - cls(a))) if (cls(A) > 0) f = prem1(f, A, mvar(A));
       return normal(f);
     };
-    const lower = (p, q) => cls(p) < cls(q) || (cls(p) === cls(q) && cls(p) > 0 && deg(p, mvar(p)) < deg(q, mvar(q)));
+    // Posto: classe, grau na variável principal e, para desempatar (o fator
+    // y de x·y tem o posto de x·y), grau total e número de termos.
+    const rank = (p) => { const c = cls(p); return c ? [c, deg(p, mvar(p)), R.totalDegree(p), R.len(p)] : [0, 0, 0, 0]; };
+    const lower = (p, q) => {
+      const a = rank(p), b = rank(q);
+      const k = a.findIndex((x, i) => x !== b[i]);
+      return k >= 0 && a[k] < b[k];
+    };
     const basicSet = (P) => {
       const B = [];
       let Q = P;
@@ -6142,7 +6149,36 @@ function makeGlobals() {
     };
     const initials = (cs) => addNew([], cs.filter((A) => cls(A) > 0).map((A) => normal(lcIn(A, mvar(A))))).filter((I) => cls(I) > 0);
     const toR = (p) => (p.ring instanceof PolyRing ? R.fromTerms(p.ring.coeffs(p).map((c, i) => ({ c, e: [i] }))) : coerce(p, R));
-    return { R, cls, mvar, prem1, premChain, charset, initials, normal, out, toR };
+    // Fatores irredutíveis (sobre QQ) não constantes, normalizados.
+    const factors = (p) => mpolyFactor(p).map((t) => [normal(t.items[0]), toInt(t.items[1])]).filter(([f]) => cls(f) > 0);
+    const sameChain = (a, b) => a.length === b.length && a.every((p, k) => equal(p, b[k]));
+    // Decomposição de Wu: Zero(P) = ∪ Zero(CS/J) sobre as cadeias devolvidas.
+    // Se um polinômio da cadeia fatora, cada fator abre um ramo; senão a
+    // cadeia entra, e os zeros de P em que um inicial se anula vêm dos ramos
+    // P ∪ {fator do inicial}. O posto da cadeia cai a cada passo: termina.
+    const decomp = (ps, chains) => {
+      const cs = charset(ps);
+      if (cls(cs[0]) === 0) return;
+      for (const A of cs) {
+        const fs = factors(A);
+        if (fs.length > 1 || fs[0][1] > 1) {
+          for (const [f] of fs) decomp([...ps, f], chains);
+          return;
+        }
+      }
+      if (!chains.some((c) => sameChain(c, cs))) chains.push(cs);
+      for (const I of initials(cs)) for (const [f] of factors(I)) decomp([...ps, f], chains);
+    };
+    // Tira C2 se a cadeia C1 se anula nos pontos genéricos de C2 (pseudo-restos
+    // nulos) e nenhum inicial de C1 se anula neles: Zero(C2/J2) já está nos
+    // zeros de C1/J1 ou nos ramos dos iniciais de C1.
+    const contains = (C1, C2) => C1.every((A) => R.isZero(premChain(A, C2))) && initials(C1).every((I) => !R.isZero(premChain(I, C2)));
+    const wudecomp = (ps) => {
+      const chains = [];
+      decomp(ps.map((p) => normal(toR(p))), chains);
+      return chains.filter((C2, k) => !chains.some((C1, j) => j !== k && C1.length < C2.length && contains(C1, C2)));
+    };
+    return { R, cls, mvar, prem1, premChain, charset, initials, normal, out, toR, wudecomp };
   };
   const polyList = (x, name) => {
     if (!Array.isArray(x)) fail(`${name} espera uma lista de polinômios`);
@@ -6181,6 +6217,10 @@ function makeGlobals() {
     }
     return new Tuple([W.out(r), conds.map(W.out)]);
   }, 'wuprove(hs, g, vars=): (resto, condições): g segue das hipóteses hs se resto = 0 e as condições ≠ 0');
+  def('wudecomp', 1, ([ps], kw) => {
+    const W = wuSetup(polyList(ps, 'wudecomp'), kw, 'wudecomp');
+    return W.wudecomp(ps).map((cs) => cs.map(W.out));
+  }, 'wudecomp(ps, vars=): decomposição de Wu: os zeros de ps são a união dos zeros de cada cadeia fora dos seus iniciais');
   def('roots', null, ([p], kw) => {
     const F = flint();
     const go = () => {
@@ -8187,11 +8227,11 @@ const RULES = [
   [/^(.+) tem (\d+) variáveis: use gens\(R\) ou gen\(R, k\)$/, '$1 has $2 variables: use gens(R) or gen(R, k)'],
   [/^(.+) não é variável de (.+)$/, '$1 is not a variable of $2'],
   [/^(.+) não é a variável de (.+)$/, '$1 is not the variable of $2'],
-  [/^(prem|charset|initials|wuprove) espera polinômios \(recebeu (.+)\)$/, '$1 expects polynomials (got $2)'],
-  [/^(prem|charset|initials|wuprove) espera uma lista de polinômios$/, '$1 expects a list of polynomials'],
-  [/^(prem|charset|initials|wuprove): lista de polinômios vazia$/, '$1: empty list of polynomials'],
-  [/^(prem|charset|initials|wuprove) espera polinômios num mesmo anel$/, '$1 expects polynomials in a common ring'],
-  [/^(prem|charset|initials|wuprove) requer coeficientes em ZZ ou QQ$/, '$1 requires coefficients in ZZ or QQ'],
+  [/^(prem|charset|initials|wuprove|wudecomp) espera polinômios \(recebeu (.+)\)$/, '$1 expects polynomials (got $2)'],
+  [/^(prem|charset|initials|wuprove|wudecomp) espera uma lista de polinômios$/, '$1 expects a list of polynomials'],
+  [/^(prem|charset|initials|wuprove|wudecomp): lista de polinômios vazia$/, '$1: empty list of polynomials'],
+  [/^(prem|charset|initials|wuprove|wudecomp) espera polinômios num mesmo anel$/, '$1 expects polynomials in a common ring'],
+  [/^(prem|charset|initials|wuprove|wudecomp) requer coeficientes em ZZ ou QQ$/, '$1 requires coefficients in ZZ or QQ'],
   [/^vars não pode repetir variáveis$/, 'vars cannot repeat variables'],
   [/^prem: o divisor não depende de (.+)$/, 'prem: the divisor does not depend on $1'],
   [/^use prem\(f, g, x\) ou prem\(f, cadeia\)$/, 'use prem(f, g, x) or prem(f, chain)'],
@@ -9433,6 +9473,14 @@ const EXAMPLES = [
         en: '# The converse: without the hypothesis that P lies on the circle, the remainder\n# does not vanish, but it factors. Besides the degenerate factors, what is left\n# is the equation of the circle through A, B and C at P = (u4, x3): the feet are\n# collinear only when P is on the circle.\nfactor(prem(g, charset(take(hs, 2) + drop(hs, 3))))',
       },
       {
+        pt: '# A decomposição de Wu separa os zeros das hipóteses em componentes, cada uma\n# dada por uma cadeia (fora dos zeros dos seus iniciais). As condições de\n# wuprove excluem casos de sobra; a decomposição mostra onde o teorema vale.\nd = wudecomp(hs)\nlen(d)',
+        en: '# Wu\'s decomposition splits the zeros of the hypotheses into components, each\n# given by a chain (away from the zeros of its initials). The conditions of\n# wuprove exclude more than needed; the decomposition shows where the theorem holds.\nd = wudecomp(hs)\nlen(d)',
+      },
+      {
+        pt: '# Para cada componente: as relações entre os parâmetros (os polinômios cuja\n# variável principal é um u, que envolvem só os u) e se g se reduz a 0 nela.\n# A componente genérica não tem relações e o teorema vale. Onde ele falha há\n# u2² + u3² = 0 ou (u1 − u2)² + u3² = 0: sobre os reais, C = A ou C = B.\nparam(p) = any([u1, u2, u3, u4], v → v == last(vars(p)))\n[([p | p ← c, param(p)], prem(g, c) == 0) | c ← d]',
+        en: '# For each component: the relations among the parameters (the polynomials whose\n# main variable is a u, which involve only the u) and whether g reduces to 0 on it.\n# The generic component has no relations and the theorem holds. Where it fails,\n# u2² + u3² = 0 or (u1 − u2)² + u3² = 0: over the reals, C = A or C = B.\nparam(p) = any([u1, u2, u3, u4], v → v == last(vars(p)))\n[([p | p ← c, param(p)], prem(g, c) == 0) | c ← d]',
+      },
+      {
         pt: '# A figura: arraste A, B, C e P, ou desmarque a caixa para soltar P do círculo\nA = handle(-2 - i)\nB = handle(2 - i)\nC = handle(1/2 + 3i/2)',
         en: '# The figure: drag A, B, C and P, or untick the box to free P from the circle\nA = handle(-2 - i)\nB = handle(2 - i)\nC = handle(1/2 + 3i/2)',
       },
@@ -9752,6 +9800,7 @@ prem ¦ mpoly ¦ prem(f, g, x), prem(f, cs, vars=[…]) ¦ Pseudo-resto de f por
 charset ¦ mpoly ¦ charset(ps), charset(ps, vars=[…]) ¦ Conjunto característico de Wu–Ritt: uma cadeia triangular cujos zeros contêm os de ps e que pseudo-reduz todo polinômio de ps a 0. As variáveis vão da menor para a maior na ordem do anel ou na lista vars (as que ficam fora vêm antes, como parâmetros); cada polinômio da cadeia introduz uma variável principal nova. Devolve [1] se o sistema não tem solução. ¦ Wu–Ritt characteristic set: a triangular chain whose zeros contain those of ps and which pseudo-reduces every polynomial of ps to 0. Variables go from lowest to highest in the ring's order or in the list vars (those left out come first, as parameters); each polynomial of the chain introduces a new main variable. Returns [1] if the system has no solution. ¦ (x, y) = gens(QQ[x, y]); charset([x^2 + y^2 - 1, x*y - 1/2]) ;; (x, y) = gens(QQ[x, y]); charset([x^2 + y^2 - 1, x*y - 1/2], vars = [y, x]) ¦
 initials ¦ mpoly ¦ initials(cs), initials(cs, vars=[…]) ¦ Iniciais de uma cadeia: o coeficiente líder de cada polinômio na sua variável principal (as constantes ficam de fora). Fora dos zeros dos iniciais, a cadeia descreve o conjunto de soluções. ¦ Initials of a chain: the leading coefficient of each polynomial in its main variable (constants are left out). Away from the zeros of the initials, the chain describes the solution set. ¦ (x, y) = gens(QQ[x, y]); initials(charset([x^2 + y^2 - 1, x*y - 2])) ¦
 wuprove ¦ mpoly ¦ wuprove(hs, g), wuprove(hs, g, vars=[…]) ¦ Método de Wu para demonstrar teoremas: calcula o conjunto característico das hipóteses hs e pseudo-reduz a conclusão g por ele. Devolve (r, conds): se r = 0, g se anula em toda solução de hs em que nenhum polinômio de conds se anula (condições de não degenerescência, suficientes mas nem sempre necessárias). ¦ Wu's method for proving theorems: computes the characteristic set of the hypotheses hs and pseudo-reduces the conclusion g by it. Returns (r, conds): if r = 0, g vanishes at every solution of hs where no polynomial in conds vanishes (non-degeneracy conditions, sufficient but not always necessary). ¦ (u1, u2, u3, x1, x2) = gens(QQ[u1, u2, u3, x1, x2]); wuprove([2*u1*x1 - u1^2, 2*u2*x1 + 2*u3*x2 - u2^2 - u3^2], (x1 - u1)^2 + x2^2 - (x1 - u2)^2 - (x2 - u3)^2) ¦
+wudecomp ¦ mpoly ¦ wudecomp(ps), wudecomp(ps, vars=[…]) ¦ Decomposição de Wu: lista de cadeias cujas componentes, cada uma fora dos zeros dos seus iniciais, somam exatamente os zeros de ps. Cada polinômio das cadeias é irredutível sobre QQ (mas a cadeia pode ainda se decompor sobre extensões); componentes contidas em outras são omitidas. A ordem das variáveis é a de charset. ¦ Wu's decomposition: a list of chains whose components, each away from the zeros of its initials, add up exactly to the zeros of ps. Each polynomial of the chains is irreducible over QQ (but a chain may still split over extensions); components contained in others are left out. The variable order is the one of charset. ¦ (x, y, z) = gens(QQ[x, y, z]); wudecomp([x*y, x*z]) ;; (x, y, z) = gens(QQ[x, y, z]); wudecomp([x*z - y^2, y*z - x^2, z^2 - x*y]) ¦
 cyclotomic ¦ poly ¦ cyclotomic(n), cyclotomic(n, var="t") ¦ Polinômio ciclotômico Φₙ. ¦ Cyclotomic polynomial Φₙ. ¦ cyclotomic(105) ¦ fmpz_poly_cyclotomic
 chebyshevt ¦ poly ¦ chebyshevt(n), chebyshevt(n, z) ¦ Polinômio de Chebyshev Tₙ; com z, o valor Tₙ(z) = cos(n·arccos z), também para n não inteiro (se z é um polinômio, compõe). ¦ Chebyshev polynomial Tₙ; with z, the value Tₙ(z) = cos(n·arccos z), also for non-integer n (if z is a polynomial, composes). ¦ chebyshevt(8) ;; chebyshevt(5, 1/2) ;; chebyshevt(1/2, 1/2) ¦ fmpz_poly_chebyshev_t acb_hypgeom_chebyshev_t
 chebyshevu ¦ poly ¦ chebyshevu(n), chebyshevu(n, z) ¦ Polinômio de Chebyshev Uₙ; com z, o valor Uₙ(z). ¦ Chebyshev polynomial Uₙ; with z, the value Uₙ(z). ¦ chebyshevu(5) ;; chebyshevu(5, 1/3) ¦ fmpz_poly_chebyshev_u acb_hypgeom_chebyshev_u
