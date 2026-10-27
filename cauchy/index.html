@@ -287,6 +287,17 @@ sup { font-size: .68em; line-height: 0; }
 .plot .tick { font-size: 11px; fill: var(--muted); }
 .plot .ptitle { font-size: 13px; fill: var(--ink); }
 .plot .gtext { font-family: var(--sans); }
+.plot3d { position: relative; max-width: 100%; font-family: var(--sans); outline: none; border-radius: 6px; }
+.plot3d:focus-visible { box-shadow: 0 0 0 2px var(--line); }
+.plot3d canvas { display: block; touch-action: none; cursor: grab; }
+.plot3d canvas:active { cursor: grabbing; }
+.overlay3d { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.overlay3d span { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; }
+.tick3d { font-size: 11px; color: var(--muted); }
+.axis3d { font-size: 12px; font-style: italic; color: var(--ink); }
+.text3d { font-size: 13px; color: var(--ink); }
+.title3d { position: absolute; top: 6px; left: 0; right: 0; text-align: center; font-size: 13px; color: var(--ink); }
+.loading3d { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: var(--muted); }
 .plot .hover { pointer-events: none; }
 .plot .hover line { stroke: var(--muted); stroke-dasharray: 3 3; }
 .plot .hover circle { fill: var(--accent); }
@@ -3405,6 +3416,8 @@ __m["src/js/runtime/values.js"] = (() => {
 // Valores da linguagem que não são elementos de anéis.
 // Listas são arrays JS; strings e booleanos são nativos.
 
+const { fail } = __m["src/js/runtime/errors.js"];
+
 class Tuple {
   constructor(items) {
     this.items = items;
@@ -3432,18 +3445,23 @@ class Factored extends Array {
 
 // Gráfico: lista de primitivas já convertidas em números de ponto flutuante
 // ({g: 'line'|'points'|'circle'|..., attrs}) e opções da janela (xlim, ylim,
-// aspect, axes, ...). Não guarda handles FLINT.
+// aspect, axes, ...). Não guarda handles FLINT. Primitivas 3D levam d3: true
+// (grupos também, se os filhos são 3D); um gráfico não mistura 2D e 3D.
 class Graphic {
   constructor(items, opts = {}) {
     this.items = items;
     this.opts = opts;
   }
+  get is3d() {
+    return this.items.length > 0 && this.items[0].d3 === true;
+  }
   // g1 + g2: junta as primitivas; opções da esquerda têm prioridade.
   concat(other) {
+    if (this.items.length && other.items.length && this.is3d !== other.is3d) fail('não é possível juntar gráficos 2D e 3D');
     return new Graphic([...this.items, ...other.items], { ...other.opts, ...this.opts });
   }
   display() {
-    return { t: 'graphics', items: this.items, opts: this.opts };
+    return { t: this.is3d ? 'graphics3d' : 'graphics', items: this.items, opts: this.opts };
   }
 }
 
@@ -4805,6 +4823,7 @@ function toText(d) {
     case 'fn': return d.name ? `<função ${d.name}>` : '<função>';
     case 'ring': return d.s;
     case 'graphics': return '<gráfico>';
+    case 'graphics3d': return '<gráfico 3D>';
     case 'widget': return d.value && typeof d.value === 'object' ? (d.value.text ?? toText(d.value)) : String(d.value);
     default: return `<${d.t}>`;
   }
@@ -6928,7 +6947,7 @@ function makeGlobals() {
       if (v.length !== 2 || !v.every(Number.isFinite) || !(v[1] > v[0])) fail(`${name} deve ser [lo, hi] com lo < hi`);
       return v;
     };
-    return { xlim: lim('xlim'), ylim: lim('ylim') };
+    return { xlim: lim('xlim'), ylim: lim('ylim'), zlim: lim('zlim') };
   };
   const sample = (f, a, b, n) => {
     const pts = [];
@@ -6963,18 +6982,33 @@ function makeGlobals() {
     }
     fail(`${what} deve ser um número complexo ou uma tupla (x, y)`);
   };
+  // Ponto do espaço: tupla (x, y, z).
+  const is3 = (p) => unw(p) instanceof Tuple && unw(p).items.length === 3;
+  const pt3 = (p, what = 'ponto') => {
+    p = unw(p);
+    if (p instanceof Tuple && p.items.length === 3) {
+      const xyz = p.items.map(toNum);
+      if (xyz.every(Number.isFinite)) return xyz;
+    }
+    fail(`${what} deve ser uma tupla (x, y, z)`);
+  };
+  // Ponto do plano ou do espaço, conforme a tupla.
+  const ptN = (p, what) => (is3(p) ? pt3(p, what) : pt(p, what));
   // Ponto calculado (curve/transform): bolas largas demais (perto de polos)
   // não têm ponto médio confiável e viram lacunas.
+  const isSharp = (x) => {
+    if (!(x instanceof Elem && (x.ring === RR || x.ring === CC))) return true;
+    const parts = x.ring === RR ? [x] : [CC.re(x), CC.im(x)];
+    return parts.every((y) => RR.rad(y) <= 1e-9 * (1 + Math.abs(RR.mid(y))));
+  };
   const sharp = (v) => {
-    if (v instanceof Elem && (v.ring === RR || v.ring === CC)) {
-      const parts = v.ring === RR ? [v] : [CC.re(v), CC.im(v)];
-      if (parts.some((x) => !(RR.rad(x) <= 1e-9 * (1 + Math.abs(RR.mid(x)))))) return null;
-    }
-    return pt(v);
+    if (v instanceof Tuple && v.items.length === 3) return v.items.every(isSharp) ? pt3(v) : null;
+    return isSharp(v) ? pt(v) : null;
   };
   const pts = (ps, min, what = 'pontos') => {
-    const out = list(unw(ps)).map((p) => pt(p));
+    const out = list(unw(ps)).map((p) => ptN(p));
     if (out.length < min) fail(`${what}: esperava pelo menos ${min} pontos`);
+    if (out.some((p) => p.length !== out[0].length)) fail(`${what}: pontos do plano e do espaço misturados`);
     return out;
   };
   // Pontos de controle: vértices cujo valor de entrada é o próprio valor de um
@@ -7047,6 +7081,12 @@ function makeGlobals() {
       fail(`${k} deve ser um de: ${MARKERS.join(', ')}`);
     },
     label: (v) => (typeof v === 'string' ? v : showText(v)),
+    mesh: (v, k) => toBool(v, k),
+    colormap: (v, k) => {
+      if (v === false) return null;
+      if (v === true || v === 'z') return 'z';
+      fail(`${k} deve ser "z" (cor pela altura) ou false`);
+    },
   };
   const attrsOf = (kw, skip = []) => {
     const out = {};
@@ -7057,30 +7097,38 @@ function makeGlobals() {
     }
     return out;
   };
-  const prim = (g, data, kw, skip, defaults = {}) => new Graphic([{ g, ...data, attrs: { ...defaults, ...attrsOf(kw, skip) } }]);
+  const prim = (g, data, kw, skip, defaults = {}) => {
+    const p0 = data.pts?.find((p) => p) ?? data.p ?? data.c;
+    const d3 = data.d3 ?? (Array.isArray(p0) && p0.length === 3);
+    return new Graphic([{ g, ...data, ...(d3 ? { d3 } : {}), attrs: { ...defaults, ...attrsOf(kw, skip) } }]);
+  };
+  const only2d = (p, what) => { if (is3(p)) fail(`${what} ainda não aceita pontos 3D`); };
   const graphic = (v, what = 'argumento') => asGraphic(v) ?? fail(`${what} deve ser um gráfico ou uma lista de gráficos`);
   const distinct = (a, b) => {
-    if (a[0] === b[0] && a[1] === b[1]) fail('os dois pontos devem ser distintos');
+    if (a.length !== b.length) fail('pontos do plano e do espaço misturados');
+    if (a.every((x, k) => x === b[k])) fail('os dois pontos devem ser distintos');
     return [a, b];
   };
 
   const two = (a, b) => drags([[0, a], [1, b]]);
-  def('point', 1, ([p], kw) => prim('points', { pts: [pt(p)], ...drags([[0, p]]) }, kw), 'point(p): ponto (complexo ou tupla (x, y))');
+  def('point', 1, ([p], kw) => prim('points', { pts: [ptN(p)], ...drags([[0, p]]) }, kw), 'point(p): ponto (complexo, tupla (x, y) ou (x, y, z))');
   def('points', 1, ([ps], kw) => prim('points', { pts: pts(ps, 0), ...ptsDrag(ps) }, kw), 'points(ps): vários pontos');
-  def('segment', 2, ([a, b], kw) => prim('line', { pts: [pt(a), pt(b)], ...two(a, b) }, kw), 'segment(a, b): segmento de a a b');
-  def('arrow', 2, ([a, b], kw) => prim('arrow', { pts: distinct(pt(a), pt(b)), ...two(a, b) }, kw), 'arrow(a, b): seta de a para b');
+  def('segment', 2, ([a, b], kw) => prim('line', { pts: pts([a, b], 2, 'segment'), ...two(a, b) }, kw), 'segment(a, b): segmento de a a b');
+  def('arrow', 2, ([a, b], kw) => prim('arrow', { pts: distinct(ptN(a), ptN(b)), ...two(a, b) }, kw), 'arrow(a, b): seta de a para b');
   def('line', 1, ([ps], kw) => prim('line', { pts: pts(ps, 2, 'line'), closed: kw.closed === true, ...ptsDrag(ps) }, kw, ['closed']),
     'line([p₁, p₂, …], closed=false): poligonal');
   def('polygon', 1, ([ps], kw) => prim('line', { pts: pts(ps, 3, 'polygon'), closed: true, ...ptsDrag(ps) }, kw), 'polygon([p₁, p₂, …]): polígono');
   def('rect', 2, ([a, b], kw) => {
+    only2d(a, 'rect'); only2d(b, 'rect');
     const [[x0, y0], [x1, y1]] = [pt(a), pt(b)];
     return prim('line', { pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], closed: true, ...drags([[0, a], [2, b]]) }, kw);
   }, 'rect(a, b): retângulo de cantos opostos a e b');
-  def('infline', 2, ([a, b], kw) => prim('infline', { pts: distinct(pt(a), pt(b)), ...two(a, b) }, kw), 'infline(a, b): reta por a e b');
-  def('ray', 2, ([a, b], kw) => prim('ray', { pts: distinct(pt(a), pt(b)), ...two(a, b) }, kw), 'ray(a, b): semirreta de a passando por b');
-  def('circle', 2, ([c, r], kw) => prim('circle', { c: pt(c, 'centro'), r: positive(r, 'raio'), ...drags([['c', c]]) }, kw), 'circle(c, r): circunferência');
-  def('disk', 2, ([c, r], kw) => prim('circle', { c: pt(c, 'centro'), r: positive(r, 'raio'), ...drags([['c', c]]) }, kw, [], { fill: true }), 'disk(c, r): disco');
+  def('infline', 2, ([a, b], kw) => prim('infline', { pts: distinct(ptN(a), ptN(b)), ...two(a, b) }, kw), 'infline(a, b): reta por a e b');
+  def('ray', 2, ([a, b], kw) => prim('ray', { pts: distinct(ptN(a), ptN(b)), ...two(a, b) }, kw), 'ray(a, b): semirreta de a passando por b');
+  def('circle', 2, ([c, r], kw) => only2d(c, 'circle') ?? prim('circle', { c: pt(c, 'centro'), r: positive(r, 'raio'), ...drags([['c', c]]) }, kw), 'circle(c, r): circunferência');
+  def('disk', 2, ([c, r], kw) => only2d(c, 'disk') ?? prim('circle', { c: pt(c, 'centro'), r: positive(r, 'raio'), ...drags([['c', c]]) }, kw, [], { fill: true }), 'disk(c, r): disco');
   const arcData = (c, r, t0, t1) => {
+    only2d(c, 'arc');
     const a0 = real(t0, 'ângulo'), a1 = real(t1, 'ângulo');
     if (!(a1 > a0)) fail('o ângulo final deve ser maior que o inicial');
     return { c: pt(c, 'centro'), r: positive(r, 'raio'), t0: a0, t1: Math.min(a1, a0 + 2 * Math.PI), ...drags([['c', c]]) };
@@ -7104,8 +7152,10 @@ function makeGlobals() {
         out.push(p);
       }
     });
+    const dim = out.find((p) => p)?.length;
+    if (out.some((p) => p && p.length !== dim)) fail('curve: a função mistura pontos do plano e do espaço');
     return prim('line', { pts: out }, kw, ['points']);
-  }, 'curve(t -> z(t), a, b, points=400): curva paramétrica');
+  }, 'curve(t -> z(t), a, b, points=400): curva paramétrica no plano (z(t) complexo ou (x, y)) ou no espaço ((x, y, z))');
   // Conjunto zero de p(x, y): fatoração exata na FLINT (cada fator irredutível
   // uma vez, sem multiplicidades) e traçado em ponto flutuante (implicit.js).
   const IMPLICIT_OPTS = ['xlim', 'ylim', 'resolution', 'vars'];
@@ -7167,11 +7217,11 @@ function makeGlobals() {
     const POS = ['c', 'n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
     const pos = kw.pos ?? 'c';
     if (!POS.includes(pos)) fail(`pos deve ser um de: ${POS.join(', ')}`);
-    return prim('text', { s: typeof str === 'string' ? str : showText(str), p: pt(p), pos, ...drags([['p', p]]) }, kw, ['pos']);
+    return prim('text', { s: typeof str === 'string' ? str : showText(str), p: ptN(p), pos, ...drags([['p', p]]) }, kw, ['pos']);
   }, 'text(s, p, pos="c"): texto no ponto p');
   def('group', null, (args, kw) => {
     const g = graphic(args, 'group');
-    return new Graphic([{ g: 'group', items: g.items, attrs: attrsOf(kw) }], g.opts);
+    return new Graphic([{ g: 'group', items: g.items, ...(g.is3d ? { d3: true } : {}), attrs: attrsOf(kw) }], g.opts);
   }, 'group(g₁, g₂, …, attrs): grupo; atributos valem para os filhos que não os definem');
   def('style', 1, ([g], kw) => {
     const a = attrsOf(kw);
@@ -7185,18 +7235,20 @@ function makeGlobals() {
     const lim = limits(kw);
     if (lim.xlim) opts.xlim = lim.xlim;
     if (lim.ylim) opts.ylim = lim.ylim;
+    if (lim.zlim) opts.zlim = lim.zlim;
     for (const [k, v] of Object.entries(kw)) {
-      if (k === 'xlim' || k === 'ylim') continue;
+      if ((k === 'zlim' || k === 'box') && !G.is3d) fail(`${k} só vale para gráficos 3D`);
+      if (k === 'xlim' || k === 'ylim' || k === 'zlim') continue;
       if (k === 'aspect') {
         if (v !== 'equal' && v !== 'auto') fail('aspect deve ser "equal" ou "auto"');
         opts.aspect = v;
-      } else if (k === 'axes' || k === 'grid' || k === 'frame') opts[k] = toBool(v, k);
+      } else if (k === 'axes' || k === 'grid' || k === 'frame' || k === 'box') opts[k] = toBool(v, k);
       else if (k === 'title') opts.title = typeof v === 'string' ? v : showText(v);
       else if (k === 'width' || k === 'height') opts[k] = Math.min(2000, Math.max(100, positive(v, k)));
       else fail(`opção desconhecida de draw: ${k}`);
     }
     return new Graphic(G.items, opts);
-  }, 'draw(g, xlim=, ylim=, aspect="equal", axes=true, grid=true, frame=true, title=, width=, height=)');
+  }, 'draw(g, xlim=, ylim=, zlim=, aspect="equal", axes=true, grid=true, frame=true, box=true, title=, width=, height=)');
   const unit = (v, what) => {
     const x = real(v, what);
     if (x < 0 || x > 1) fail(`${what} deve estar entre 0 e 1`);
@@ -7213,6 +7265,7 @@ function makeGlobals() {
   // semelhanças); funções arbitrárias amostram e mapeiam cada ponto.
   const withItems = (g, what, f) => {
     const G = graphic(g, what);
+    if (G.is3d) fail(`${what} ainda não aceita gráficos 3D`);
     return new Graphic(f(G.items), G.opts);
   };
   const center = (c) => (c === undefined ? [0, 0] : pt(c, 'centro'));
@@ -7281,6 +7334,67 @@ function makeGlobals() {
     });
     return new Graphic([{ g: 'points', pts: points, attrs: { color: 1, ...attrsOf(kw, PLOT_OPTS) } }], plotOpts(kw, 'equal'));
   }, 'complexplot(zs, xlim=, ylim=, attrs): pontos no plano complexo');
+
+  // --------------------------------------------------------- gráficos 3D
+  // Retas e planos viajam como dados e são recortados pela caixa da cena na
+  // UI (plot3d.js); superfícies são grades (nu + 1)×(nv + 1) de vértices em
+  // Float32Array, com NaN onde a função não está definida.
+  const vec3 = (v, what) => {
+    const p = pt3(v, what);
+    if (p.every((x) => x === 0)) fail(`${what} não pode ser nulo`);
+    return p;
+  };
+  def('plane', 2, ([p, n], kw) => prim('plane', { p: pt3(p), n: vec3(n, 'normal') }, kw), 'plane(p, n): plano por p com normal n');
+  def('sphere', 2, ([c, r], kw) => prim('sphere', { c: pt3(c, 'centro'), r: positive(r, 'raio') }, kw), 'sphere(c, r): esfera');
+  const range2 = (v, what) => {
+    const ab = iterable(v ?? fail(`${what}: faltou o intervalo [lo, hi]`)).map(toNum);
+    if (ab.length !== 2 || !ab.every(Number.isFinite) || !(ab[1] > ab[0])) fail(`${what} deve ser [lo, hi] com lo < hi`);
+    return ab;
+  };
+  const gridSize = (kw, n0) => {
+    if (kw.points === undefined) return [n0, n0];
+    const ns = kw.points instanceof Elem ? [kw.points, kw.points] : iterable(kw.points);
+    if (ns.length !== 2) fail('points deve ser n ou [nu, nv]');
+    return ns.map((n) => Math.min(400, Math.max(2, toInt(n, 'points'))));
+  };
+  // Amostra f(u, v) na grade; val converte o valor em [x, y, z] ou null.
+  const grid3 = (f, [u0, u1], [v0, v1], [nu, nv], val) => {
+    const pos = new Float32Array((nu + 1) * (nv + 1) * 3).fill(NaN);
+    flint().withPrec(64, () => {
+      for (let i = 0; i <= nu; i++) {
+        const u = u0 + ((u1 - u0) * i) / nu;
+        for (let j = 0; j <= nv; j++) {
+          const v = v0 + ((v1 - v0) * j) / nv;
+          let w;
+          try {
+            w = callValue(f, [RR.fromNumber(u), RR.fromNumber(v)]);
+          } catch (e) {
+            if (e.name === 'CauchyError' && /recursão/.test(e.message)) throw e;
+            continue;
+          }
+          const p = val(w, u, v);
+          if (p && p.every(Number.isFinite)) pos.set(p, (i * (nv + 1) + j) * 3);
+        }
+      }
+    });
+    return pos;
+  };
+  const MESH_OPTS = ['points', 'xlim', 'ylim', 'zlim'];
+  def('surface', 3, ([f, ur, vr], kw) => {
+    const [nu, nv] = gridSize(kw, 40);
+    const pos = grid3(fn(f), range2(ur, 'intervalo de u'), range2(vr, 'intervalo de v'), [nu, nv], (w) => {
+      if (!(w instanceof Tuple && w.items.length === 3)) fail('surface: a função deve devolver uma tupla (x, y, z)');
+      return sharp(w);
+    });
+    return new Graphic([{ g: 'mesh', d3: true, nu, nv, pos, attrs: { color: 1, ...attrsOf(kw, MESH_OPTS) } }], { aspect: 'equal' });
+  }, 'surface((u, v) -> (x, y, z), [u₀, u₁], [v₀, v₁], points=40): superfície paramétrica');
+  def('plot3d', 3, ([f, xr, yr], kw) => {
+    const [nu, nv] = gridSize(kw, 50);
+    const pos = grid3(fn(f), range2(xr, 'intervalo de x'), range2(yr, 'intervalo de y'), [nu, nv], (w, x, y) => (isSharp(w) ? [x, y, toNum(w)] : null));
+    const lim = limits(kw);
+    return new Graphic([{ g: 'mesh', d3: true, data: true, nu, nv, pos, attrs: { color: 1, colormap: 'z', ...attrsOf(kw, MESH_OPTS) } }],
+      { aspect: 'auto', ...(lim.zlim ? { zlim: lim.zlim } : {}) });
+  }, 'plot3d((x, y) -> z, [x₀, x₁], [y₀, y₁], points=50, zlim=): gráfico de função de duas variáveis');
 
   // --------------------------------------------------------- widgets
   const widget = (kind, spec, defVal, parse) => {
@@ -8017,6 +8131,8 @@ const STRINGS = {
     'cell.add': 'Nova célula abaixo (Alt+Enter)', 'cell.del': 'Excluir célula', 'cell.code': 'código da célula',
     'cell.hide': 'Esconder código', 'cell.show': 'Mostrar código', 'cell.hidden': '‹› código oculto',
     graphicsTruncated: (n) => `só as primeiras ${n} primitivas foram desenhadas`,
+    loading3d: 'carregando gráficos 3D…',
+    load3dFailed: 'não foi possível carregar a biblioteca de gráficos 3D',
     error: 'erro', digits: (n) => `${n} dígitos`, matrix: (r, c) => `matriz ${r}×${c}`,
     'link-copied': 'Link copiado para a área de transferência', 'link-in-url': 'Link no endereço da página',
     'bad-file': (m) => `Arquivo inválido: ${m}`, 'bad-link': 'Link de notebook inválido',
@@ -8050,6 +8166,8 @@ const STRINGS = {
     'cell.add': 'New cell below (Alt+Enter)', 'cell.del': 'Delete cell', 'cell.code': 'cell code',
     'cell.hide': 'Hide code', 'cell.show': 'Show code', 'cell.hidden': '‹› hidden code',
     graphicsTruncated: (n) => `only the first ${n} primitives were drawn`,
+    loading3d: 'loading 3D graphics…',
+    load3dFailed: 'could not load the 3D graphics library',
     error: 'error', digits: (n) => `${n} digits`, matrix: (r, c) => `${r}×${c} matrix`,
     'link-copied': 'Link copied to the clipboard', 'link-in-url': 'Link is in the address bar',
     'bad-file': (m) => `Invalid file: ${m}`, 'bad-link': 'Invalid notebook link',
@@ -8204,7 +8322,8 @@ const WORDS = {
   'gráfico': 'graphic', ponto: 'point', centro: 'center', raio: 'radius', 'ângulo': 'angle', 'início': 'start',
   matiz: 'hue', 'saturação': 'saturation', luminosidade: 'lightness', 'componente de cor': 'color component',
   deslocamento: 'displacement', fator: 'factor', 'entrada da matriz': 'matrix entry',
-  'módulo': 'modulus', resto: 'remainder', 'ponto inicial': 'initial point',
+  'módulo': 'modulus', resto: 'remainder', 'ponto inicial': 'initial point', normal: 'normal', pontos: 'points',
+  'intervalo de u': 'range of u', 'intervalo de v': 'range of v', 'intervalo de x': 'range of x', 'intervalo de y': 'range of y',
 };
 const w = (s) => WORDS[s] ?? s;
 
@@ -8428,7 +8547,20 @@ const RULES = [
   [/^valor não iterável$/, 'value is not iterable'],
   [/^valuation\(0, p\) é infinito$/, 'valuation(0, p) is infinite'],
   [/^Zmod\(n\) requer n > 1$/, 'Zmod(n) requires n > 1'],
-  [/^(xlim|ylim) deve ser \[lo, hi\] com lo < hi$/, '$1 must be [lo, hi] with lo < hi'],
+  [/^(xlim|ylim|zlim) deve ser \[lo, hi\] com lo < hi$/, '$1 must be [lo, hi] with lo < hi'],
+  [/^(.+) deve ser \[lo, hi\] com lo < hi$/, (_, x) => `${w(x)} must be [lo, hi] with lo < hi`],
+  [/^(.+): faltou o intervalo \[lo, hi\]$/, (_, x) => `${w(x)}: missing range [lo, hi]`],
+  [/^(.+) deve ser uma tupla \(x, y, z\)$/, (_, x) => `${w(x)} must be a tuple (x, y, z)`],
+  [/^(.+) não pode ser nulo$/, (_, x) => `${w(x)} cannot be zero`],
+  [/^não é possível juntar gráficos 2D e 3D$/, 'cannot combine 2D and 3D graphics'],
+  [/^(.+) ainda não aceita pontos 3D$/, '$1 does not accept 3D points yet'],
+  [/^(.+) ainda não aceita gráficos 3D$/, '$1 does not accept 3D graphics yet'],
+  [/^(?:(.+): )?pontos do plano e do espaço misturados$/, (_, x) => `${x ? `${w(x)}: ` : ''}planar and spatial points mixed`],
+  [/^curve: a função mistura pontos do plano e do espaço$/, 'curve: the function mixes planar and spatial points'],
+  [/^surface: a função deve devolver uma tupla \(x, y, z\)$/, 'surface: the function must return a tuple (x, y, z)'],
+  [/^(zlim|box) só vale para gráficos 3D$/, '$1 only applies to 3D graphics'],
+  [/^(.+) deve ser "z" \(cor pela altura\) ou false$/, '$1 must be "z" (color by height) or false'],
+  [/^points deve ser n ou \[nu, nv\]$/, 'points must be n or [nu, nv]'],
   [/^(.+) deve ser um número complexo ou uma tupla \(x, y\)$/, (_, x) => `${w(x)} must be a complex number or a tuple (x, y)`],
   [/^(.+): esperava pelo menos (\d+) pontos$/, '$1: expected at least $2 points'],
   [/^(.+) deve ser um número real$/, (_, x) => `${w(x)} must be a real number`],
@@ -8615,6 +8747,7 @@ function r(d, slots, inner) {
     case 'fn': return `<span class="fnv">ƒ${d.name ? ' ' + esc(d.name) : ''}${d.arity !== null && d.arity !== undefined ? `<span class="note">/${d.arity}</span>` : ''}</span>`;
     case 'ring': return `<span class="ring">${ringName(d.s)}</span>`;
     case 'graphics':
+    case 'graphics3d':
     case 'widget': {
       const k = slots.length;
       slots.push(d);
@@ -9054,7 +9187,456 @@ function hover(svg, leaves, { width, height, x0, x1, y0, y1, X, Y, W, H, m }) {
   svg.addEventListener('pointerleave', () => box.setAttribute('visibility', 'hidden'));
 }
 
-return { renderGraphics, handleKey };
+return { ticks, fmt, flatten, renderGraphics, handleKey };
+})();
+// ---- src/ui/plot3d.js
+__m["src/ui/plot3d.js"] = (() => {
+// Gráficos 3D com three.js. A biblioteca (dist/three.module.min.js) só é
+// baixada quando aparece a primeira figura 3D. Recebe do worker
+// {t: 'graphics3d', items, opts}: pontos, poligonais, retas, planos, esferas,
+// textos e malhas (grades de vértices em Float32Array, NaN nas lacunas).
+//
+// Cada célula guarda suas figuras (uma por slot): reavaliar a célula refaz a
+// cena no mesmo contexto WebGL e mantém a câmera. Figuras fora do documento
+// são liberadas, porque os navegadores limitam os contextos WebGL.
+
+const { t } = __m["src/ui/i18n.js"];
+const { ticks, fmt, flatten } = __m["src/ui/plot.js"];
+
+let THREE = null;
+let loading = null;
+function loadThree() {
+  loading ??= import(new URL('three.module.min.js', document.baseURI).href).then((m) => (THREE = m));
+  return loading;
+}
+
+const live = new Set();
+
+// Monta (ou atualiza) a figura `key` da célula em lugar de `slot`.
+function mount3d(figs, key, slot, d, avail) {
+  let fig = figs.get(key);
+  if (!fig || fig.disposed) {
+    fig = new Figure(figs, key);
+    figs.set(key, fig);
+  }
+  slot.replaceWith(fig.el);
+  fig.show(d, avail);
+  setTimeout(sweep, 1000);
+}
+
+// Libera figuras que saíram do documento.
+function sweep() {
+  for (const fig of live) if (!fig.el.isConnected) fig.dispose();
+}
+
+// O tema muda as cores: refaz as cenas.
+const retheme = () => { for (const fig of live) if (fig.d) fig.show(fig.d, fig.avail); };
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// ------------------------------------------------------------------ cores
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function color(c) {
+  if (typeof c === 'number') return new THREE.Color(cssVar(`--s${(c - 1) % 6}`));
+  if (c === 'ink' || c === undefined || c === null) return new THREE.Color(c === 'ink' ? cssVar('--ink') : cssVar('--s0'));
+  return new THREE.Color(c);
+}
+
+// Escala de cores pela altura (viridis, 5 paradas).
+const VIRIDIS = [[0.267, 0.005, 0.329], [0.229, 0.322, 0.546], [0.128, 0.567, 0.551], [0.369, 0.789, 0.383], [0.993, 0.906, 0.144]];
+function viridis(s) {
+  const x = Math.min(1, Math.max(0, s)) * (VIRIDIS.length - 1);
+  const k = Math.min(VIRIDIS.length - 2, Math.floor(x)), f = x - k;
+  return VIRIDIS[k].map((a, i) => a + (VIRIDIS[k + 1][i] - a) * f);
+}
+
+// ------------------------------------------------------------------ caixa
+
+// Intervalo robusto (quantis) para alturas de gráficos com polos.
+function robust(vs) {
+  vs = vs.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!vs.length) return null;
+  const q = (p) => vs[Math.round(p * (vs.length - 1))];
+  let lo = vs[0], hi = vs[vs.length - 1];
+  const core = q(0.98) - q(0.02);
+  if (core > 0 && hi - lo > 20 * core) { lo = q(0.02) - core * 0.5; hi = q(0.98) + core * 0.5; }
+  return [lo, hi];
+}
+
+function bounds(leaves, o) {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  const dataZ = [];
+  const add = (p, data) => {
+    if (!p || !p.every(Number.isFinite)) return;
+    for (let k = 0; k < 3; k++) {
+      if (k === 2 && data) { dataZ.push(p[2]); continue; }
+      lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]);
+    }
+  };
+  for (const it of leaves) {
+    switch (it.g) {
+      case 'sphere': add(it.c.map((x) => x - it.r)); add(it.c.map((x) => x + it.r)); break;
+      case 'plane': add(it.p); break;
+      case 'text': add(it.p); break;
+      case 'mesh':
+        for (let i = 0; i < it.pos.length; i += 3) add([it.pos[i], it.pos[i + 1], it.pos[i + 2]], it.data);
+        break;
+      default: for (const p of it.pts) add(p);
+    }
+  }
+  const z = robust(dataZ);
+  if (z) { lo[2] = Math.min(lo[2], z[0]); hi[2] = Math.max(hi[2], z[1]); }
+  const lims = [o.xlim, o.ylim, o.zlim];
+  const span = Math.max(1e-9, ...[0, 1, 2].map((k) => (hi[k] > lo[k] ? hi[k] - lo[k] : 0)));
+  const box = [0, 1, 2].map((k) => {
+    if (lims[k]) return [...lims[k]];
+    if (!(hi[k] >= lo[k])) return [-1, 1];
+    if (hi[k] - lo[k] < 1e-9 * span) { const w = span > 1e-9 ? span / 2 : 1; return [lo[k] - w, hi[k] + w]; }
+    return [lo[k], hi[k]];
+  });
+  return box;
+}
+
+// ------------------------------------------------------------------ figura
+
+class Figure {
+  constructor(figs, key) {
+    this.figs = figs;
+    this.key = key;
+    this.view = { theta: -1.07, phi: 0.95, zoom: 1 };
+    this.el = document.createElement('div');
+    this.el.className = 'plot3d';
+    this.el.tabIndex = 0;
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'overlay3d';
+    this.el.append(this.overlay);
+    this.disposed = false;
+    live.add(this);
+  }
+
+  show(d, avail) {
+    this.d = d;
+    this.avail = avail;
+    const o = d.opts ?? {};
+    this.width = Math.round(o.width ?? avail);
+    this.height = Math.round(o.height ?? Math.min(520, Math.max(260, this.width * 0.72)));
+    this.el.style.width = `${this.width}px`;
+    this.el.style.height = `${this.height}px`;
+    if (!THREE) {
+      this.overlay.innerHTML = `<div class="loading3d">${t('loading3d')}</div>`;
+      loadThree().then(() => { if (!this.disposed && this.d) this.show(this.d, this.avail); },
+        () => { this.overlay.innerHTML = `<div class="loading3d">${t('load3dFailed')}</div>`; });
+      return;
+    }
+    if (!this.renderer) this.init();
+    this.renderer.setSize(this.width, this.height);
+    this.camera.aspect = this.width / this.height;
+    this.build(d);
+    this.render();
+  }
+
+  init() {
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    r.localClippingEnabled = true;
+    this.renderer = r;
+    this.el.prepend(r.domElement);
+    this.camera = new THREE.PerspectiveCamera(30, 1, 0.01, 1000);
+    this.camera.up.set(0, 0, 1);
+    this.controls();
+  }
+
+  // Arrastar gira; a roda aproxima quando a figura tem foco (clique nela);
+  // duplo clique volta à vista inicial; setas giram.
+  controls() {
+    const el = this.renderer.domElement;
+    let last = null;
+    el.addEventListener('pointerdown', (ev) => {
+      last = [ev.clientX, ev.clientY];
+      el.setPointerCapture(ev.pointerId);
+      this.el.focus({ preventScroll: true });
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!last) return;
+      this.turn((ev.clientX - last[0]) * 0.01, (ev.clientY - last[1]) * 0.01);
+      last = [ev.clientX, ev.clientY];
+    });
+    const up = () => { last = null; };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('wheel', (ev) => {
+      if (document.activeElement !== this.el) return;
+      ev.preventDefault();
+      this.view.zoom = Math.min(6, Math.max(0.25, this.view.zoom * Math.exp(ev.deltaY * 0.001)));
+      this.render();
+    }, { passive: false });
+    el.addEventListener('dblclick', () => { this.view = { theta: -1.07, phi: 0.95, zoom: 1 }; this.render(); });
+    this.el.addEventListener('keydown', (ev) => {
+      const k = { ArrowLeft: [0.1, 0], ArrowRight: [-0.1, 0], ArrowUp: [0, 0.1], ArrowDown: [0, -0.1] }[ev.key];
+      if (!k) return;
+      ev.preventDefault();
+      this.turn(...k);
+    });
+  }
+
+  turn(dt, dp) {
+    this.view.theta -= dt;
+    this.view.phi = Math.min(Math.PI - 0.02, Math.max(0.02, this.view.phi - dp));
+    this.render();
+  }
+
+  // Coordenadas dos dados → cena: centro da caixa na origem; "equal" usa a
+  // mesma escala nos três eixos, "auto" leva x e y a 2 e z a 1,4.
+  build(d) {
+    const o = d.opts ?? {};
+    if (this.scene) this.free();
+    const scene = new THREE.Scene();
+    this.scene = scene;
+    const leaves = flatten(d.items, {}, []);
+    const box = bounds(leaves, o);
+    const span = box.map(([a, b]) => b - a);
+    const c = box.map(([a, b]) => (a + b) / 2);
+    const s = o.aspect === 'auto' ? [2 / span[0], 2 / span[1], 1.4 / span[2]] : span.map(() => 2 / Math.max(...span));
+    const S = (p) => new THREE.Vector3((p[0] - c[0]) * s[0], (p[1] - c[1]) * s[1], (p[2] - c[2]) * s[2]);
+    const h = span.map((w, k) => (w * s[k]) / 2);
+    this.radius = Math.hypot(...h);
+    this.box = box;
+    this.h = h;
+    const eps = 1e-3 * this.radius;
+    const clip = [0, 1, 2].flatMap((k) => [1, -1].map((sg) => {
+      const n = new THREE.Vector3(); n.setComponent(k, sg);
+      return new THREE.Plane(n, h[k] + eps);
+    }));
+    const tube = (w) => (w ?? 1.5) * 0.004 * this.radius;
+    const mat = (a, opts = {}) => {
+      const op = a.opacity ?? opts.opacity ?? 1;
+      return new THREE.MeshPhongMaterial({
+        color: color(a.color ?? 1), side: THREE.DoubleSide, shininess: 40, clippingPlanes: clip,
+        transparent: op < 1, opacity: op, depthWrite: op >= 1, ...opts.extra,
+      });
+    };
+    const far = 8 * this.radius;
+    this.labels = [];
+    for (const it of leaves) {
+      const a = it.attrs;
+      switch (it.g) {
+        case 'points': {
+          const g = new THREE.BufferGeometry().setFromPoints(it.pts.filter(Boolean).map(S));
+          const m = new THREE.PointsMaterial({ color: color(a.color ?? 1), size: (a.size ?? 3) * 2, sizeAttenuation: false,
+            map: dotTexture(), alphaTest: 0.5, transparent: true, opacity: a.opacity ?? 1, clippingPlanes: clip });
+          scene.add(new THREE.Points(g, m));
+          break;
+        }
+        case 'line': case 'arrow': {
+          const runs = [[]];
+          for (const p of it.pts) if (p) runs[runs.length - 1].push(S(p)); else runs.push([]);
+          if (it.closed && it.pts[0] && it.pts.at(-1)) runs[runs.length - 1].push(S(it.pts[0]));
+          for (const r of runs) if (r.length >= 2) scene.add(new THREE.Mesh(polyTube(r, tube(a.width)), mat(a)));
+          if (it.g === 'arrow') scene.add(arrowHead(S(it.pts[0]), S(it.pts[1]), tube(a.width), mat(a)));
+          break;
+        }
+        case 'infline': case 'ray': {
+          const p = S(it.pts[0]), q = S(it.pts[1]);
+          const dir = q.clone().sub(p).normalize();
+          const a0 = it.g === 'ray' ? p : p.clone().addScaledVector(dir, -far);
+          scene.add(new THREE.Mesh(polyTube([a0, p.clone().addScaledVector(dir, far)], tube(a.width)), mat(a)));
+          break;
+        }
+        case 'plane': {
+          // Normal na cena: inversa transposta da escala.
+          const n = new THREE.Vector3(it.n[0] / s[0], it.n[1] / s[1], it.n[2] / s[2]).normalize();
+          const p = S(it.p);
+          const g = new THREE.PlaneGeometry(2 * far, 2 * far);
+          const m = new THREE.Mesh(g, mat({ color: 2, ...a }, { opacity: 0.5 }));
+          m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+          m.position.copy(n.clone().multiplyScalar(n.dot(p)));
+          scene.add(m);
+          break;
+        }
+        case 'sphere': {
+          const m = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 32), mat(a));
+          m.scale.set(it.r * s[0], it.r * s[1], it.r * s[2]);
+          m.position.copy(S(it.c));
+          scene.add(m);
+          break;
+        }
+        case 'mesh': scene.add(...meshObjects(it, S, mat, clip, box[2])); break;
+        case 'text': this.labels.push({ p: S(it.p), s: it.s, cls: 'text3d', color: a.color, pos: it.pos }); break;
+      }
+    }
+    if (o.box !== false) scene.add(boxLines(h, clip));
+    if (o.axes !== false) this.axisLabels(box, h);
+    if (o.title) this.labels.push({ title: o.title });
+    scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    this.light = new THREE.DirectionalLight(0xffffff, 1.6);
+    scene.add(this.light);
+  }
+
+  // Marcas nas arestas da caixa: x e y na base, z numa aresta vertical.
+  axisLabels(box, h) {
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const edges = [
+      (u) => V(u, -h[1] * 1.12, -h[2]), (u) => V(h[0] * 1.12, u, -h[2]), (u) => V(-h[0] * 1.08, -h[1] * 1.08, u),
+    ];
+    for (let k = 0; k < 3; k++) {
+      const [a, b] = box[k];
+      for (const v of ticks(a, b, k === 2 ? 4 : 5)) {
+        const u = ((v - a) / (b - a) - 0.5) * 2 * h[k];
+        this.labels.push({ p: edges[k](u), s: fmt(v), cls: 'tick3d' });
+      }
+      this.labels.push({ p: edges[k](0).multiplyScalar(1.12).setComponent(k, k === 2 ? h[2] * 1.15 : 0), s: 'xyz'[k], cls: 'axis3d' });
+    }
+  }
+
+  render() {
+    if (!this.renderer || !this.scene) return;
+    const { theta, phi, zoom } = this.view;
+    const cam = this.camera;
+    const dist = (zoom * this.radius) / Math.sin((cam.fov * Math.PI) / 360);
+    cam.position.set(dist * Math.sin(phi) * Math.cos(theta), dist * Math.sin(phi) * Math.sin(theta), dist * Math.cos(phi));
+    cam.lookAt(0, 0, 0);
+    cam.near = dist / 100;
+    cam.far = dist * 10;
+    cam.updateProjectionMatrix();
+    this.light.position.copy(cam.position).add(new THREE.Vector3(0, 0, dist * 0.5));
+    this.renderer.render(this.scene, cam);
+    this.placeLabels();
+  }
+
+  placeLabels() {
+    const html = [];
+    for (const l of this.labels) {
+      if (l.title) { html.push(`<div class="title3d">${esc(l.title)}</div>`); continue; }
+      const v = l.p.clone().project(this.camera);
+      if (v.z > 1) continue;
+      const x = ((v.x + 1) / 2) * this.width, y = ((1 - v.y) / 2) * this.height;
+      const col = l.color === undefined ? '' : `color:${typeof l.color === 'number' ? `var(--s${(l.color - 1) % 6})` : l.color === 'ink' ? 'var(--ink)' : l.color};`;
+      html.push(`<span class="${l.cls}" style="${col}left:${x.toFixed(1)}px;top:${y.toFixed(1)}px">${esc(l.s)}</span>`);
+    }
+    this.overlay.innerHTML = html.join('');
+  }
+
+  free() {
+    this.scene.traverse((ob) => {
+      ob.geometry?.dispose();
+      const ms = Array.isArray(ob.material) ? ob.material : ob.material ? [ob.material] : [];
+      for (const m of ms) m.dispose();
+    });
+    this.scene = null;
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    live.delete(this);
+    if (this.figs.get(this.key) === this) this.figs.delete(this.key);
+    if (this.scene) this.free();
+    if (this.renderer) {
+      this.renderer.dispose();
+      this.renderer.forceContextLoss();
+    }
+  }
+}
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+// Tubo ao longo de uma poligonal (as retas do WebGL têm 1 px).
+function polyTube(pts, r) {
+  const path = new THREE.CurvePath();
+  for (let k = 0; k + 1 < pts.length; k++) if (pts[k].distanceTo(pts[k + 1]) > 0) path.add(new THREE.LineCurve3(pts[k], pts[k + 1]));
+  if (!path.curves.length) return new THREE.SphereGeometry(r, 8, 6).translate(pts[0].x, pts[0].y, pts[0].z);
+  return new THREE.TubeGeometry(path, Math.min(4000, path.curves.length), r, 8, false);
+}
+
+function arrowHead(p, q, r, m) {
+  const dir = q.clone().sub(p);
+  const len = Math.min(dir.length() * 0.3, r * 12);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(r * 3.5, len, 16), m);
+  dir.normalize();
+  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  cone.position.copy(q).addScaledVector(dir, -len / 2);
+  return cone;
+}
+
+let dot = null;
+function dotTexture() {
+  if (dot) return dot;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#fff';
+  g.beginPath();
+  g.arc(32, 32, 30, 0, 2 * Math.PI);
+  g.fill();
+  dot = new THREE.CanvasTexture(cv);
+  return dot;
+}
+
+// Superfície: triângulos nas células da grade com os 4 vértices definidos,
+// normais pela média das faces, cor pela altura dentro da caixa [z0, z1]
+// (colormap) e linhas da malha (mesh, até ~24 em cada direção).
+function meshObjects(it, S, mat, clip, [z0, z1]) {
+  const { nu, nv, pos } = it;
+  const a = it.attrs;
+  const n = (nu + 1) * (nv + 1);
+  const P = new Float32Array(n * 3);
+  const ok = new Uint8Array(n);
+  for (let k = 0; k < n; k++) {
+    const p = [pos[3 * k], pos[3 * k + 1], pos[3 * k + 2]];
+    if (!p.every(Number.isFinite)) continue;
+    ok[k] = 1;
+    S(p).toArray(P, 3 * k);
+  }
+  const idx = [];
+  const at = (i, j) => i * (nv + 1) + j;
+  for (let i = 0; i < nu; i++) {
+    for (let j = 0; j < nv; j++) {
+      const q = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+      if (q.every((k) => ok[k])) idx.push(q[0], q[1], q[2], q[0], q[2], q[3]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const extra = { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 };
+  if (a.colormap === 'z') {
+    const C = new Float32Array(n * 3);
+    for (let k = 0; k < n; k++) if (ok[k]) C.set(viridis(z1 > z0 ? (pos[3 * k + 2] - z0) / (z1 - z0) : 0.5), 3 * k);
+    g.setAttribute('color', new THREE.BufferAttribute(C, 3));
+    extra.vertexColors = true;
+  }
+  const m = mat(a, { extra });
+  if (a.colormap === 'z') m.color.set(0xffffff);
+  const out = [new THREE.Mesh(g, m)];
+  if (a.mesh !== false) {
+    const L = [];
+    const every = (len) => Math.max(1, Math.round(len / 24));
+    const su = every(nu), sv = every(nv);
+    const seg = (k1, k2) => { if (ok[k1] && ok[k2]) L.push(...P.subarray(3 * k1, 3 * k1 + 3), ...P.subarray(3 * k2, 3 * k2 + 3)); };
+    for (let i = 0; i <= nu; i += su) for (let j = 0; j < nv; j++) seg(at(i, j), at(i, j + 1));
+    for (let j = 0; j <= nv; j += sv) for (let i = 0; i < nu; i++) seg(at(i, j), at(i + 1, j));
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(L), 3));
+    out.push(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: color('ink'), transparent: true, opacity: 0.22, clippingPlanes: clip })));
+  }
+  return out;
+}
+
+function boxLines(h, clip) {
+  const [x, y, z] = h;
+  const c = [[-x, -y, -z], [x, -y, -z], [x, y, -z], [-x, y, -z], [-x, -y, z], [x, -y, z], [x, y, z], [-x, y, z]];
+  const E = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(E.flatMap(([a, b]) => [...c[a], ...c[b]])), 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: new THREE.Color(cssVar('--muted')), transparent: true, opacity: 0.5 }));
+}
+
+return { mount3d };
 })();
 // ---- src/ui/highlight.js
 __m["src/ui/highlight.js"] = (() => {
@@ -9392,6 +9974,43 @@ const EXAMPLES = [
     ],
   },
   {
+    title: { pt: 'Gráficos 3D', en: '3D graphics' },
+    cells: [
+      {
+        pt: '# Gráficos 3D: pontos do espaço são tuplas (x, y, z). Arraste para girar;\n# clique na figura e use a roda para aproximar; duplo clique volta à vista inicial.\nR = slider(1, 3, 0.1, value = 2)',
+        en: '# 3D graphics: points in space are tuples (x, y, z). Drag to rotate; click the\n# figure and use the wheel to zoom; double-click goes back to the initial view.\nR = slider(1, 3, 0.1, value = 2)',
+      },
+      'surface((u, v) -> ((R + cos(v))*cos(u), (R + cos(v))*sin(u), sin(v)), [0, 2pi], [0, 2pi])',
+      {
+        pt: '# Gráfico de uma função de duas variáveis, colorido pela altura\nplot3d((x, y) -> sin(x)*cos(y), [-3, 3], [-3, 3])',
+        en: '# Graph of a function of two variables, colored by height\nplot3d((x, y) -> sin(x)*cos(y), [-3, 3], [-3, 3])',
+      },
+      {
+        pt: '# Polos: zlim fixa a altura e o que sai da caixa é cortado\nplot3d((x, y) -> 1/(x^2 + y^2), [-1, 1], [-1, 1], zlim = [0, 10], points = 60)',
+        en: '# Poles: zlim fixes the height and whatever leaves the box is clipped\nplot3d((x, y) -> 1/(x^2 + y^2), [-1, 1], [-1, 1], zlim = [0, 10], points = 60)',
+      },
+      {
+        pt: '# Superfície mínima de Enneper\nsurface((u, v) -> (u - u^3/3 + u*v^2, v - v^3/3 + v*u^2, u^2 - v^2), [-2, 2], [-2, 2], colormap = "z")',
+        en: '# Enneper\'s minimal surface\nsurface((u, v) -> (u - u^3/3 + u*v^2, v - v^3/3 + v*u^2, u^2 - v^2), [-2, 2], [-2, 2], colormap = "z")',
+      },
+      {
+        pt: '# Hélice e a reta tangente num ponto móvel: tuplas somam como vetores\nh(t) = (cos(t), sin(t), t/4)\nt0 = slider(0, 4pi, 0.1, value = 2)',
+        en: '# Helix and the tangent line at a moving point: tuples add as vectors\nh(t) = (cos(t), sin(t), t/4)\nt0 = slider(0, 4pi, 0.1, value = 2)',
+      },
+      'curve(h, 0, 4pi, width = 2) + point(h(t0), size = 5, color = 2) + infline(h(t0), h(t0) + (-sin(t0), cos(t0), 1/4), color = 2)',
+      {
+        pt: '# Esfera cortada por um plano: a interseção é um círculo de raio √(1 − c²)\nc = slider(-1, 1, 0.05, value = 1/2)',
+        en: '# A sphere cut by a plane: the intersection is a circle of radius √(1 − c²)\nc = slider(-1, 1, 0.05, value = 1/2)',
+      },
+      'sphere((0, 0, 0), 1, opacity = 0.35) + plane((0, 0, c), (0, 0, 1)) + curve(t -> (sqrt(1 - c^2)*cos(t), sqrt(1 - c^2)*sin(t), c), 0, 2pi, color = 3, width = 2)',
+      {
+        pt: '# Pontos de Fibonacci: n pontos quase igualmente espaçados na esfera\nn = slider(50, 1000, 50, value = 400)',
+        en: '# Fibonacci points: n almost evenly spaced points on the sphere\nn = slider(50, 1000, 50, value = 400)',
+      },
+      'points([let z = 1 - (2k - 1)/n, r = sqrt(1 - z^2), a = k*pi*(3 - sqrt(5)) in (r*cos(a), r*sin(a), z) | k ← 1..n], size = 2)',
+    ],
+  },
+  {
     title: { pt: 'Problema de Apolônio', en: 'Problem of Apollonius' },
     cells: [
       {
@@ -9569,6 +10188,7 @@ const CATEGORIES = [
   ['list', 'Listas e funções de ordem superior', 'Lists and higher-order functions'],
   ['plot', 'Gráficos e widgets', 'Plots and widgets'],
   ['draw', 'Desenho: primitivas e atributos', 'Drawing: primitives and attributes'],
+  ['3d', 'Gráficos 3D', '3D graphics'],
   ['misc', 'Diversos', 'Miscellaneous'],
 ];
 
@@ -9886,27 +10506,31 @@ id ¦ list ¦ id(x) ¦ Identidade. ¦ Identity. ¦ map([1, 2], id) ¦
 plot ¦ plot ¦ plot(f, a, b), plot([f, g], a, b, points=, xlim=, ylim=, title=, atributos) ¦ Gráfico de funções reais amostradas em [a, b]. xlim = [x₀, x₁] e ylim = [y₀, y₁] fixam a janela visível (sem eles, y é escolhido automaticamente ignorando polos). Aceita atributos de desenho (color, width, dash…) e pode ser somado a primitivas com +. ¦ Plot of real functions sampled on [a, b]. xlim = [x₀, x₁] and ylim = [y₀, y₁] fix the visible window (without them, y is chosen automatically, ignoring poles). Accepts drawing attributes (color, width, dash…) and can be added to primitives with +. ¦ plot(t -> sin(t)/t, -20, 20) ;; plot([sin, cos], 0, 2pi) ;; plot(tan, -5, 5, ylim = [-4, 4]) ;; plot(sin, 0, 2pi, color = "red", dash = "dash") + point((pi, 0)) ¦
 listplot ¦ plot ¦ listplot(ys), listplot([(x, y), …], joined=true, xlim=, ylim=, atributos) ¦ Gráfico de pontos; xlim e ylim fixam a janela visível. Aceita atributos de desenho (color, marker, size…). ¦ Point plot; xlim and ylim fix the visible window. Accepts drawing attributes (color, marker, size…). ¦ listplot(map(1..50, k -> numdivisors(k))) ;; listplot(map(1..100, eulerphi), xlim = [0, 50], ylim = [0, 50]) ¦
 complexplot ¦ plot ¦ complexplot(zs), complexplot(zs, xlim=, ylim=, atributos) ¦ Pontos no plano complexo, com escala igual nos eixos. xlim (parte real) e ylim (parte imaginária) fixam a região; se as proporções não baterem com o quadro, o outro eixo é ampliado para manter a escala. ¦ Points in the complex plane, with equal axis scales. xlim (real part) and ylim (imaginary part) fix the region; if the proportions do not match the frame, the other axis is widened to keep the scale. ¦ x = gen(ZZ[x]); complexplot(roots(x^30 - x - 1)) ;; x = gen(ZZ[x]); complexplot(roots(x^60 - x - 1), xlim = [-1.5, 1.5], ylim = [-1.5, 1.5]) ¦
-point ¦ draw ¦ point(p, atributos) ¦ Um ponto. Pontos são números complexos (2 + i), reais (3) ou tuplas (x, y); bolas viram seu ponto médio. Atributos: color, size (raio em px), marker ("dot", "circle", "square", "diamond", "cross", "plus"), opacity, label. ¦ A point. Points are complex numbers (2 + i), reals (3) or tuples (x, y); balls become their midpoint. Attributes: color, size (radius in px), marker ("dot", "circle", "square", "diamond", "cross", "plus"), opacity, label. ¦ point(1 + i) ;; point((2, 3), size = 5, color = "red") ¦
+point ¦ draw ¦ point(p, atributos) ¦ Um ponto. Pontos são números complexos (2 + i), reais (3) ou tuplas (x, y); bolas viram seu ponto médio. Com uma tupla (x, y, z), o ponto é do espaço e o gráfico é 3D (o mesmo vale para segment, line, polygon, arrow, infline, ray e text). Atributos: color, size (raio em px), marker ("dot", "circle", "square", "diamond", "cross", "plus"), opacity, label. ¦ A point. Points are complex numbers (2 + i), reals (3) or tuples (x, y); balls become their midpoint. With a tuple (x, y, z) the point lies in space and the graphic is 3D (the same holds for segment, line, polygon, arrow, infline, ray and text). Attributes: color, size (radius in px), marker ("dot", "circle", "square", "diamond", "cross", "plus"), opacity, label. ¦ point(1 + i) ;; point((2, 3), size = 5, color = "red") ;; point((1, 2, 3)) + segment((0, 0, 0), (1, 2, 3)) ¦
 points ¦ draw ¦ points(ps, atributos) ¦ Vários pontos com o mesmo estilo (desenhados de uma vez, eficiente para milhares de pontos). ¦ Many points with the same style (drawn at once, efficient for thousands of points). ¦ points([exp(2pi*i*k/12) | k <- 1..12], marker = "square") ¦
 segment ¦ draw ¦ segment(a, b, atributos) ¦ Segmento de a até b. Atributos de traço: color, width (px), dash ("dot", "dash", "dashdot" ou "4 2"), opacity. ¦ Segment from a to b. Stroke attributes: color, width (px), dash ("dot", "dash", "dashdot" or "4 2"), opacity. ¦ segment(0, 1 + i) ;; segment((0, 0), (1, 2), width = 3, dash = "dash") ¦
 arrow ¦ draw ¦ arrow(a, b, atributos) ¦ Seta de a para b (o tamanho da ponta acompanha width). ¦ Arrow from a to b (the head size follows width). ¦ arrow(0, 1 + i) ;; [arrow(0, exp(i*k*pi/4), color = k) | k <- 1..6] ¦
 line ¦ draw ¦ line([p₁, p₂, …], closed=false, atributos) ¦ Poligonal pelos pontos dados; closed = true fecha o caminho. ¦ Polyline through the given points; closed = true closes the path. ¦ line([0, 1, 1 + i, 2i]) ;; line([(k, k^2) | k <- -3..3]) ¦
 polygon ¦ draw ¦ polygon([p₁, p₂, …], atributos) ¦ Polígono fechado. fill = true preenche com a cor do traço; fill = "cor" usa outra cor; opacity torna translúcido. ¦ Closed polygon. fill = true fills with the stroke color; fill = "color" uses another color; opacity makes it translucent. ¦ polygon([0, 1, i]) ;; polygon([exp(2pi*i*k/5) | k <- 1..5], fill = "gold", color = "ink") ¦
 rect ¦ draw ¦ rect(a, b, atributos) ¦ Retângulo de lados paralelos aos eixos com cantos opostos a e b. ¦ Axis-parallel rectangle with opposite corners a and b. ¦ rect(0, 2 + i, fill = true, opacity = 0.3) ¦
-infline ¦ draw ¦ infline(a, b, atributos) ¦ Reta infinita por a e b, cortada nas bordas da janela. ¦ Infinite line through a and b, clipped at the window edges. ¦ infline(0, 1 + i) + circle(0, 1) ¦
+infline ¦ draw ¦ infline(a, b, atributos) ¦ Reta infinita por a e b, cortada nas bordas da janela (em 3D, pela caixa da cena). ¦ Infinite line through a and b, clipped at the window edges (in 3D, by the scene box). ¦ infline(0, 1 + i) + circle(0, 1) ¦
 ray ¦ draw ¦ ray(a, b, atributos) ¦ Semirreta que parte de a e passa por b. ¦ Ray starting at a through b. ¦ ray(0, 1 + i) + point(0) ¦
 circle ¦ draw ¦ circle(c, r, atributos) ¦ Circunferência de centro c e raio r (em unidades do plano). Com escala igual nos eixos (padrão de draw) é um círculo; com aspect = "auto", uma elipse. ¦ Circle with center c and radius r (in plane units). With equal axis scales (the draw default) it is round; with aspect = "auto", an ellipse. ¦ circle(0, 1) ;; [circle(0, r) | r <- 1..5] ;; circle(1 + i, 1/2, color = "red", dash = "dot") ¦
 disk ¦ draw ¦ disk(c, r, atributos) ¦ Disco (círculo preenchido); fill = "cor" escolhe o preenchimento. ¦ Disk (filled circle); fill = "color" chooses the fill. ¦ disk(0, 1, opacity = 0.3) + circle(0, 1) ¦
 arc ¦ draw ¦ arc(c, r, θ₀, θ₁, atributos) ¦ Arco de circunferência de θ₀ a θ₁ (radianos, sentido anti-horário). ¦ Circular arc from θ₀ to θ₁ (radians, counterclockwise). ¦ arc(0, 1, 0, pi) ;; arc(0, 1, 0, 3pi/2, width = 3) ¦
 sector ¦ draw ¦ sector(c, r, θ₀, θ₁, atributos) ¦ Setor circular ("fatia") de θ₀ a θ₁, preenchido. ¦ Circular sector ("slice") from θ₀ to θ₁, filled. ¦ sector(0, 1, 0, pi/3, color = 2) + sector(0, 1, pi/3, 2pi, color = 3, opacity = 0.4) ¦
-curve ¦ draw ¦ curve(t -> z(t), a, b, points=400, atributos) ¦ Curva paramétrica: z(t) devolve um complexo ou uma tupla (x, y). Pontos onde a função falha abrem lacunas. ¦ Parametric curve: z(t) returns a complex number or a tuple (x, y). Points where the function fails leave gaps. ¦ curve(t -> exp(i*t) + exp(7i*t)/2, 0, 2pi) ;; curve(t -> (sin(3t), sin(4t)), 0, 2pi, color = 4) ¦
+curve ¦ draw ¦ curve(t -> z(t), a, b, points=400, atributos) ¦ Curva paramétrica: z(t) devolve um complexo ou uma tupla (x, y); com uma tupla (x, y, z), a curva é do espaço. Pontos onde a função falha abrem lacunas. ¦ Parametric curve: z(t) returns a complex number or a tuple (x, y); with a tuple (x, y, z) the curve lies in space. Points where the function fails leave gaps. ¦ curve(t -> exp(i*t) + exp(7i*t)/2, 0, 2pi) ;; curve(t -> (sin(3t), sin(4t)), 0, 2pi, color = 4) ;; curve(t -> (cos(t), sin(t), t/5), 0, 6pi) ¦
 implicitplot ¦ draw ¦ implicitplot(p), implicitplot(p, xlim=, ylim=, resolution=512, vars=[u, v]) ¦ Curva p(x, y) = 0 de um polinômio com coeficientes em ℤ ou ℚ, como gráfico (aceita atributos como color e width). A FLINT fatora p e cada fator irredutível é traçado uma vez, então multiplicidades como (x² + y² − 1)² não atrapalham e componentes distintas se cruzam com nitidez. O traçado usa uma quadtree com aritmética intervalar, que descarta regiões sem zeros, e marching squares nas células de lado (janela)/resolution, com os pontos refinados sobre a curva. Janela padrão [−3, 3]². Ovais menores que uma célula e pontos isolados (como a origem em y² = x²(x − 1)) podem não aparecer. ¦ Curve p(x, y) = 0 of a polynomial with coefficients in ℤ or ℚ, as a graphic (accepts attributes such as color and width). FLINT factors p and each irreducible factor is traced once, so multiplicities such as (x² + y² − 1)² do no harm and distinct components cross cleanly. Tracing uses a quadtree with interval arithmetic, which discards regions without zeros, and marching squares on cells of side (window)/resolution, with points refined onto the curve. Default window [−3, 3]². Ovals smaller than a cell and isolated points (such as the origin on y² = x²(x − 1)) may not show. ¦ (x, y) = gens(QQ[x, y]); implicitplot(y^2 - x^3 + x) ;; (x, y) = gens(QQ[x, y]); implicitplot((x^2 + y^2)^2 - 2*(x^2 - y^2), xlim = [-2, 2], color = 2) ;; (x, y) = gens(QQ[x, y]); implicitplot(x^2 + y^2 - 4) + implicitplot(x*y - 1, color = 3) ¦ fmpq_mpoly_factor
 text ¦ draw ¦ text(s, p, pos="c", fontsize=13, color=) ¦ Texto no ponto p. pos indica onde o texto fica em relação ao ponto: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Valores que não são strings são exibidos como texto. ¦ Text at point p. pos says where the text sits relative to the point: "c", "n", "s", "e", "w", "ne", "nw", "se", "sw". Non-string values are shown as text. ¦ point(1 + i) + text("1 + i", 1 + i, pos = "ne") ;; text(pi, 0, fontsize = 20) ¦
 handle ¦ draw ¦ handle(z₀, snap=, xlim=, ylim=, on=, label=) ¦ Ponto de controle: um valor de entrada (como slider) que começa em z₀ e muda ao ser arrastado nos gráficos. Todo primitivo que recebe o próprio valor (point, segment, polygon, circle, text…, em qualquer célula) mostra um marcador arrastável naquele vértice; valores derivados, como (a + b)/2, não arrastam. A célula mostra o ponto e campos x e y editáveis; setas do teclado movem o marcador focado. snap = h arredonda à grade h (valores exatos); xlim/ylim limitam a região; on = f projeta a posição (on = z -> z/abs(z) prende ao círculo unitário). Com z₀ = (x, y), o valor é uma tupla de coordenadas racionais exatas (com snap = 1/3, múltiplos de 1/3); com z₀ complexo, um número complexo. Editar z₀ no código, ou reavaliar a célula (Shift+Enter, Ctrl+Enter ou ▶), reposiciona o ponto no valor inicial. ¦ Control point: an input value (like slider) that starts at z₀ and changes when dragged in plots. Every primitive that receives the value itself (point, segment, polygon, circle, text…, in any cell) shows a draggable marker at that vertex; derived values, such as (a + b)/2, do not drag. The cell shows the point and editable x and y fields; arrow keys move the focused marker. snap = h rounds to the grid h (exact values); xlim/ylim restrict the region; on = f projects the position (on = z -> z/abs(z) pins it to the unit circle). With z₀ = (x, y), the value is a tuple of exact rational coordinates (with snap = 1/3, multiples of 1/3); with complex z₀, a complex number. Editing z₀ in the code, or re-running the cell (Shift+Enter, Ctrl+Enter or ▶), puts the point back at its initial value. ¦ p = handle(1 + i); point(p) + circle(p, 1) ;; q = handle(0, snap = 1/4) ;; r = handle((0, 0), snap = 1/3) ;; u = handle(1, on = z -> z/abs(z)) ¦
 handles ¦ draw ¦ handles([z₁, …], add=false, min=, max=, snap=, …) ¦ Lista de pontos de controle. Cada ponto é arrastável como em handle; com add = true, clicar no fundo de um gráfico que recebe a lista inteira (points, line, polygon) acrescenta um ponto (numa poligonal, no segmento mais próximo) e Alt+clique num marcador o remove, respeitando min e max. ¦ List of control points. Each point drags as in handle; with add = true, clicking the background of a plot that receives the whole list (points, line, polygon) adds a point (on a polyline, at the nearest segment) and Alt+click on a marker removes it, within min and max. ¦ vs = handles([0, 1, i], add = true); polygon(vs) ;; ps = handles([-1, 0, 1]); interpolate(map(ps, re), map(ps, im)) ¦
 group ¦ draw ¦ group(g₁, g₂, …, atributos) ¦ Agrupa gráficos; os atributos do grupo valem para as primitivas que não os definem (o filho prevalece). ¦ Groups graphics; the group's attributes apply to primitives that do not set them (the child wins). ¦ group(circle(0, 1), segment(-1, 1), color = "red", width = 2) ¦
 style ¦ draw ¦ style(g, atributos) ¦ Impõe atributos a todas as primitivas de g, sobrescrevendo os que elas já tinham. Útil com |>. ¦ Imposes attributes on every primitive of g, overriding those they already had. Handy with |>. ¦ [segment(0, exp(i*k*pi/6)) | k <- 1..12] |> style(color = "gray", width = 0.5) ¦
-draw ¦ draw ¦ draw(g, xlim=, ylim=, aspect="equal", axes=true, grid=true, frame=true, title=, width=, height=) ¦ Ajusta a janela de um gráfico (ou lista de gráficos). Sem draw, uma célula cujo valor é um gráfico ou uma lista só de gráficos já é desenhada. aspect = "equal" mantém a mesma escala nos eixos (padrão para primitivas; plot usa "auto"). width e height em px. ¦ Sets the window of a graphic (or list of graphics). Without draw, a cell whose value is a graphic or a list of graphics only is drawn anyway. aspect = "equal" keeps the same scale on both axes (the default for primitives; plot uses "auto"). width and height in px. ¦ draw([circle(0, 1), segment(-1, 1)], axes = false, grid = false) ;; draw(circle(0, 1), xlim = [0, 2], ylim = [0, 2]) ¦
+draw ¦ draw ¦ draw(g, xlim=, ylim=, zlim=, aspect="equal", axes=true, grid=true, frame=true, box=true, title=, width=, height=) ¦ Ajusta a janela de um gráfico (ou lista de gráficos). Sem draw, uma célula cujo valor é um gráfico ou uma lista só de gráficos já é desenhada. aspect = "equal" mantém a mesma escala nos eixos (padrão para primitivas; plot usa "auto"). width e height em px. Em gráficos 3D: zlim fixa o intervalo de z, box = false esconde a caixa e aspect = "auto" leva os três eixos a proporções fixas. ¦ Sets the window of a graphic (or list of graphics). Without draw, a cell whose value is a graphic or a list of graphics only is drawn anyway. aspect = "equal" keeps the same scale on both axes (the default for primitives; plot uses "auto"). width and height in px. In 3D graphics: zlim fixes the z range, box = false hides the box and aspect = "auto" brings the three axes to fixed proportions. ¦ draw([circle(0, 1), segment(-1, 1)], axes = false, grid = false) ;; draw(circle(0, 1), xlim = [0, 2], ylim = [0, 2]) ¦
+surface ¦ 3d ¦ surface((u, v) -> (x, y, z), [u₀, u₁], [v₀, v₁], points=40, mesh=true, colormap=, atributos) ¦ Superfície paramétrica, amostrada numa grade (points = n ou [nu, nv]); onde a função falha a superfície tem buracos. Arraste para girar; clique na figura e use a roda para aproximar; duplo clique volta à vista inicial. mesh = false esconde as linhas da malha; colormap = "z" colore pela altura; color e opacity como nas outras primitivas. ¦ Parametric surface, sampled on a grid (points = n or [nu, nv]); where the function fails the surface has holes. Drag to rotate; click the figure and use the wheel to zoom; double-click goes back to the initial view. mesh = false hides the mesh lines; colormap = "z" colors by height; color and opacity as for the other primitives. ¦ surface((u, v) -> ((2 + cos(v))*cos(u), (2 + cos(v))*sin(u), sin(v)), [0, 2pi], [0, 2pi]) ;; surface((u, v) -> (u - u^3/3 + u*v^2, v - v^3/3 + v*u^2, u^2 - v^2), [-2, 2], [-2, 2], colormap = "z") ¦
+plot3d ¦ 3d ¦ plot3d((x, y) -> z, [x₀, x₁], [y₀, y₁], points=50, zlim=, mesh=true, colormap="z", atributos) ¦ Gráfico de uma função de duas variáveis, colorido pela altura. Os eixos ficam em proporções fixas (como aspect = "auto"); o intervalo de z ignora polos, ou é fixado por zlim, e o que sai da caixa é cortado. ¦ Graph of a function of two variables, colored by height. The axes have fixed proportions (as aspect = "auto"); the z range ignores poles, or is fixed by zlim, and whatever leaves the box is clipped. ¦ plot3d((x, y) -> sin(x)*cos(y), [-3, 3], [-3, 3]) ;; plot3d((x, y) -> x*y/(x^2 + y^2), [-1, 1], [-1, 1], colormap = false) ¦
+sphere ¦ 3d ¦ sphere(c, r, atributos) ¦ Esfera de centro c (tupla (x, y, z)) e raio r. Atributos: color, opacity. ¦ Sphere with center c (a tuple (x, y, z)) and radius r. Attributes: color, opacity. ¦ sphere((0, 0, 0), 1) ;; sphere((0, 0, 0), 1, opacity = 0.4) + point((0, 0, 1)) ¦
+plane ¦ 3d ¦ plane(p, n, atributos) ¦ Plano por p com vetor normal n, cortado pela caixa da cena; translúcido por padrão (opacity = 0.5). ¦ Plane through p with normal vector n, clipped by the scene box; translucent by default (opacity = 0.5). ¦ sphere((0, 0, 0), 1) + plane((0, 0, 1/2), (0, 0, 1)) ;; plane((0, 0, 0), (1, 1, 1)) + infline((0, 0, 0), (1, 1, 1)) ¦
 translate ¦ draw ¦ translate(g, v) ¦ Desloca g pelo vetor v (complexo ou tupla). Como todas as transformações, aceita um gráfico ou lista de gráficos e combina com |>. ¦ Translates g by the vector v (complex or tuple). Like every transformation, it takes a graphic or list of graphics and combines with |>. ¦ translate(circle(0, 1), 2 + i) ;; [translate(circle(0, 1/2), k) | k <- 1..5] ¦
 rotate ¦ draw ¦ rotate(g, θ, c=0) ¦ Gira g de θ radianos (anti-horário) em torno de c. Círculos e arcos continuam exatos; o texto muda de lugar mas não gira. ¦ Rotates g by θ radians (counterclockwise) about c. Circles and arcs stay exact; text moves but is not rotated. ¦ [rotate(segment(0, 1), k*pi/8) | k <- 1..16] ;; rotate(rect(0, 2 + i), pi/6, 1 + i/2) + rect(0, 2 + i) ¦
 scale ¦ draw ¦ scale(g, k, c=0), scale(g, (kx, ky), c=0) ¦ Homotetia de razão k com centro c; com (kx, ky), escala cada eixo (círculos viram elipses, desenhadas como poligonais). ¦ Homothety with ratio k about c; with (kx, ky), scales each axis (circles become ellipses, drawn as polylines). ¦ [scale(polygon([1, i, -1, -i]), 0.8^k) | k <- 0..10] ;; scale(circle(0, 1), (2, 1)) ¦
@@ -9972,6 +10596,7 @@ __m["src/ui/ui.js"] = (() => {
 
 const { render, ringName, esc } = __m["src/ui/render.js"];
 const { renderGraphics, handleKey } = __m["src/ui/plot.js"];
+const { mount3d } = __m["src/ui/plot3d.js"];
 const { highlight, symbolAt, KEYWORDS } = __m["src/ui/highlight.js"];
 const { typeChar, backspace, newline, wordBefore, identifiers, complete, callAt } = __m["src/ui/editing.js"];
 const { EXAMPLES, pick } = __m["src/ui/examples.js"];
@@ -10410,6 +11035,11 @@ function refreshWidget(wrap, d) {
 }
 
 function mountSlot(c, slot, d, name) {
+  if (d.t === 'graphics3d') {
+    const w = Math.max(300, Math.min(760, ($('#cells').clientWidth || 700) - 60));
+    mount3d(c.figs3d ??= new Map(), slot.dataset.slot ?? '0', slot, d, w);
+    return;
+  }
   if (d.t === 'graphics') {
     const w = Math.max(300, Math.min(760, ($('#cells').clientWidth || 700) - 60));
     // Depois de arrastar um ponto, a janela fica fixa até a célula ser editada.
