@@ -135,6 +135,54 @@ function distribute(ctx) {
 
 // -------------------------------------------------------- pôr em evidência
 
+// Caminho da parcela que contém p: sobe por um produto e por um sinal.
+function termPathOf(tree, p) {
+  let tp = p;
+  if (parentOf(tree, tp)?.op === 'Multiply') tp = parentPath(tp);
+  if (parentOf(tree, tp)?.op === 'Negate') tp = parentPath(tp);
+  return tp;
+}
+
+// Pôr em evidência pela seleção: o usuário marca o fator comum em cada
+// parcela (Espaço) e aperta "e". As parcelas envolvidas são as que têm uma
+// seleção; o fator é o que foi selecionado na primeira delas (com sinal, se
+// a parcela −b inteira foi selecionada). Parcelas inteiras vizinhas
+// selecionadas juntas formam uma ocorrência só: em 1 − a − b(1 − a),
+// selecionar 1, −a e o (1 − a) de dentro põe 1 − a em evidência.
+// Sem seleção, ou só com parcelas inteiras, vale o fator em foco.
+function factorOut(ctx) {
+  const { tree, targets } = ctx;
+  if (targets.length < 2) return factorAt(ctx);
+  const info = targets.map((p) => ({ p, tp: termPathOf(tree, p) }));
+  const sp = parentPath(info[0].tp).join();
+  if (info.some((x) => parentPath(x.tp).join() !== sp) || parentOf(tree, info[0].tp)?.op !== 'Add') return factorAt(ctx);
+  info.forEach((x) => { x.whole = x.p.length === x.tp.length; x.i = lastIndex(x.tp); });
+  if (info.every((x) => x.whole)) return factorAt(ctx);
+  if (new Set(info.map((x) => x.i)).size !== info.length) return null; // duas seleções na mesma parcela
+  info.sort((a, b) => a.i - b.i);
+
+  // Ocorrências: parcelas inteiras vizinhas (2 ou mais) viram um grupo.
+  const occ = [];
+  for (const x of info) {
+    const last = occ[occ.length - 1];
+    if (x.whole && last?.run && last.items[last.items.length - 1].i === x.i - 1) last.items.push(x);
+    else occ.push(x.whole ? { run: true, items: [x] } : { run: false, items: [x] });
+  }
+  occ.forEach((o) => { if (o.run && o.items.length === 1) o.run = false; });
+
+  // O fator: a seleção da primeira ocorrência; se ela é um grupo de
+  // parcelas, uma seleção de dentro de outra parcela que seja igual a ele.
+  let focus = occ[0].items[0].p;
+  if (occ[0].run) {
+    const S = parentOf(tree, info[0].tp);
+    const group = fn('Add', ...occ[0].items.map((x) => S.args[x.i]));
+    const match = info.find((x) => !x.whole && same(unparen(getAt(tree, x.p)), group));
+    if (!match) return null;
+    focus = match.p;
+  }
+  return factorAt({ ...ctx, focus, targets: info.map((x) => x.tp) });
+}
+
 // Mesmo fator, ignorando parênteses digitados: (1 − a) e 1 − a.
 const sameFactor = (a, b) => same(unparen(a), unparen(b));
 
@@ -144,7 +192,7 @@ const sameFactor = (a, b) => same(unparen(a), unparen(b));
 //   foco no termo −b (inteiro):   −b + ab → −b(1 − a)      (fator com sinal)
 //   foco em (1 − a) dentro de −b(1 − a): os termos soltos 1 − a do começo
 //   da soma contam como uma ocorrência:  1 − a − b(1 − a) → (1 − a)(1 − b)
-function factorOut(ctx) {
+function factorAt(ctx) {
   const { tree, focus, targets } = ctx;
   if (!focus.length) return null;
   const F = getAt(tree, focus);
