@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manip — atalhos</title>
+  <meta name="description" content="Folha de atalhos do Manip (manipulação algébrica pelo teclado), em português e inglês, para imprimir.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232462c9'/%3E%3Ctext x='16' y='22' font-family='serif' font-style='italic' font-size='17' text-anchor='middle' fill='white'%3Ex=%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* A folha é sempre clara (impressão), independente do tema do app. */
+    :root {
+      --bg: #ffffff; --panel: #ffffff; --ink: #1d1d22; --muted: #5d5c63; --line: #dcd8cf;
+      --accent: #2462c9; color-scheme: light;
+    }
+    html, body { height: auto; }
+    body {
+      display: block;
+      margin: 0 auto;
+      max-width: 1180px;
+      padding: 28px 32px 40px;
+      background: var(--bg);
+    }
+    .sheet-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+    .sheet-head h1 { margin: 0; font: italic 500 30px/1.1 var(--math); }
+    .sheet-tools { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+    .sheet-tools a, .sheet-tools button {
+      font: inherit; color: var(--muted); text-decoration: none; cursor: pointer;
+      padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: none;
+    }
+    .sheet-tools a.active { color: var(--ink); border-color: var(--accent); }
+    .subtitle { margin: 8px 0 18px; color: var(--muted); font-size: 14px; max-width: 80ch; }
+    .cols { columns: 2 520px; column-gap: 32px; }
+    section { break-inside: avoid; margin-bottom: 18px; }
+    h2 {
+      margin: 0 0 6px; padding-bottom: 3px; border-bottom: 1px solid var(--line);
+      font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    td { padding: 3px 6px 3px 0; vertical-align: middle; }
+    td.k { width: 1%; white-space: nowrap; }
+    td.name { width: 40%; }
+    td.ex { color: var(--ink); }
+    .ex-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ex-line .formula { font-size: 15px; line-height: 1.2; }
+    .ex-line .arrow { color: var(--muted); }
+    .ex-note { display: block; font-size: 11px; color: var(--muted); }
+    kbd { font-size: 12px; }
+    .sheet-foot { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    @page { size: A4 landscape; margin: 10mm; }
+    @media print {
+      body { padding: 0; max-width: none; }
+      .sheet-tools { display: none; }
+      .cols { columns: 2; column-gap: 10mm; }
+      table { font-size: 11.5px; }
+      .ex-line .formula { font-size: 12.5px; }
+      h2 { margin-top: 0; }
+      section { margin-bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="sheet-head">
+    <h1 id="title">Manip</h1>
+    <nav class="sheet-tools">
+      <a href="?lang=pt" data-lang="pt">Português</a>
+      <a href="?lang=en" data-lang="en">English</a>
+      <button type="button" id="print"></button>
+    </nav>
+  </header>
+  <p class="subtitle" id="subtitle"></p>
+  <main class="cols" id="sheet"></main>
+  <p class="sheet-foot" id="foot"></p>
+  <script type="module" src="src/cheatsheet.js"></script>
+</body>
+</html>

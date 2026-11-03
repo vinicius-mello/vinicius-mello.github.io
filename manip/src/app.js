@@ -17,6 +17,7 @@ import { History } from './history.js';
 import { applicable, RULES, GROUPS } from './rules/index.js';
 import { createKeyboard } from './keyboard.js';
 import { createRecorder } from './recorder.js';
+import { COMMANDS as KEY_COMMANDS, NAV_KEYS } from './keymap.js';
 import { isRelation, LATEX_RELATIONS } from './relations.js';
 import { t, msg, fmt, LANGS, getLang, setLang, onLangChange, translateDom } from './i18n.js';
 
@@ -944,35 +945,21 @@ const recorder = createRecorder({
 
 // ---------- teclado ----------
 
-// Comandos da interface: maiúsculas (Shift) e alguns símbolos. As
-// operações usam minúsculas, dígitos e símbolos (rules/index.js).
-const COMMANDS = [
-  { key: 'C', label: 'keys.color', run: () => cycleColor() },
-  { key: 'E', label: 'keys.edit', run: () => { input.value = toAscii(state().tree); input.focus(); input.select(); } },
-  { key: 'L', label: 'keys.latex', run: () => copyText(toLatex(state().tree), 'what.latex') },
-  { key: 'P', label: 'keys.present', run: () => togglePresenting() },
-  { key: 'K', label: 'keys.keyboard', run: () => toggleKeyboard() },
-  { key: 'O', label: 'keys.note', run: () => openNote() },
-  { key: 'R', label: 'keys.record', run: () => recorder.openDialog() },
-  { key: ']', label: 'keys.zoomIn', run: () => setZoom(zoom * 1.15) },
-  { key: '[', label: 'keys.zoomOut', run: () => setZoom(zoom / 1.15) },
-  { key: '\\', label: 'keys.zoomReset', run: () => setZoom(1) },
-  { key: '?', label: 'keys.help', run: () => toggleHelp() },
-];
-
-// Teclas de navegação e seleção, para o painel de ajuda.
-const NAV_KEYS = [
-  ['← → ↑ ↓', 'keys.nav'],
-  ['Ctrl+← →', 'keys.move'],
-  ['Ctrl+↑ ↓', 'keys.group'],
-  ['Shift+← →', 'keys.extend'],
-  ['Espaço', 'keys.select'],
-  ['Esc', 'keys.esc'],
-  ['Enter', 'keys.ops'],
-  ['Tab', 'keys.tabs'],
-  ['PgUp PgDn Home End', 'keys.steps'],
-  ['Ctrl+Z  Ctrl+Shift+Z', 'keys.undo'],
-];
+// Comandos da interface (teclas e textos em keymap.js) e suas ações.
+const ACTIONS = {
+  color: () => cycleColor(),
+  edit: () => { input.value = toAscii(state().tree); input.focus(); input.select(); },
+  latex: () => copyText(toLatex(state().tree), 'what.latex'),
+  present: () => togglePresenting(),
+  keyboard: () => toggleKeyboard(),
+  note: () => openNote(),
+  record: () => recorder.openDialog(),
+  zoomIn: () => setZoom(zoom * 1.15),
+  zoomOut: () => setZoom(zoom / 1.15),
+  zoomReset: () => setZoom(1),
+  help: () => toggleHelp(),
+};
+const COMMANDS = KEY_COMMANDS.map((c) => ({ ...c, run: ACTIONS[c.id] }));
 
 // Uma operação pela sua tecla, direto na fórmula: as que pedem texto abrem
 // o campo; as demais se aplicam ou explicam por que não.
@@ -1002,13 +989,14 @@ function toggleHelp() {
   helpEl = document.createElement('div');
   helpEl.className = 'menu help-panel';
   helpEl.tabIndex = -1;
+  // rows: [teclas (lista), texto]
   const section = (title, rows) => {
     const sec = document.createElement('section');
     sec.append(Object.assign(document.createElement('h3'), { textContent: title }));
     const dl = document.createElement('dl');
-    for (const [key, text] of rows) {
+    for (const [keys, text] of rows) {
       const dt = document.createElement('dt');
-      dt.append(...String(key).split(' ').filter(Boolean).map((k) => Object.assign(document.createElement('kbd'), { textContent: k })));
+      dt.append(...keys.map((k) => Object.assign(document.createElement('kbd'), { textContent: k === 'Space' ? t('keys.space') : k })));
       dl.append(dt, Object.assign(document.createElement('dd'), { textContent: text }));
     }
     sec.append(dl);
@@ -1016,15 +1004,22 @@ function toggleHelp() {
   };
   const cols = document.createElement('div');
   cols.className = 'help-cols';
-  cols.append(section(t('help.nav'), NAV_KEYS.map(([k, l]) => [k === 'Espaço' ? t('keys.space') : k, t(l)])));
-  cols.append(section(t('help.commands'), COMMANDS.map((c) => [c.key, t(c.label)])));
+  cols.append(section(t('help.nav'), NAV_KEYS.map(([k, l]) => [k, t(l)])));
+  cols.append(section(t('help.commands'), COMMANDS.map((c) => [[c.key], t(c.label)])));
   for (const g of GROUPS) {
-    const rows = RULES.filter((r) => r.group === g).map((r) => [r.key, t(`rule.${r.id}`)]);
+    const rows = RULES.filter((r) => r.group === g).map((r) => [[r.key], t(`rule.${r.id}`)]);
     cols.append(section(t(`group.${g}`), rows));
   }
+  const print = Object.assign(document.createElement('a'), {
+    className: 'help-print',
+    href: `cheatsheet.html?lang=${getLang()}`,
+    target: '_blank',
+    textContent: t('help.print'),
+  });
   helpEl.append(
     Object.assign(document.createElement('h2'), { textContent: t('help.title') }),
     Object.assign(document.createElement('p'), { className: 'hint', textContent: t('help.hint') }),
+    print,
     cols,
   );
   helpEl.addEventListener('keydown', (ev) => {

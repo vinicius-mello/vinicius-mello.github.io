@@ -931,7 +931,8 @@ kbd { min-width: 1.8em; }
   outline: none;
 }
 .help-panel h2 { margin: 0 0 4px; font: 600 18px/1.3 var(--ui); }
-.help-panel > .hint { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.help-panel > .hint { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+.help-print { display: inline-block; margin-bottom: 14px; font-size: 13px; color: var(--accent); }
 .help-cols { columns: 3 260px; column-gap: 28px; }
 .help-cols section { break-inside: avoid; margin-bottom: 16px; }
 .help-cols h3 {
