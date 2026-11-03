@@ -135,6 +135,15 @@ function distribute(ctx) {
 
 // -------------------------------------------------------- pôr em evidência
 
+// Mesmo fator, ignorando parênteses digitados: (1 − a) e 1 − a.
+const sameFactor = (a, b) => same(unparen(a), unparen(b));
+
+// Põe em evidência o fator em foco nos termos da soma (os selecionados, com
+// o do foco, ou todos):
+//   foco em b dentro de ab:       −b + ab → (−1 + a)b
+//   foco no termo −b (inteiro):   −b + ab → −b(1 − a)      (fator com sinal)
+//   foco em (1 − a) dentro de −b(1 − a): os termos soltos 1 − a do começo
+//   da soma contam como uma ocorrência:  1 − a − b(1 − a) → (1 − a)(1 − b)
 function factorOut(ctx) {
   const { tree, focus, targets } = ctx;
   if (!focus.length) return null;
@@ -143,15 +152,38 @@ function factorOut(ctx) {
   if (parentOf(tree, tp)?.op === 'Multiply') tp = parentPath(tp);
   if (parentOf(tree, tp)?.op === 'Negate') tp = parentPath(tp);
   const sp = parentPath(tp);
-  const S = parentOf(tree, tp);
+  let S = parentOf(tree, tp);
   if (S?.op !== 'Add') return null;
 
+  // Foco no termo −b inteiro: o fator é −b.
+  const negF = F.op === 'Negate' && tp === focus;
+  const base = negF ? F.args[0] : F;
+  let ti = lastIndex(tp);
+  let chosen = new Set(targets.filter((t) => parentPath(t).join() === sp.join()).map(lastIndex));
+
+  // Fator que é uma soma: procura os seus termos, em sequência, soltos na
+  // soma, e os trata como uma ocorrência só (um grupo).
+  const fb = unparen(base);
+  if (fb.op === 'Add') {
+    const m = fb.args.length;
+    for (let i = 0; i + m <= S.args.length; i++) {
+      if (i <= ti && ti < i + m) continue;
+      if (!fb.args.every((x, k) => same(S.args[i + k], x))) continue;
+      const remap = (j) => (j < i ? j : j < i + m ? i : j - m + 1);
+      S = withArgs(S, [...S.args.slice(0, i), fn('Delimiter', fn('Add', ...S.args.slice(i, i + m))), ...S.args.slice(i + m)]);
+      ti = remap(ti);
+      chosen = new Set([...chosen].map(remap));
+      break;
+    }
+  }
+
   // Termos envolvidos: os selecionados dessa soma (com o do foco) ou todos.
-  const chosen = new Set(targets.filter((t) => parentPath(t).join() === sp.join()).map(lastIndex));
-  chosen.add(lastIndex(tp));
+  chosen.add(ti);
   const idx = chosen.size >= 2 ? [...chosen].sort((a, b) => a - b) : S.args.map((_, i) => i);
   if (idx.length < 2) return null;
 
+  // O fator fica do lado em que aparece no primeiro termo da soma:
+  // ax + bx → (a + b)x;  2x + 2y → 2(x + y);  1 − a − b(1 − a) → (1 − a)(1 − b).
   const removed = [];
   let atEnd = false;
   const rems = [];
@@ -159,23 +191,25 @@ function factorOut(ctx) {
     const t = S.args[i];
     const { neg, body } = signed(t);
     let rem;
-    if (body.id === F.id || (same(body, F) && body.op !== 'Multiply')) {
+    if (body.id === base.id || sameFactor(body, base)) {
       rem = num(1);
-      if (body.id !== F.id) removed.push(body.id);
+      if (body.id !== base.id) removed.push(body.id);
     } else if (body.op === 'Multiply') {
-      let j = body.args.findIndex((a) => a.id === F.id);
-      if (j >= 0) atEnd = j === body.args.length - 1;
-      else j = body.args.findIndex((a) => same(a, F));
+      let j = body.args.findIndex((a) => a.id === base.id);
+      if (j < 0) j = body.args.findIndex((a) => sameFactor(a, base));
       if (j < 0) return null;
-      if (body.args[j].id !== F.id) removed.push(body.args[j].id);
+      if (i === idx[0]) atEnd = j === body.args.length - 1;
+      if (body.args[j].id !== base.id) removed.push(body.args[j].id);
       rem = rebuild('Multiply', body.args.filter((_, q) => q !== j), body);
     } else return null;
-    rems.push(neg ? withArgs(t, [rem]) : rem);
+    // Com o fator −b, o sinal de cada resto inverte.
+    rems.push(neg !== negF ? (neg ? withArgs(t, [rem]) : fn('Negate', rem)) : rem);
   }
 
   const all = idx.length === S.args.length;
   const inner = all ? withArgs(S, rems) : fn('Add', ...rems);
-  const product = atEnd ? fn('Multiply', inner, F) : fn('Multiply', F, inner);
+  let product = atEnd ? fn('Multiply', inner, base) : fn('Multiply', base, inner);
+  if (negF) product = withArgs(F, [product]);
   let t2;
   if (all) t2 = replaceAt(tree, sp, product);
   else {
@@ -187,7 +221,7 @@ function factorOut(ctx) {
     tree: t2,
     label: msg('step.factor'),
     focus: product.id,
-    hints: { merge: { to: F.id, from: removed } },
+    hints: { merge: { to: base.id, from: removed } },
   };
 }
 
