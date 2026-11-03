@@ -1133,7 +1133,7 @@ function substituteInSystem(ctx) {
     return n.args ? withArgs(n, n.args.map(replace)) : n;
   };
   const args = tree.args.map((eq, idx) => (idx === k ? eq : replace(eq)));
-  if (!count) return null;
+  if (!count) return { error: 'err.varAbsent', params: { v: v.name } };
   return {
     tree: withArgs(tree, args),
     label: msg('step.substSystem', { v: v.name }),
@@ -1321,7 +1321,8 @@ export function applicable(ctx) {
     } catch (err) {
       console.error(`[Manip] regra ${rule.id}`, err);
     }
-    if (result) out.push({ rule, result });
+    // Erros explicam por que a regra não vale aqui; não entram no menu.
+    if (result && !result.error) out.push({ rule, result });
   }
   return out;
 }

@@ -14,7 +14,7 @@ import { capture, play, finishAll } from './animate.js';
 import { left, right, up, down } from './cursor.js';
 import { shiftSideways, shiftOut, shiftIn } from './moves.js';
 import { History } from './history.js';
-import { applicable } from './rules/index.js';
+import { applicable, RULES } from './rules/index.js';
 import { createKeyboard } from './keyboard.js';
 import { isRelation, LATEX_RELATIONS } from './relations.js';
 import { t, msg, fmt, LANGS, getLang, setLang, onLangChange, translateDom } from './i18n.js';
@@ -560,11 +560,14 @@ function openMenu(ruleId) {
   drawMenu();
 }
 
-// Aplica uma regra direto, sem abrir o menu (atalhos como "(").
-function applyRule(id) {
-  const item = applicable(ruleContext()).find((x) => x.rule.id === id);
-  if (!item) return bump();
-  applyResult(item.result);
+// Aplica uma regra direto, sem abrir o menu (atalhos como "(" e ">").
+// Se ela não se aplica, um aviso opcional explica o que falta.
+function applyRule(id, hintKey) {
+  const r = RULES.find((x) => x.id === id).run(ruleContext());
+  if (r?.error) toast(t(r.error, r.params));
+  else if (!r) { if (hintKey) toast(t(hintKey)); }
+  else return applyResult(r);
+  bump();
 }
 
 function closeMenu() {
@@ -959,6 +962,7 @@ stage.addEventListener('keydown', (ev) => {
   } else if (k === 'Enter') openMenu();
   else if (k === 's') openMenu('subst');
   else if (k === '(' || k === ')') applyRule('wrap');
+  else if (k === '>') applyRule('substsys', 'toast.substsys');
   else if (k === 'n') openMenu('name');
   else if (k === 'c') cycleColor();
   else if (k === 'p') togglePresenting();
