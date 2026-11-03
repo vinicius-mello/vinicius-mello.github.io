@@ -14,7 +14,7 @@ import { capture, play, finishAll } from './animate.js';
 import { left, right, up, down } from './cursor.js';
 import { shiftSideways, shiftOut, shiftIn } from './moves.js';
 import { History } from './history.js';
-import { applicable, RULES } from './rules/index.js';
+import { applicable, RULES, GROUPS } from './rules/index.js';
 import { createKeyboard } from './keyboard.js';
 import { createRecorder } from './recorder.js';
 import { isRelation, LATEX_RELATIONS } from './relations.js';
@@ -569,16 +569,6 @@ function openMenu(ruleId) {
   drawMenu();
 }
 
-// Aplica uma regra direto, sem abrir o menu (atalhos como "(" e ">").
-// Se ela não se aplica, um aviso opcional explica o que falta.
-function applyRule(id, hintKey) {
-  const r = RULES.find((x) => x.id === id).run(ruleContext());
-  if (r?.error) toast(t(r.error, r.params));
-  else if (!r) { if (hintKey) toast(t(hintKey)); }
-  else return applyResult(r);
-  bump();
-}
-
 function closeMenu() {
   if (!menu) return;
   menu = null;
@@ -752,7 +742,8 @@ function menuKey(ev) {
   else if (k === 'Enter') choose(menu.index);
   else if (k === '/') { menu.query = ''; drawMenu(); }
   else {
-    const i = menu.items.findIndex(({ rule }) => rule.key === k.toLowerCase());
+    // Tecla exata: maiúsculas são comandos, não operações.
+    const i = menu.items.findIndex(({ rule }) => rule.key === k || (rule.id === 'wrap' && k === ')'));
     if (i < 0) return;
     choose(i);
   }
@@ -919,10 +910,7 @@ function toggleKeyboard(open) {
 }
 
 kbToggle.addEventListener('click', () => toggleKeyboard());
-$('#keys-toggle').addEventListener('click', () => {
-  document.querySelector('.keys').classList.toggle('expanded');
-  stage.focus();
-});
+$('#keys-toggle').addEventListener('click', () => toggleHelp());
 
 // ---------- gravação da apresentação ----------
 
@@ -956,6 +944,97 @@ const recorder = createRecorder({
 
 // ---------- teclado ----------
 
+// Comandos da interface: maiúsculas (Shift) e alguns símbolos. As
+// operações usam minúsculas, dígitos e símbolos (rules/index.js).
+const COMMANDS = [
+  { key: 'C', label: 'keys.color', run: () => cycleColor() },
+  { key: 'E', label: 'keys.edit', run: () => { input.value = toAscii(state().tree); input.focus(); input.select(); } },
+  { key: 'L', label: 'keys.latex', run: () => copyText(toLatex(state().tree), 'what.latex') },
+  { key: 'P', label: 'keys.present', run: () => togglePresenting() },
+  { key: 'K', label: 'keys.keyboard', run: () => toggleKeyboard() },
+  { key: 'O', label: 'keys.note', run: () => openNote() },
+  { key: 'R', label: 'keys.record', run: () => recorder.openDialog() },
+  { key: ']', label: 'keys.zoomIn', run: () => setZoom(zoom * 1.15) },
+  { key: '[', label: 'keys.zoomOut', run: () => setZoom(zoom / 1.15) },
+  { key: '\\', label: 'keys.zoomReset', run: () => setZoom(1) },
+  { key: '?', label: 'keys.help', run: () => toggleHelp() },
+];
+
+// Teclas de navegação e seleção, para o painel de ajuda.
+const NAV_KEYS = [
+  ['← → ↑ ↓', 'keys.nav'],
+  ['Ctrl+← →', 'keys.move'],
+  ['Ctrl+↑ ↓', 'keys.group'],
+  ['Shift+← →', 'keys.extend'],
+  ['Espaço', 'keys.select'],
+  ['Esc', 'keys.esc'],
+  ['Enter', 'keys.ops'],
+  ['Tab', 'keys.tabs'],
+  ['PgUp PgDn Home End', 'keys.steps'],
+  ['Ctrl+Z  Ctrl+Shift+Z', 'keys.undo'],
+];
+
+// Uma operação pela sua tecla, direto na fórmula: as que pedem texto abrem
+// o campo; as demais se aplicam ou explicam por que não.
+function runRuleKey(rule) {
+  const ctx = ruleContext();
+  if (rule.input) {
+    if (rule.available(ctx)) return openMenu(rule.id);
+    toast(t('toast.notHere', { op: t(`rule.${rule.id}`) }));
+    return bump();
+  }
+  const r = rule.run(ctx);
+  if (r?.error) toast(t(r.error, r.params));
+  else if (!r) toast(t(rule.id === 'substsys' ? 'toast.substsys' : 'toast.notHere', { op: t(`rule.${rule.id}`) }));
+  else return applyResult(r);
+  bump();
+}
+
+// Painel com todos os atalhos (tecla ?), montado a partir das listas acima
+// e das operações: nunca fica desatualizado.
+let helpEl = null;
+function toggleHelp() {
+  if (helpEl) {
+    helpEl.remove();
+    helpEl = null;
+    return stage.focus();
+  }
+  helpEl = document.createElement('div');
+  helpEl.className = 'menu help-panel';
+  helpEl.tabIndex = -1;
+  const section = (title, rows) => {
+    const sec = document.createElement('section');
+    sec.append(Object.assign(document.createElement('h3'), { textContent: title }));
+    const dl = document.createElement('dl');
+    for (const [key, text] of rows) {
+      const dt = document.createElement('dt');
+      dt.append(...String(key).split(' ').filter(Boolean).map((k) => Object.assign(document.createElement('kbd'), { textContent: k })));
+      dl.append(dt, Object.assign(document.createElement('dd'), { textContent: text }));
+    }
+    sec.append(dl);
+    return sec;
+  };
+  const cols = document.createElement('div');
+  cols.className = 'help-cols';
+  cols.append(section(t('help.nav'), NAV_KEYS.map(([k, l]) => [k === 'Espaço' ? t('keys.space') : k, t(l)])));
+  cols.append(section(t('help.commands'), COMMANDS.map((c) => [c.key, t(c.label)])));
+  for (const g of GROUPS) {
+    const rows = RULES.filter((r) => r.group === g).map((r) => [r.key, t(`rule.${r.id}`)]);
+    cols.append(section(t(`group.${g}`), rows));
+  }
+  helpEl.append(
+    Object.assign(document.createElement('h2'), { textContent: t('help.title') }),
+    Object.assign(document.createElement('p'), { className: 'hint', textContent: t('help.hint') }),
+    cols,
+  );
+  helpEl.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' || ev.key === '?') { toggleHelp(); ev.preventDefault(); }
+  });
+  helpEl.addEventListener('click', (ev) => { if (ev.target === helpEl) toggleHelp(); });
+  document.body.append(helpEl);
+  helpEl.focus();
+}
+
 stage.addEventListener('keydown', (ev) => {
   // Gravando: só avançar e encerrar (tratados pelo gravador); nada de editar.
   if (recorder.isRecording()) return ev.preventDefault();
@@ -964,7 +1043,9 @@ stage.addEventListener('keydown', (ev) => {
     menuKey(ev);
     return;
   }
-  const k = ev.key;
+  // Shift + letra é sempre maiúscula (comando), mesmo que o evento venha
+  // com a letra minúscula (alguns teclados virtuais e automações).
+  const k = ev.shiftKey && /^[a-z]$/.test(ev.key) ? ev.key.toUpperCase() : ev.key;
   const ctrl = ev.ctrlKey || ev.metaKey;
   const nav = { ArrowLeft: left, ArrowRight: right, ArrowUp: up, ArrowDown: down };
   // Ctrl (ou Alt, já que no macOS Ctrl+setas troca de mesa) + setas movem o termo.
@@ -972,6 +1053,8 @@ stage.addEventListener('keydown', (ev) => {
     ArrowLeft: [shiftSideways, -1], ArrowRight: [shiftSideways, +1],
     ArrowUp: [shiftOut], ArrowDown: [shiftIn],
   };
+  const rule = !ctrl && !ev.altKey && RULES.find((r) => r.key === k || (r.id === 'wrap' && k === ')'));
+  const command = !ctrl && !ev.altKey && COMMANDS.find((c) => c.key === k);
 
   if ((ctrl || ev.altKey) && moves[k]) move(...moves[k]);
   else if (ctrl && (k === 'z' || k === 'Z')) stepTo(history().index + (ev.shiftKey ? 1 : -1));
@@ -983,35 +1066,20 @@ stage.addEventListener('keydown', (ev) => {
     switchTo((active + (ev.shiftKey ? -1 : 1) + workspaces.length) % workspaces.length);
   } else if (k === 'PageUp' || k === 'PageDown') stepTo(history().index + (k === 'PageUp' ? -1 : 1));
   else if (k === 'Home') stepTo(0);
-  else if (k === 'End') stepTo(history().steps.length - 1); else if (ev.shiftKey && k === 'ArrowLeft') extendSelection(-1);
+  else if (k === 'End') stepTo(history().steps.length - 1);
+  else if (ev.shiftKey && k === 'ArrowLeft') extendSelection(-1);
   else if (ev.shiftKey && k === 'ArrowRight') extendSelection(+1);
   else if (nav[k] && !ev.shiftKey) {
     anchorId = null;
     setFocus(nav[k](state().tree, focusPath()));
-  }
-  else if (k === ' ') toggleSelection();
+  } else if (k === ' ') toggleSelection();
   else if (k === 'Escape') {
     if (selected.size) { selected.clear(); applyMarks(); }
     else if (presenting) togglePresenting();
   } else if (k === 'Enter') openMenu();
-  else if (k === 's') openMenu('subst');
-  else if (k === '(' || k === ')') applyRule('wrap');
-  else if (k === '>') applyRule('substsys', 'toast.substsys');
-  else if (k === 'n') openMenu('name');
-  else if (k === 'c') cycleColor();
-  else if (k === 'p') togglePresenting();
-  else if (k === 'k') toggleKeyboard();
-  else if (k === 'o') openNote();
-  else if (k === '?') document.querySelector('.keys').classList.toggle('expanded');
-  else if (k === '+' || k === '=') setZoom(zoom * 1.15);
-  else if (k === '-') setZoom(zoom / 1.15);
-  else if (k === '0') setZoom(1);
-  else if (k === 'l') copyText(toLatex(state().tree), 'what.latex');
-  else if (k === 'e') {
-    input.value = toAscii(state().tree);
-    input.focus();
-    input.select();
-  } else return;
+  else if (rule) runRuleKey(rule);
+  else if (command) command.run();
+  else return;
   ev.preventDefault();
 });
 

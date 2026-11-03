@@ -1237,8 +1237,9 @@ function openName(ctx) {
 }
 
 // Ordem do menu: por assunto (o cabeçalho de cada grupo vem de i18n
-// "group.<nome>"). As teclas são fixas; operações sem tecla própria são
-// alcançadas pelas setas ou pela busca (/).
+// "group.<nome>"). Cada operação tem uma tecla (minúscula, dígito ou
+// símbolo) que vale tanto direto na fórmula quanto com o menu aberto; as
+// maiúsculas ficam para os comandos da interface (app.js).
 export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'complex', 'relation', 'system', 'names'];
 
 export const RULES = [
@@ -1246,7 +1247,7 @@ export const RULES = [
   { id: 'calc', key: 'c', group: 'arith', run: calculate },
   { id: 'like', key: 'l', group: 'arith', run: likeTerms },
   { id: 'cancel', key: 'x', group: 'arith', run: cancel },
-  { id: 'neutral', key: 'n', group: 'arith', run: neutral },
+  { id: 'neutral', key: '0', group: 'arith', run: neutral },
   { id: 'signs', key: 'r', group: 'arith', run: signs },
   // estrutura
   { id: 'dist', key: 'd', group: 'structure', run: distribute },
@@ -1298,7 +1299,7 @@ export const RULES = [
   { id: 'substsys', key: '>', group: 'system', run: substituteInSystem },
   // nomes
   {
-    id: 'name', key: 'a', group: 'names', run: nameIt,
+    id: 'name', key: 'n', group: 'names', run: nameIt,
     input: true,
     available: (ctx) => ctx.targets.length === 1 && !isRelation(getAt(ctx.tree, ctx.targets[0]).op)
       && getAt(ctx.tree, ctx.targets[0]).op !== 'System',
