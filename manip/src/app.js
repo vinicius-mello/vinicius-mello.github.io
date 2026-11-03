@@ -16,6 +16,7 @@ import { shiftSideways, shiftOut, shiftIn } from './moves.js';
 import { History } from './history.js';
 import { applicable, RULES } from './rules/index.js';
 import { createKeyboard } from './keyboard.js';
+import { createRecorder } from './recorder.js';
 import { isRelation, LATEX_RELATIONS } from './relations.js';
 import { t, msg, fmt, LANGS, getLang, setLang, onLangChange, translateDom } from './i18n.js';
 
@@ -461,12 +462,20 @@ async function copyText(text, what) {
   }
 }
 
-function togglePresenting() {
-  presenting = !presenting;
+function setPresenting(on, quiet = false) {
+  presenting = on;
   document.body.classList.toggle('presenting', presenting);
   closeMenu();
   refresh(false);
-  if (presenting) toast(t('toast.presenting'));
+  if (presenting && !quiet) toast(t('toast.presenting'));
+}
+
+const togglePresenting = () => setPresenting(!presenting);
+
+function saveBlob(blob, name) {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 // Texto digitado no campo principal: na área principal começa um problema
@@ -825,15 +834,8 @@ function stepsLatex() {
 const EXPORTS = {
   'latex-steps': () => copyText(stepsLatex(), 'what.latexSteps'),
   mathjson: () => copyText(JSON.stringify(toMathJson(state().tree)), 'what.mathjson'),
-  save: () => {
-    const blob = new Blob([JSON.stringify(serialize(), null, 2)], { type: 'application/json' });
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(blob),
-      download: 'manip.json',
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
-  },
+  save: () => saveBlob(new Blob([JSON.stringify(serialize(), null, 2)], { type: 'application/json' }), 'manip.json'),
+  record: () => recorder.openDialog(),
   open: () => fileInput.click(),
 };
 
@@ -922,9 +924,41 @@ $('#keys-toggle').addEventListener('click', () => {
   stage.focus();
 });
 
+// ---------- gravação da apresentação ----------
+
+const recorder = createRecorder({
+  stage,
+  toast,
+  saveBlob,
+  stepCount: () => history().steps.length,
+  currentNote: () => state().note,
+  // Vai ao passo i; animando só ao avançar um passo (repete a animação gravada).
+  goTo(i, animate) {
+    if (animate && i === history().index + 1) return stepTo(i);
+    history().goto(i);
+    selected.clear();
+    refresh(false);
+  },
+  // Entra na apresentação com a velocidade escolhida; devolve como desfazer.
+  beginRecording(opts) {
+    const before = { presenting, speed: speedSelect.value };
+    closeMenu();
+    selected.clear();
+    speedSelect.value = String(opts.speed);
+    setPresenting(true, true);
+    return () => {
+      speedSelect.value = before.speed;
+      setPresenting(before.presenting, true);
+      stage.focus();
+    };
+  },
+});
+
 // ---------- teclado ----------
 
 stage.addEventListener('keydown', (ev) => {
+  // Gravando: só avançar e encerrar (tratados pelo gravador); nada de editar.
+  if (recorder.isRecording()) return ev.preventDefault();
   if (menu?.kind === 'note') return;
   if (menu) {
     menuKey(ev);

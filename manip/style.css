@@ -926,6 +926,68 @@ kbd { min-width: 1.8em; }
   .kb-side { grid-template-columns: repeat(2, 44px); grid-auto-rows: 42px; }
 }
 
+/* ---------- gravação ---------- */
+
+.rec-dialog {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  width: min(92vw, 520px);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rec-dialog h2 { margin: 0; font: 600 16px/1.3 var(--ui); }
+.rec-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 14px; align-items: end; }
+.rec-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.rec-grid label.wide { grid-column: 1 / -1; }
+.rec-grid input, .rec-grid select {
+  font: 15px/1.3 var(--ui);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  width: 100%;
+  min-width: 0;
+}
+.rec-grid input:disabled { opacity: .5; }
+.rec-checks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 14px; }
+.rec-checks label { display: flex; gap: 8px; align-items: center; }
+.rec-dialog .hint { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
+.rec-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.tool.primary { color: #fff; background: var(--c0); border-color: var(--c0); }
+.tool.primary:hover { color: #fff; filter: brightness(1.08); }
+
+/* Durante a gravação: sem marcas de foco e seleção, opções do painel */
+body.recording .formula .n.focus,
+body.recording .formula .n.selected { background: none; box-shadow: none; }
+body.rec-no-notes .caption .note,
+body.rec-no-counter .caption .counter,
+body.rec-no-board .board { display: none; }
+
+/* Título de abertura do vídeo */
+.title-card {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  font: italic 500 clamp(32px, 5vw, 64px)/1.2 var(--math);
+  color: var(--ink);
+  background: var(--bg);
+  animation: caption-in 600ms ease-out;
+  transition: opacity 500ms;
+}
+.title-card.out { opacity: 0; }
+
 /* ---------- apresentação ---------- */
 
 body.presenting { grid-template-rows: 1fr; }
