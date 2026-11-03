@@ -961,19 +961,25 @@ const ACTIONS = {
 };
 const COMMANDS = KEY_COMMANDS.map((c) => ({ ...c, run: ACTIONS[c.id] }));
 
-// Uma operação pela sua tecla, direto na fórmula: as que pedem texto abrem
-// o campo; as demais se aplicam ou explicam por que não.
-function runRuleKey(rule) {
+// Operações pela tecla, direto na fórmula. Uma tecla pode servir a mais de
+// uma operação que nunca valem juntas (ex.: "-"): vale a primeira que se
+// aplica. As que pedem texto abrem o campo; se nenhuma se aplica, um aviso
+// explica por quê.
+function runRuleKey(rules) {
   const ctx = ruleContext();
-  if (rule.input) {
-    if (rule.available(ctx)) return openMenu(rule.id);
-    toast(t('toast.notHere', { op: t(`rule.${rule.id}`) }));
-    return bump();
+  let error = null;
+  for (const rule of rules) {
+    if (rule.input) {
+      if (rule.available(ctx)) return openMenu(rule.id);
+      continue;
+    }
+    const r = rule.run(ctx);
+    if (r?.tree || r?.action) return applyResult(r);
+    if (r?.error) error ??= r;
   }
-  const r = rule.run(ctx);
-  if (r?.error) toast(t(r.error, r.params));
-  else if (!r) toast(t(rule.id === 'substsys' ? 'toast.substsys' : 'toast.notHere', { op: t(`rule.${rule.id}`) }));
-  else return applyResult(r);
+  const first = rules[0];
+  if (error) toast(t(error.error, error.params));
+  else toast(t(first.id === 'substsys' ? 'toast.substsys' : 'toast.notHere', { op: t(`rule.${first.id}`) }));
   bump();
 }
 
@@ -1048,7 +1054,7 @@ stage.addEventListener('keydown', (ev) => {
     ArrowLeft: [shiftSideways, -1], ArrowRight: [shiftSideways, +1],
     ArrowUp: [shiftOut], ArrowDown: [shiftIn],
   };
-  const rule = !ctrl && !ev.altKey && RULES.find((r) => r.key === k || (r.id === 'wrap' && k === ')'));
+  const rules = !ctrl && !ev.altKey ? RULES.filter((r) => r.key === k || (r.id === 'wrap' && k === ')')) : [];
   const command = !ctrl && !ev.altKey && COMMANDS.find((c) => c.key === k);
 
   if ((ctrl || ev.altKey) && moves[k]) move(...moves[k]);
@@ -1072,7 +1078,7 @@ stage.addEventListener('keydown', (ev) => {
     if (selected.size) { selected.clear(); applyMarks(); }
     else if (presenting) togglePresenting();
   } else if (k === 'Enter') openMenu();
-  else if (rule) runRuleKey(rule);
+  else if (rules.length) runRuleKey(rules);
   else if (command) command.run();
   else return;
   ev.preventDefault();

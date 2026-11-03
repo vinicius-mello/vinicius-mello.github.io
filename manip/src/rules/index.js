@@ -404,6 +404,46 @@ function removeParens(ctx) {
   });
 }
 
+// ------------------------------------------------------- trocar os sinais
+
+// Inverte o sinal de um termo sem acumular: x → −x, −x → x.
+const flip = (t) => (t.op === 'Negate' ? t.args[0] : fn('Negate', t));
+
+// A(B + C + …) → −A(−B − C − …)  e  B + C → −(−B − C): multiplica por
+// (−1)(−1), mostrando os dois sinais trocados.
+function flipSigns(ctx) {
+  const { tree } = ctx;
+  const p = ctx.targets[0];
+  const n = getAt(tree, p);
+  const parent = parentOf(tree, p);
+
+  if (n.op === 'Add') {
+    if (parent?.op === 'Multiply') return null; // é o fator de um produto: use o produto
+    const inner = withArgs(n, n.args.map(flip));
+    const node = fn('Negate', inner);
+    return { tree: place(tree, p, node), label: msg('step.flipSigns'), focus: node.id };
+  }
+  if (n.op !== 'Multiply') return null;
+  const k = n.args.findIndex((f) => sumOf(f));
+  if (k < 0 || n.args.length < 2) return null;
+  const s = sumOf(n.args[k]);
+  const args = n.args.slice();
+  args[k] = withArgs(s, s.args.map(flip));
+
+  // O sinal de fora: some se o produto já era negativo (−A·… ou −(A·…)).
+  const first = k === 0 ? 1 : 0;
+  if (unparen(args[first]).op === 'Negate') {
+    args[first] = unparen(args[first]).args[0];
+    return { tree: replaceAt(tree, p, withArgs(n, args)), label: msg('step.flipSigns'), focus: n.id };
+  }
+  if (parent?.op === 'Negate') {
+    const prod = withArgs(n, args);
+    return { tree: replaceAt(tree, parentPath(p), prod), label: msg('step.flipSigns'), focus: prod.id };
+  }
+  const node = fn('Negate', withArgs(n, args));
+  return { tree: replaceAt(tree, p, node), label: msg('step.flipSigns'), focus: node.id };
+}
+
 // ------------------------------------------------------------- agrupar
 
 function group(ctx) {
@@ -1331,6 +1371,8 @@ export const RULES = [
   { id: 'cancel', key: 'x', group: 'arith', run: cancel },
   { id: 'neutral', key: '0', group: 'arith', run: neutral },
   { id: 'signs', key: 'r', group: 'arith', run: signs },
+  // "-" é compartilhada com "subtrair equações": nunca valem juntas.
+  { id: 'flipsigns', key: '-', group: 'arith', run: flipSigns },
   // estrutura
   { id: 'dist', key: 'd', group: 'structure', run: distribute },
   { id: 'factor', key: 'e', group: 'structure', run: factorOut },

@@ -10,6 +10,7 @@ export const EXAMPLES = {
   cancel: { src: 'x + 3 - 3 = 5', focus: [0, 1] },
   neutral: { src: 'x + 0 = y', focus: [0, 1] },
   signs: { src: 'x = a - (-b)', focus: [1, 1] },
+  flipsigns: { src: '2(x - 1) = 4', focus: [0] },
   dist: { src: '2(x + 1) = 4', focus: [0] },
   factor: { src: '1 - a - b + a*b = 0', focus: [0, 0], sel: [[0, 2], [0, 3, 1]] },
   wrap: { src: 'a + b + c = 0', focus: [0, 1], sel: [[0, 1], [0, 2]] },
