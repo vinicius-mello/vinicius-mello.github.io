@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manip</title>
+  <meta name="description" content="Manipulação algébrica visual de equações pelo teclado, para professores: passos explícitos e animados, sem simplificação automática.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232462c9'/%3E%3Ctext x='16' y='22' font-family='serif' font-style='italic' font-size='17' text-anchor='middle' fill='white'%3Ex=%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Manip</h1>
+    <label class="entry">
+      <span class="sr" data-i18n="ui.input">Equação</span>
+      <input id="input" type="text" spellcheck="false" autocomplete="off" data-i18n-placeholder="ui.input.ph">
+    </label>
+    <span id="input-error" class="error" role="alert"></span>
+    <button id="kb-toggle" class="tool" type="button" aria-pressed="false"
+            data-i18n="ui.keyboard" data-i18n-title="ui.keyboard.title">Teclado</button>
+    <details class="dropdown">
+      <summary data-i18n="ui.settings">Ajustes</summary>
+      <div class="dropdown-menu settings">
+        <label>
+          <span data-i18n="ui.speed">Animação</span>
+          <select id="speed">
+            <option value="480" data-i18n="ui.speed.normal">normal</option>
+            <option value="1000" data-i18n="ui.speed.slow">aula (lenta)</option>
+            <option value="0" data-i18n="ui.speed.off">desligada</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="ui.theme">Tema</span>
+          <select id="theme">
+            <option value="auto" data-i18n="theme.auto">automático</option>
+            <option value="light" data-i18n="theme.light">claro</option>
+            <option value="dark" data-i18n="theme.dark">escuro</option>
+            <option value="chalk" data-i18n="theme.chalk">quadro verde</option>
+            <option value="paper" data-i18n="theme.paper">papel</option>
+            <option value="contrast" data-i18n="theme.contrast">alto contraste</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="ui.long">Expressões longas</span>
+          <select id="long">
+            <option value="wrap" data-i18n="long.wrap">quebrar linhas</option>
+            <option value="scroll" data-i18n="long.scroll">rolar</option>
+          </select>
+        </label>
+        <label>
+          <span data-i18n="ui.lang">Idioma</span>
+          <select id="lang"></select>
+        </label>
+      </div>
+    </details>
+    <details class="dropdown">
+      <summary data-i18n="ui.export">Exportar</summary>
+      <div class="dropdown-menu">
+        <button type="button" data-export="latex-steps" data-i18n="ui.export.latex"></button>
+        <button type="button" data-export="mathjson" data-i18n="ui.export.mathjson"></button>
+        <button type="button" data-export="save" data-i18n="ui.export.save"></button>
+        <button type="button" data-export="open" data-i18n="ui.export.open"></button>
+      </div>
+    </details>
+    <input id="file" type="file" accept=".json,application/json" hidden>
+  </header>
+
+  <main class="layout">
+    <div class="work">
+      <nav id="tabs" class="tabs" data-i18n-aria="ui.tabs"></nav>
+      <section id="stage" tabindex="0" data-i18n-aria="ui.stage"></section>
+    </div>
+    <aside class="side">
+      <section id="names-panel" hidden>
+        <h2 data-i18n="ui.names">Nomes</h2>
+        <ul id="names"></ul>
+      </section>
+      <h2 data-i18n="ui.steps">Passos</h2>
+      <ol id="history"></ol>
+    </aside>
+  </main>
+
+  <section id="keyboard" class="keyboard" data-i18n-aria="ui.kbd" hidden></section>
+
+  <footer class="keys">
+    <span><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="keys.nav"></span></span>
+    <span><kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>→</kbd> <span data-i18n="keys.move"></span></span>
+    <span><kbd data-i18n="keys.space">Espaço</kbd> <span data-i18n="keys.select"></span></span>
+    <span><kbd>Enter</kbd> <span data-i18n="keys.ops"></span></span>
+    <span><kbd>Ctrl</kbd>+<kbd>Z</kbd> <span data-i18n="keys.undo"></span></span>
+    <span><kbd>P</kbd> <span data-i18n="keys.present"></span></span>
+    <span class="more"><kbd>Ctrl</kbd>+<kbd>↑</kbd><kbd>↓</kbd> <span data-i18n="keys.group"></span></span>
+    <span class="more"><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> <span data-i18n="keys.extend"></span></span>
+    <span class="more"><kbd>O</kbd> <span data-i18n="keys.note"></span></span>
+    <span class="more"><kbd>PgUp</kbd><kbd>PgDn</kbd><kbd>Home</kbd><kbd>End</kbd> <span data-i18n="keys.steps"></span></span>
+    <span class="more"><kbd>S</kbd> <span data-i18n="keys.subst"></span></span>
+    <span class="more"><kbd>(</kbd> <span data-i18n="keys.wrap"></span></span>
+    <span class="more"><kbd>N</kbd> <span data-i18n="keys.name"></span></span>
+    <span class="more"><kbd>Tab</kbd> <span data-i18n="keys.tabs"></span></span>
+    <span class="more"><kbd>C</kbd> <span data-i18n="keys.color"></span></span>
+    <span class="more"><kbd>E</kbd> <span data-i18n="keys.edit"></span></span>
+    <span class="more"><kbd>L</kbd> <span data-i18n="keys.latex"></span></span>
+    <span class="more"><kbd>K</kbd> <span data-i18n="keys.keyboard"></span></span>
+    <span class="more"><kbd>+</kbd><kbd>−</kbd><kbd>0</kbd> <span data-i18n="keys.zoom"></span></span>
+    <button type="button" class="keys-toggle" id="keys-toggle"><kbd>?</kbd> <span class="when-collapsed" data-i18n="keys.more"></span><span class="when-expanded" data-i18n="keys.less"></span></button>
+  </footer>
+
+  <div id="menu" class="menu" tabindex="-1" role="menu" hidden></div>
+  <div id="toast" role="status"></div>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
