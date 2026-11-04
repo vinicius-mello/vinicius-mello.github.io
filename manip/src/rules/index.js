@@ -413,7 +413,22 @@ function neutral(ctx) {
     const n = getAt(tree, p);
     let node = null;
     let gone = [];
-    if (n.op === 'Divide' && isNum(n.args[1], 1)) { node = n.args[0]; gone = [n.args[1].id]; }
+    let label = 'step.neutral';
+    // Zero absorve: 0·x → 0 · 0/x → 0 · x⁰ → 1 (x ≠ 0)
+    const zero = n.op === 'Multiply' && n.args.find((a) => isNum(a, 0));
+    if (zero) {
+      node = zero;
+      gone = n.args.filter((a) => a !== zero).map((a) => a.id);
+      label = 'step.zero';
+    } else if (n.op === 'Divide' && isNum(n.args[0], 0) && !isNum(n.args[1], 0)) {
+      node = n.args[0];
+      gone = [n.args[1].id];
+      label = 'step.zero';
+    } else if (n.op === 'Power' && isNum(n.args[1], 0) && !isNum(n.args[0], 0)) {
+      node = num(1);
+      gone = [n.args[0].id, n.args[1].id];
+      label = 'step.powZero';
+    } else if (n.op === 'Divide' && isNum(n.args[1], 1)) { node = n.args[0]; gone = [n.args[1].id]; }
     else if (n.op === 'Power' && isNum(n.args[1], 1)) { node = n.args[0]; gone = [n.args[1].id]; }
     else if (n.op === 'Negate' && isNum(n.args[0], 0)) { node = n.args[0]; }
     else if (n.op === 'Add' || n.op === 'Multiply') {
@@ -423,7 +438,7 @@ function neutral(ctx) {
       gone = n.args.filter((a) => isNum(a, unit)).map((a) => a.id);
       node = rebuild(n.op, keep, n);
     } else return null;
-    return { tree: replaceAt(tree, p, node), label: msg('step.neutral'), hints: { strike: gone } };
+    return { tree: replaceAt(tree, p, node), label: msg(label), focus: node.id, hints: { strike: gone } };
   });
 }
 
