@@ -232,6 +232,7 @@ function factorAt(ctx) {
 
   // O fator fica do lado em que aparece no primeiro termo da soma:
   // ax + bx → (a + b)x;  2x + 2y → 2(x + y);  1 − a − b(1 − a) → (1 − a)(1 − b).
+  // Se o que sobra são só números, eles vão para a esquerda (abaixo).
   const removed = [];
   let atEnd = false;
   const rems = [];
@@ -254,6 +255,10 @@ function factorAt(ctx) {
     rems.push(neg !== negF ? (neg ? withArgs(t, [rem]) : fn('Negate', rem)) : rem);
   }
 
+  // Coeficientes todos numéricos: ficam à esquerda, em foco, prontos para
+  // calcular:  x·2 + x·3 → (2 + 3)x.
+  const numeric = rems.every((r) => evaluate(r));
+  if (numeric) atEnd = true;
   const all = idx.length === S.args.length;
   const inner = all ? withArgs(S, rems) : fn('Add', ...rems);
   let product = atEnd ? fn('Multiply', inner, base) : fn('Multiply', base, inner);
@@ -268,7 +273,7 @@ function factorAt(ctx) {
   return {
     tree: t2,
     label: msg('step.factor'),
-    focus: product.id,
+    focus: numeric ? inner.id : product.id,
     hints: { merge: { to: base.id, from: removed } },
   };
 }
