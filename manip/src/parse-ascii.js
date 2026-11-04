@@ -59,6 +59,7 @@ function splitWord(word, pos, toks) {
   }
   if (sub !== undefined) {
     const last = toks[toks.length - 1];
+    if (last.t === 'fn' && last.v === 'Log' && sub) { last.base = sub; return; }
     if (last.v === IMAGINARY) last.v = 'i';
     if (last.t !== 'id') throw new ParseError('err.subNoVar', pos);
     last.v += '_' + sub;

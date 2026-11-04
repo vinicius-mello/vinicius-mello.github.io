@@ -81,11 +81,14 @@ function tokenize(src) {
       i++;
     } else if (c === '_') {
       const last = toks[toks.length - 1];
-      if (last?.t !== 'id') throw new ParseError('err.subNoVar', i);
+      const isLog = last?.t === 'fn' && last.v === 'Log';
+      if (last?.t !== 'id' && !isLog) throw new ParseError('err.subNoVar', i);
       if (last.v === IMAGINARY) last.v = 'i';
       m = /^_(\{([^{}]*)\}|([A-Za-z0-9]))/.exec(src.slice(i));
       if (!m) throw new ParseError('err.badSub', i);
-      last.v += '_' + (m[2] ?? m[3]).replace(/\s+/g, '');
+      const sub = (m[2] ?? m[3]).replace(/\s+/g, '');
+      if (isLog) last.base = sub;
+      else last.v += '_' + sub;
       i += m[0].length;
     } else if (c === '[') {
       brackets.push(prev === 'sqrt');

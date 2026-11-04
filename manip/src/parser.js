@@ -93,18 +93,26 @@ export function parseTokens(toks) {
       case 'id': return sym(tok.v);
       case 'fn': {
         const arity = ARITY[tok.v] ?? 1;
+        // sen^2 x: expoente entre o nome e o argumento.
+        let exp = null;
+        if (peek().t === '^' && arity === 1) { next(); exp = unwrap(atom()); }
+        // log_2 x: a base vem do subscrito.
+        const base = tok.base === undefined ? [] : [/^\d/.test(tok.base) ? num(tok.base) : sym(tok.base)];
+        let f;
         if (peek().t !== '(') {
           if (arity !== 1) throw new ParseError('err.missing', peek().pos, { t: '(' });
-          return fn(tok.v, peek().t === '{' ? braced() : power());
+          f = fn(tok.v, peek().t === '{' ? braced() : power(), ...base);
+        } else {
+          next();
+          const args = [expr()];
+          while (peek().t === ',') { next(); args.push(expr()); }
+          const close = expect(')');
+          // log(x, b): base como segundo argumento (MathJSON).
+          const ok = args.length === arity || (tok.v === 'Log' && args.length === 2 && !base.length);
+          if (!ok) throw new ParseError('err.arity', close.pos, { n: arity });
+          f = fn(tok.v, ...args, ...base);
         }
-        next();
-        const args = [expr()];
-        while (peek().t === ',') { next(); args.push(expr()); }
-        const close = expect(')');
-        if (args.length !== arity) {
-          throw new ParseError('err.arity', close.pos, { n: arity });
-        }
-        return fn(tok.v, ...args);
+        return exp ? fn('Power', f, exp) : f;
       }
       case '(': {
         const e = expr();

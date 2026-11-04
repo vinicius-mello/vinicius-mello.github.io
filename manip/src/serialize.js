@@ -1,7 +1,7 @@
 // Serialização da árvore para ASCII (reeditar no campo de entrada) e LaTeX.
 
 import { FUNCTION_NAMES, GREEK, IMAGINARY } from './ast.js';
-import { needsParens, needsDot } from './notation.js';
+import { needsParens, needsDot, isFunctionPower, simpleBase } from './notation.js';
 import { ASCII_RELATIONS, LATEX_RELATIONS, isRelation } from './relations.js';
 import { parseAscii } from './parse-ascii.js';
 
@@ -59,7 +59,12 @@ export function toAscii(n) {
     // Fração dentro de produto vai entre parênteses: "x*1/2" seria (x·1)/2.
     case 'Multiply': return asciiProduct(n, sub);
     case 'Divide': return `${group(n.args[0])}/${group(n.args[1])}`;
-    case 'Power': return `${sub(n.args[0], 0)}^${group(n.args[1])}`;
+    case 'Power':
+      if (isFunctionPower(n)) return `${FUNCTION_NAMES[n.args[0].op]}^${n.args[1].value}(${toAscii(n.args[0].args[0])})`;
+      return `${sub(n.args[0], 0)}^${group(n.args[1])}`;
+    case 'Log':
+      if (n.args.length === 2 && simpleBase(n.args[1])) return `log_${toAscii(n.args[1])}(${toAscii(n.args[0])})`;
+      return `log(${n.args.map(toAscii).join(', ')})`;
     case 'Delimiter': return `(${toAscii(n.args[0])})`;
     case 'System': return n.args.map(toAscii).join('; ');
     case 'Root': return `root(${toAscii(n.args[0])}, ${toAscii(n.args[1])})`;
@@ -79,6 +84,11 @@ export function toLatex(n) {
     const s = toLatex(c);
     return needsParens(c, n, i) ? `\\left(${s}\\right)` : s;
   };
+  // Argumento de uma função f: "\sin x" ou "\sin\left(2x\right)".
+  const sub2 = (f) => {
+    const a = toLatex(f.args[0]);
+    return needsParens(f.args[0], f, 0) ? `\\left(${a}\\right)` : ` ${a}`;
+  };
   switch (n.op) {
     case 'Number': return n.value;
     case 'Symbol': return latexSymbol(n.name);
@@ -97,7 +107,12 @@ export function toLatex(n) {
         return sep + sub(c, i);
       }).join('');
     case 'Divide': return `\\frac{${toLatex(n.args[0])}}{${toLatex(n.args[1])}}`;
-    case 'Power': return `${sub(n.args[0], 0)}^{${toLatex(n.args[1])}}`;
+    case 'Power':
+      if (isFunctionPower(n)) {
+        const f = n.args[0];
+        return `\\${FUNCTION_NAMES[f.op]}^{${n.args[1].value}}${sub2(f)}`;
+      }
+      return `${sub(n.args[0], 0)}^{${toLatex(n.args[1])}}`;
     case 'Sqrt': return `\\sqrt{${toLatex(n.args[0])}}`;
     case 'Root': return `\\sqrt[${toLatex(n.args[1])}]{${toLatex(n.args[0])}}`;
     case 'Abs': return `\\left|${toLatex(n.args[0])}\\right|`;
@@ -106,9 +121,12 @@ export function toLatex(n) {
     case 'Real': return `\\operatorname{Re}\\left(${toLatex(n.args[0])}\\right)`;
     case 'Imaginary': return `\\operatorname{Im}\\left(${toLatex(n.args[0])}\\right)`;
     case 'Delimiter': return `\\left(${toLatex(n.args[0])}\\right)`;
+    case 'Log':
+      if (n.args.length === 2) return `\\log_{${toLatex(n.args[1])}}${sub2(n)}`;
+      return `\\log${sub2(n)}`;
     default: {
       const name = FUNCTION_NAMES[n.op] ?? n.op;
-      return `\\${name}${sub(n.args[0], 0).replace(/^(?!\\left)/, ' ')}`;
+      return `\\${name}${sub2(n)}`;
     }
   }
 }

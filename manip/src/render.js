@@ -5,7 +5,7 @@
 // acompanhar cada pedaço entre dois estados.
 
 import { GREEK, FUNCTION_NAMES, IMAGINARY } from './ast.js';
-import { needsParens, needsDot } from './notation.js';
+import { needsParens, needsDot, isFunctionPower, simpleBase } from './notation.js';
 import { functionLabel } from './i18n.js';
 import { RELATIONS } from './relations.js';
 
@@ -114,6 +114,19 @@ export function render(n, parent = null, index = 0) {
         el('span', 'den', null, kid(n.args[1], 1))));
       break;
     case 'Power':
+      // sen²x: o expoente fica junto do nome da função.
+      if (isFunctionPower(n)) {
+        const f = n.args[0];
+        const fe = el('span', `n ${f.op} func`, f.id);
+        if (f.color !== undefined) fe.classList.add('c' + f.color);
+        fe.append(
+          el('span', 'fname', f.id + 'f', functionLabel(f.op, FUNCTION_NAMES[f.op])),
+          el('span', 'fexp', null, kid(n.args[1], 1)),
+          render(f.args[0], f, 0));
+        e.classList.add('fpow');
+        e.append(fe);
+        break;
+      }
       e.append(
         el('span', 'base', null, kid(n.args[0], 0)),
         el('span', 'exp', null, kid(n.args[1], 1)),
@@ -147,7 +160,11 @@ export function render(n, parent = null, index = 0) {
     default: {
       const name = functionLabel(n.op, FUNCTION_NAMES[n.op] ?? n.op);
       e.classList.add('func');
-      e.append(el('span', 'fname', n.id + 'f', name), ...n.args.map(kid));
+      const fname = el('span', 'fname', n.id + 'f', name);
+      // log com base: log₂ x
+      if (n.op === 'Log' && n.args.length === 2 && simpleBase(n.args[1])) {
+        e.append(fname, el('span', 'fbase', null, kid(n.args[1], 1)), kid(n.args[0], 0));
+      } else e.append(fname, ...n.args.map(kid));
     }
   }
 
@@ -165,6 +182,7 @@ export function layoutPowers(root) {
   for (const p of pows) {
     const base = p.querySelector(':scope > .base');
     const exp = p.querySelector(':scope > .exp');
+    if (!base) continue; // sen²x: expoente junto do nome
     exp.style.verticalAlign = '0px';
     const b = base.getBoundingClientRect();
     const x = exp.getBoundingClientRect();

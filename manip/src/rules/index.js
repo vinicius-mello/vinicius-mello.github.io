@@ -24,40 +24,13 @@ import { msg } from '../i18n.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
+import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
 import { monomial as normalMonomial, sameMonomial, negateMonomial, squareRoot } from './monomial.js';
 import {
   terms, factors, unparen, signed, parentPath, lastIndex, parentOf,
-  siblingsOf, cloneFrom, spliceFlat,
+  siblingsOf, cloneFrom, spliceFlat, rebuild, place, atFocusOrParent, sumOf, isNum, either,
 } from './util.js';
 
-// Soma/produto com 0 ou 1 argumentos vira o elemento neutro ou o próprio item.
-function rebuild(op, args, original) {
-  if (args.length === 0) return num(op === 'Add' ? 0 : 1);
-  if (args.length === 1) return args[0];
-  return original?.op === op ? withArgs(original, args) : fn(op, ...args);
-}
-
-// Substitui o nó em `path` por `node`; se o nó resultante for uma soma
-// dentro de outra soma, os termos entram direto no pai.
-function place(tree, path, node) {
-  const parent = parentOf(tree, path);
-  if (parent?.op === 'Add' && node.op === 'Add') {
-    return replaceAt(tree, parentPath(path), withArgs(parent, spliceFlat(parent, lastIndex(path), [node])));
-  }
-  return replaceAt(tree, path, node);
-}
-
-// Tenta f no foco e, se não se aplicar, no pai do foco.
-function atFocusOrParent(ctx, f) {
-  return f(ctx.focus) ?? (ctx.focus.length ? f(parentPath(ctx.focus)) : null);
-}
-
-const sumOf = (x) => {
-  const u = unparen(x);
-  return u.op === 'Add' ? u : null;
-};
-
-const isNum = (n, v) => n.op === 'Number' && Number(n.value) === v;
 
 // ---------------------------------------------------------------- calcular
 
@@ -95,25 +68,6 @@ function calculate(ctx) {
     focus: node.id,
     hints: { merge: { to: node.id, from: items.map((x) => x.id) } },
   };
-}
-
-// Uma tecla, uma equivalência: as funções são as formas (os dois sentidos)
-// que ela pode produzir. `all` lista as que se aplicam, em ordem e sem
-// repetir; `run` aplica a primeira. Repetir a tecla alterna entre elas.
-function either(...fns) {
-  const all = (ctx) => {
-    const out = [];
-    let error = null;
-    for (const f of fns) {
-      const r = f(ctx);
-      if (r?.tree) {
-        const key = toAscii(r.tree);
-        if (!out.some((o) => toAscii(o.tree) === key)) out.push(r);
-      } else if (r?.error) error ??= r;
-    }
-    return out.length ? out : error ? [error] : [];
-  };
-  return { all, run: (ctx) => all(ctx)[0] ?? null };
 }
 
 // -------------------------------------------------------------- distribuir
@@ -295,6 +249,31 @@ function factorAt(ctx) {
     focus: numeric ? inner.id : product.id,
     hints: { merge: { to: base.id, from: removed } },
   };
+}
+
+// 12 → 2²·3: decompõe o número em foco em fatores primos (o inverso de
+// calcular). Só números inteiros compostos.
+function primeFactors(ctx) {
+  const { tree, focus } = ctx;
+  const n = getAt(tree, focus);
+  if (n.op !== 'Number' || !/^\d+$/.test(n.value)) return null;
+  let m = BigInt(n.value);
+  if (m < 4n || m > 10n ** 12n) return null;
+  const ps = [];
+  for (let d = 2n; d * d <= m; d++) {
+    let k = 0;
+    while (m % d === 0n) { m /= d; k++; }
+    if (k) ps.push([d, k]);
+  }
+  if (m > 1n) ps.push([m, 1]);
+  if (ps.length === 1 && ps[0][1] === 1) return null; // primo
+  const fs = ps.map(([d, k]) => (k === 1 ? num(d.toString()) : fn('Power', num(d.toString()), num(k))));
+  const node = rebuild('Multiply', fs);
+  const parent = parentOf(tree, focus);
+  const t2 = parent?.op === 'Multiply'
+    ? replaceAt(tree, parentPath(focus), withArgs(parent, spliceFlat(parent, lastIndex(focus), [node])))
+    : replaceAt(tree, focus, node);
+  return { tree: t2, label: msg('step.primeFactors'), focus: fs[0].id };
 }
 
 // ------------------------------------------------------------------ cancelar
@@ -743,6 +722,27 @@ function signs(ctx) {
     const stripped = withArgs(n, n.args.map((x) => (isNeg(x) ? unparen(x).args[0] : x)));
     const node = count % 2 ? fn('Negate', stripped) : stripped;
     return { tree: place(tree, p, node), label: msg('step.signs'), focus: node.id };
+  });
+}
+
+// −ab → (−a)b | a(−b) · −(a/b) → (−a)/b | a/(−b): o sinal entra num fator
+// (o inverso da regra de sinais); cada fator é uma forma.
+function signsInverse(ctx) {
+  return atFocusOrParent(ctx, (p) => {
+    const { tree } = ctx;
+    const n = getAt(tree, p);
+    if (n.op !== 'Negate') return null;
+    const inner = unparen(n.args[0]);
+    if (inner.op !== 'Multiply' && inner.op !== 'Divide') return null;
+    const out = inner.args.map((f, i) => {
+      if (unparen(f).op === 'Negate') return null;
+      const neg = fn('Negate', f);
+      const args = inner.args.slice();
+      args[i] = inner.op === 'Multiply' ? fn('Delimiter', neg) : neg;
+      const node = withArgs(inner, args);
+      return { tree: place(tree, p, node), label: msg('step.signsInv'), focus: node.id };
+    }).filter(Boolean);
+    return out.length ? out : null;
   });
 }
 
@@ -1631,15 +1631,15 @@ function openName(ctx) {
 // "group.<nome>"). Cada operação tem uma tecla (minúscula, dígito ou
 // símbolo) que vale tanto direto na fórmula quanto com o menu aberto; as
 // maiúsculas ficam para os comandos da interface (app.js).
-export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'complex', 'relation', 'system', 'names'];
+export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'functions', 'complex', 'relation', 'system', 'names'];
 
 export const RULES = [
   // aritmética
-  { id: 'calc', key: 'c', group: 'arith', run: calculate },
+  { id: 'calc', key: 'c', group: 'arith', ...either(calculate, primeFactors) },
   { id: 'like', key: 'l', group: 'arith', run: likeTerms },
   { id: 'cancel', key: 'x', group: 'arith', run: cancel },
   { id: 'neutral', key: '0', group: 'arith', run: neutral },
-  { id: 'signs', key: 'r', group: 'arith', run: signs },
+  { id: 'signs', key: 'r', group: 'arith', ...either(signs, signsInverse) },
   // "-" é compartilhada com "subtrair equações": nunca valem juntas.
   { id: 'flipsigns', key: '-', group: 'arith', run: flipSigns },
   // estrutura
@@ -1664,10 +1664,15 @@ export const RULES = [
   {
     id: 'expandfrac', key: '*', group: 'fractions', run: expandFraction,
     input: true,
+    suggest: (ctx) => {
+      const dp = fractionAround(ctx.tree, ctx.focus);
+      const r = dp && rationalizeSuggestion(getAt(ctx.tree, dp));
+      return r ? toAscii(r) : '';
+    },
     available: (ctx) => !!fractionAround(ctx.tree, ctx.focus),
   },
   // potências
-  { id: 'powers', key: '^', group: 'powers', ...either(asPower, powers, productOfPowers, powerOfProduct, splitExponent, powerAsProduct) },
+  { id: 'powers', key: '^', group: 'powers', ...either(asPower, powers, productOfPowers, powerOfProduct, splitExponent, ...RADICAL_RULES, powerAsProduct) },
   { id: 'binomial', key: 'b', group: 'powers', ...either(expandPower, notableProducts) },
   // complexos
   { id: 'conj', key: 'z', group: 'complex', run: conjugateProps },
@@ -1675,6 +1680,9 @@ export const RULES = [
   { id: 'conjprod', key: 'h', group: 'complex', run: conjProduct },
   { id: 'conjsum', key: 'v', group: 'complex', run: conjSum },
   { id: 'timesconj', key: 'y', group: 'complex', run: timesConjugate },
+  // funções: logaritmos/exponenciais e trigonometria dividem a tecla f
+  { id: 'logs', key: 'f', group: 'functions', ...either(...LOG_RULES) },
+  { id: 'trig', key: 'f', group: 'functions', ...either(...TRIG_RULES) },
   // equação e inequação
   {
     id: 'sides', key: '=', group: 'relation', run: onRelation(bothSides),
@@ -1692,13 +1700,14 @@ export const RULES = [
   { id: 'subeq', key: '-', group: 'system', run: combineEquations(-1) },
   { id: 'substsys', key: '>', group: 'system', run: substituteInSystem },
   // nomes
+  // n: num nome, expande; fora dele, dá nome (nome ↔ expressão)
+  { id: 'expand', key: 'n', group: 'names', run: expandName },
   {
     id: 'name', key: 'n', group: 'names', run: nameIt,
     input: true,
     available: (ctx) => ctx.targets.length === 1 && !isRelation(getAt(ctx.tree, ctx.targets[0]).op)
       && getAt(ctx.tree, ctx.targets[0]).op !== 'System',
   },
-  { id: 'expand', key: 'k', group: 'names', run: expandName },
   { id: 'open', key: 'w', group: 'names', run: openName },
 ];
 

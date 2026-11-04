@@ -979,30 +979,35 @@ const COMMANDS = KEY_COMMANDS.map((c) => ({ ...c, run: ACTIONS[c.id] }));
 //
 // Equivalências (j, ^, b...) podem valer nos dois sentidos: a tecla aplica a
 // primeira forma e, repetida logo em seguida, troca o passo pela próxima.
-let cycle = null; // { key, alts, i, step }
+let cycle = null; // { key, alts, i, step, focusId }
 
 function runRuleKey(rules, key) {
-  if (cycle?.key === key && cycle.step === state() && !selected.size) return nextForm();
+  // Só alterna se nada mudou desde então (passo, foco e seleção).
+  if (cycle?.key === key && cycle.step === state() && cycle.focusId === state().focusId && !selected.size) return nextForm();
   cycle = null;
   const ctx = ruleContext();
   let error = null;
+  // As formas de todas as operações da tecla, na ordem; uma que pede texto
+  // só abre o campo se nenhuma antes dela se aplicou.
+  const forms = [];
   for (const rule of rules) {
     if (rule.input) {
-      if (rule.available(ctx)) return openMenu(rule.id);
+      if (!forms.length && rule.available(ctx)) return openMenu(rule.id);
       continue;
     }
-    const alts = (rule.all ? rule.all(ctx) : [rule.run(ctx)]).filter((r) => r?.tree || r?.action || r?.error);
-    const r = alts.find((x) => x.tree || x.action);
-    if (r) {
-      applyResult(r);
-      const forms = alts.filter((x) => x.tree);
-      if (forms.length > 1) {
-        cycle = { key, alts: forms, i: 0, step: state() };
-        toast(t('toast.again', { key, i: 1, n: forms.length }));
-      }
-      return;
+    for (const r of rule.all ? rule.all(ctx) : [rule.run(ctx)]) {
+      if (r?.tree || r?.action) forms.push(r);
+      else if (r?.error) error ??= r;
     }
-    error ??= alts.find((x) => x.error);
+  }
+  if (forms.length) {
+    applyResult(forms[0]);
+    const alts = forms.filter((x) => x.tree);
+    if (alts.length > 1 && !forms[0].action) {
+      cycle = { key, alts, i: 0, step: state(), focusId: state().focusId };
+      toast(t('toast.again', { key, i: 1, n: alts.length }));
+    }
+    return;
   }
   const first = rules[0];
   if (error) toast(t(error.error, error.params));
@@ -1017,6 +1022,7 @@ function nextForm() {
   const step = { tree: r.tree, focusId: keepFocus(r.tree, r.focus ?? state().focusId), label: r.label, hints: r.hints };
   history().replaceCurrent(step);
   cycle.step = state();
+  cycle.focusId = state().focusId;
   refresh(true, null, r.hints);
   toast(t('toast.again', { key: cycle.key, i: cycle.i + 1, n: cycle.alts.length }));
 }

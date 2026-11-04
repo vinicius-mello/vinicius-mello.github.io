@@ -1,6 +1,7 @@
 // Utilitários compartilhados pelas regras.
 
-import { getAt, newId, children } from '../ast.js';
+import { getAt, newId, children, replaceAt, withArgs, fn, num } from '../ast.js';
+import { toAscii } from '../serialize.js';
 
 export const terms = (n) => (n.op === 'Add' ? n.args : [n]);
 export const factors = (n) => (n.op === 'Multiply' ? n.args : [n]);
@@ -47,3 +48,54 @@ export function spliceFlat(parent, i, items) {
   args.splice(i, 1, ...flat);
   return args;
 }
+
+// Soma/produto com 0 ou 1 argumentos vira o elemento neutro ou o próprio item.
+export function rebuild(op, args, original) {
+  if (args.length === 0) return num(op === 'Add' ? 0 : 1);
+  if (args.length === 1) return args[0];
+  return original?.op === op ? withArgs(original, args) : fn(op, ...args);
+}
+
+// Substitui o nó em `path` por `node`; se o nó resultante for uma soma
+// dentro de outra soma, os termos entram direto no pai.
+export function place(tree, path, node) {
+  const parent = parentOf(tree, path);
+  if (parent?.op === 'Add' && node.op === 'Add') {
+    return replaceAt(tree, parentPath(path), withArgs(parent, spliceFlat(parent, lastIndex(path), [node])));
+  }
+  return replaceAt(tree, path, node);
+}
+
+// Tenta f no foco e, se não se aplicar, no pai do foco.
+export function atFocusOrParent(ctx, f) {
+  return f(ctx.focus) ?? (ctx.focus.length ? f(parentPath(ctx.focus)) : null);
+}
+
+export const sumOf = (x) => {
+  const u = unparen(x);
+  return u.op === 'Add' ? u : null;
+};
+
+export const isNum = (n, v) => n.op === 'Number' && Number(n.value) === v;
+
+// Uma tecla, uma equivalência: as funções são as formas (os dois sentidos)
+// que ela pode produzir. `all` lista as que se aplicam, em ordem e sem
+// repetir; `run` aplica a primeira. Repetir a tecla alterna entre elas.
+export function either(...fns) {
+  const all = (ctx) => {
+    const out = [];
+    let error = null;
+    for (const f of fns) {
+      // Uma função pode devolver várias formas (lista).
+      for (const r of [].concat(f(ctx) ?? [])) {
+        if (r?.tree) {
+          const key = toAscii(r.tree);
+          if (!out.some((o) => toAscii(o.tree) === key)) out.push(r);
+        } else if (r?.error) error ??= r;
+      }
+    }
+    return out.length ? out : error ? [error] : [];
+  };
+  return { all, run: (ctx) => all(ctx)[0] ?? null };
+}
+

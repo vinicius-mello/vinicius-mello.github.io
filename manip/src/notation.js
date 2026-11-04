@@ -8,6 +8,15 @@ const OWN_NOTATION = new Set(['Sqrt', 'Root', 'Abs', 'Conjugate']);
 const ALWAYS_PARENS = new Set(['Real', 'Imaginary', 'Argument']);
 export const isFunctionOp = (op) => op in FUNCTION_NAMES && !OWN_NOTATION.has(op);
 
+// sen²x: potência de função trigonométrica com expoente numérico, escrita
+// com o expoente junto do nome.
+const POWER_NAMED = new Set(['Sin', 'Cos', 'Tan', 'Sec', 'Csc', 'Cot', 'Sinh', 'Cosh', 'Tanh']);
+export const isFunctionPower = (n) => n.op === 'Power' && POWER_NAMED.has(n.args[0].op)
+  && n.args[0].args.length === 1 && n.args[1].op === 'Number';
+
+// log com base: Log(x, b) é escrito log_b x (base simples) ou log(x, b).
+export const simpleBase = (b) => b.op === 'Number' || (b.op === 'Symbol' && !b.name.includes('_'));
+
 // Parênteses que não foram digitados mas que a estrutura exige para ser lida
 // corretamente (ex.: Multiply(2, Add(x, 1)) → 2(x + 1)).
 export function needsParens(child, parent, index) {
