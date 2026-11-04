@@ -415,7 +415,7 @@ function neutral(ctx) {
     let node = null;
     let gone = [];
     let label = 'step.neutral';
-    // Zero absorve: 0·x → 0 · 0/x → 0 · x⁰ → 1 (x ≠ 0)
+    // Zero absorve: 0·x → 0 · 0/x → 0 · x⁰ → 1 (x ≠ 0) · e 1ᵏ → 1
     const zero = n.op === 'Multiply' && n.args.find((a) => isNum(a, 0));
     if (zero) {
       node = zero;
@@ -429,6 +429,11 @@ function neutral(ctx) {
       node = num(1);
       gone = [n.args[0].id, n.args[1].id];
       label = 'step.powZero';
+    } else if (n.op === 'Power' && isNum(n.args[0], 1)) {
+      // 1ᵏ → 1, para qualquer expoente
+      node = n.args[0];
+      gone = [n.args[1].id];
+      label = 'step.powOne';
     } else if (n.op === 'Divide' && isNum(n.args[1], 1)) { node = n.args[0]; gone = [n.args[1].id]; }
     else if (n.op === 'Power' && isNum(n.args[1], 1)) { node = n.args[0]; gone = [n.args[1].id]; }
     else if (n.op === 'Negate' && isNum(n.args[0], 0)) { node = n.args[0]; }
