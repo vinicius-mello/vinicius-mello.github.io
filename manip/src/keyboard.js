@@ -22,7 +22,7 @@ const SQRT = '√<span class="kb-box"></span>';
 const ROOT = '<sup>n</sup>√<span class="kb-box"></span>';
 const POW2 = '<i>x</i><sup>2</sup>';
 const POWN = '<i>x</i><sup><span class="kb-box sm"></span></sup>';
-const BINOM = '(<span class="kb-frac kb-binom"><span>n</span><span>k</span></span>)';
+const BINOM = '<span class="kb-binom"><span class="kb-paren">(</span><span class="kb-frac"><span>n</span><span>k</span></span><span class="kb-paren">)</span></span>';
 const SUB = '<i>x</i><sub><span class="kb-box sm"></span></sub>';
 
 const PAGES = {

@@ -896,7 +896,9 @@ kbd { min-width: 1.8em; }
 }
 
 .kb-frac > span + span { border-top: 1.5px solid currentColor; }
-.kb-binom > span + span { border-top: 0; }
+.kb-binom { display: inline-flex; align-items: center; }
+.kb-binom .kb-frac > span + span { border-top: 0; }
+.kb-paren { font-size: 1.45em; line-height: 1; font-weight: 300; transform: scaleY(1.15); margin-top: -.08em; }
 
 .kb-imag { font-style: normal; }
 .kb-conj { display: inline-block; border-top: 1.5px solid currentColor; padding-top: 1px; line-height: 1; }
