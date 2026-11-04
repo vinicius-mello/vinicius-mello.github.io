@@ -92,7 +92,8 @@ export function toLatex(n) {
     case 'Negate': return '-' + sub(n.args[0], 0);
     case 'Multiply':
       return n.args.map((c, i) => {
-        const sep = i === 0 ? '' : needsDot(n.args[i - 1], c, i, n) ? ' \\cdot ' : ' ';
+        const fractions = n.args[i - 1]?.op === 'Divide' && c.op === 'Divide';
+        const sep = i === 0 ? '' : fractions || needsDot(n.args[i - 1], c, i, n) ? ' \\cdot ' : ' ';
         return sep + sub(c, i);
       }).join('');
     case 'Divide': return `\\frac{${toLatex(n.args[0])}}{${toLatex(n.args[1])}}`;

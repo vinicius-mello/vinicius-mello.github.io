@@ -101,7 +101,9 @@ export function render(n, parent = null, index = 0) {
     }
     case 'Multiply':
       n.args.forEach((c, i) => {
-        if (i > 0 && needsDot(n.args[i - 1], c, i, n)) e.append(op('·', `${n.id}·${c.id}`));
+        // Duas frações empilhadas coladas pareceriam uma só: a/c · b/d.
+        const fractions = n.args[i - 1]?.op === 'Divide' && c.op === 'Divide';
+        if (i > 0 && (fractions || needsDot(n.args[i - 1], c, i, n))) e.append(op('·', `${n.id}·${c.id}`));
         e.append(kid(c, i));
       });
       break;

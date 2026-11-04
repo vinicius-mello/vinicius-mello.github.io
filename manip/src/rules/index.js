@@ -97,6 +97,25 @@ function calculate(ctx) {
   };
 }
 
+// Uma tecla, uma equivalência: as funções são as formas (os dois sentidos)
+// que ela pode produzir. `all` lista as que se aplicam, em ordem e sem
+// repetir; `run` aplica a primeira. Repetir a tecla alterna entre elas.
+function either(...fns) {
+  const all = (ctx) => {
+    const out = [];
+    let error = null;
+    for (const f of fns) {
+      const r = f(ctx);
+      if (r?.tree) {
+        const key = toAscii(r.tree);
+        if (!out.some((o) => toAscii(o.tree) === key)) out.push(r);
+      } else if (r?.error) error ??= r;
+    }
+    return out.length ? out : error ? [error] : [];
+  };
+  return { all, run: (ctx) => all(ctx)[0] ?? null };
+}
+
 // -------------------------------------------------------------- distribuir
 
 function distribute(ctx) {
@@ -610,6 +629,85 @@ function multiplyFractions(ctx) {
   return { tree: t2, label: msg('step.multFrac'), focus: frac.id };
 }
 
+// (ab)/(cd) → (a/c)(b/d), o inverso do produto de frações. Com fatores
+// selecionados (em cima e/ou embaixo), eles formam a primeira fração e o
+// resto a segunda; sem seleção, os fatores se pareiam pela posição.
+function splitProduct(ctx) {
+  const { tree, targets, focus } = ctx;
+  const slotOf = (p) => {
+    const parent = parentOf(tree, p);
+    if (parent?.op === 'Divide') return { dp: parentPath(p), side: lastIndex(p), k: -1 };
+    if (parent?.op === 'Multiply' && parentOf(tree, parentPath(p))?.op === 'Divide') {
+      const mp = parentPath(p);
+      return { dp: parentPath(mp), side: lastIndex(mp), k: lastIndex(p) };
+    }
+    return null;
+  };
+  const slots = targets.map(slotOf);
+  let dp;
+  let picked = null;
+  if (slots.every((x) => x && x.dp.join() === slots[0].dp.join())) {
+    dp = slots[0].dp;
+    picked = [new Set(), new Set()];
+    for (const x of slots) {
+      const part = getAt(tree, dp).args[x.side];
+      if (x.k < 0) factors(part).forEach((_, i) => picked[x.side].add(i));
+      else picked[x.side].add(x.k);
+    }
+  } else if (getAt(tree, focus).op === 'Divide') dp = focus;
+  else return null;
+
+  const D = getAt(tree, dp);
+  const N = factors(D.args[0]);
+  const Dn = factors(D.args[1]);
+  const frac = (ns, ds, keep) => {
+    const top = ns.length ? rebuild('Multiply', ns) : num(1);
+    if (!ds.length) return ns;
+    const bottom = rebuild('Multiply', ds);
+    return [keep ? withArgs(D, [top, bottom]) : fn('Divide', top, bottom)];
+  };
+  let parts;
+  if (picked) {
+    const a = [N.filter((_, i) => picked[0].has(i)), Dn.filter((_, i) => picked[1].has(i))];
+    const r = [N.filter((_, i) => !picked[0].has(i)), Dn.filter((_, i) => !picked[1].has(i))];
+    if (!r[0].length && !r[1].length) return null;
+    parts = [...frac(a[0], a[1], true), ...frac(r[0], r[1], false)];
+  } else {
+    if (N.length < 2 && Dn.length < 2) return null;
+    const k = Math.min(N.length, Dn.length);
+    parts = [];
+    for (let i = 0; i < k; i++) parts.push(...frac([N[i]], [Dn[i]], i === 0));
+    parts.push(...N.slice(k));
+    for (const d of Dn.slice(k)) parts.push(fn('Divide', num(1), d));
+  }
+  const prod = fn('Multiply', ...parts);
+  const parent = parentOf(tree, dp);
+  const t2 = parent?.op === 'Multiply'
+    ? replaceAt(tree, parentPath(dp), withArgs(parent, spliceFlat(parent, lastIndex(dp), [prod])))
+    : replaceAt(tree, dp, prod);
+  return { tree: t2, label: msg('step.splitProduct'), focus: (parent?.op === 'Multiply' ? parts[0] : prod).id };
+}
+
+// A fração em foco (ou a mais próxima acima dele).
+function fractionAround(tree, p) {
+  for (let q = p; q; q = q.length ? parentPath(q) : null) if (getAt(tree, q).op === 'Divide') return q;
+  return null;
+}
+
+// a/b → (a·k)/(b·k): multiplica numerador e denominador pela expressão
+// digitada. O inverso é cancelar (x).
+function expandFraction(ctx) {
+  const { tree, focus } = ctx;
+  const k = parseExpr(ctx.input);
+  const dp = fractionAround(tree, focus);
+  if (!k || !dp) return null;
+  const D = getAt(tree, dp);
+  const times = (x, f) => (x.op === 'Multiply' ? withArgs(x, [...x.args, f]) : fn('Multiply', x, f));
+  const k2 = cloneFrom(k, {});
+  const result = withArgs(D, [times(D.args[0], k), times(D.args[1], k2)]);
+  return { tree: replaceAt(tree, dp, result), label: msg('step.expandFrac', { q: toAscii(k) }), focus: result.id };
+}
+
 function splitFraction(ctx) {
   return atFocusOrParent(ctx, (p) => {
     const { tree } = ctx;
@@ -725,6 +823,89 @@ function powers(ctx) {
       const inner = unparen(n.args[0]);
       const pw = powerWith(n, inner.args[0], fn('Multiply', inner.args[1], n.args[1]));
       return { tree: replaceAt(tree, p, pw), label: msg('step.powPow'), focus: pw.id };
+    }
+    return null;
+  });
+}
+
+// aⁿbⁿ → (ab)ⁿ: fatores com o mesmo expoente (os selecionados, os que têm o
+// expoente do fator em foco ou o do primeiro) viram a potência do produto.
+// a^n/b^n → (a/b)^n.
+function productOfPowers(ctx) {
+  const { tree, targets, focus } = ctx;
+  const quotient = atFocusOrParent(ctx, (p) => {
+    const D = getAt(tree, p);
+    if (D.op !== 'Divide' || D.args.some((x) => x.op !== 'Power') || !same(D.args[0].args[1], D.args[1].args[1])) return null;
+    const [a, b] = D.args;
+    const pw = withArgs(a, [withArgs(D, [a.args[0], b.args[0]]), a.args[1]]);
+    return { tree: replaceAt(tree, p, pw), label: msg('step.prodPower'), focus: pw.id, hints: { merge: { to: a.args[1].id, from: [b.args[1].id] } } };
+  });
+  if (quotient) return quotient;
+
+  let mp;
+  let idx;
+  const sib = siblingsOf(targets);
+  if (sib && parentOf(tree, targets[0])?.op === 'Multiply') {
+    mp = parentPath(targets[0]);
+    idx = sib;
+  } else {
+    const n = getAt(tree, focus);
+    mp = n.op === 'Multiply' ? focus : parentPath(focus);
+    const M = mp && getAt(tree, mp);
+    if (M?.op !== 'Multiply') return null;
+    const ref = n.op === 'Power' && mp !== focus ? n : M.args.find((x) => x.op === 'Power');
+    if (!ref) return null;
+    idx = M.args.map((x, i) => (x.op === 'Power' && same(x.args[1], ref.args[1]) ? i : -1)).filter((i) => i >= 0);
+  }
+  const M = getAt(tree, mp);
+  if (M?.op !== 'Multiply' || idx.length < 2) return null;
+  const ps = idx.map((i) => M.args[i]);
+  if (ps.some((x) => x.op !== 'Power' || !same(x.args[1], ps[0].args[1]))) return null;
+  const pw = withArgs(ps[0], [fn('Multiply', ...ps.map((x) => x.args[0])), ps[0].args[1]]);
+  const args = M.args.filter((_, i) => !idx.includes(i) || i === idx[0]);
+  args[args.indexOf(ps[0])] = pw;
+  return {
+    tree: replaceAt(tree, mp, rebuild('Multiply', args, M)),
+    label: msg('step.prodPower'),
+    focus: pw.id,
+    hints: { merge: { to: ps[0].args[1].id, from: ps.slice(1).map((x) => x.args[1].id) } },
+  };
+}
+
+// (ab)ⁿ → aⁿbⁿ  e  (a/b)ⁿ → aⁿ/bⁿ: o expoente vai para cada fator.
+function powerOfProduct(ctx) {
+  return atFocusOrParent(ctx, (p) => {
+    const { tree } = ctx;
+    const P = getAt(tree, p);
+    if (P.op !== 'Power') return null;
+    const b = unparen(P.args[0]);
+    if (b.op !== 'Multiply' && b.op !== 'Divide') return null;
+    const clones = {};
+    const e = P.args[1];
+    const args = b.args.map((f, i) => (i === 0 ? withArgs(P, [f, e]) : fn('Power', f, cloneFrom(e, clones))));
+    const node = withArgs(b, args);
+    return { tree: replaceAt(tree, p, node), label: msg('step.powProduct'), focus: node.id, hints: { clones } };
+  });
+}
+
+// x^(a + b) → xᵃ·xᵇ  e  x^(ab) → (xᵃ)ᵇ: os inversos de somar e de
+// multiplicar os expoentes.
+function splitExponent(ctx) {
+  return atFocusOrParent(ctx, (p) => {
+    const { tree } = ctx;
+    const P = getAt(tree, p);
+    if (P.op !== 'Power') return null;
+    const e = unparen(P.args[1]);
+    if (e.op === 'Add') {
+      const clones = {};
+      const ps = e.args.map((t, i) => (i === 0 ? withArgs(P, [P.args[0], t]) : fn('Power', cloneFrom(P.args[0], clones), t)));
+      const prod = fn('Multiply', ...ps);
+      return { tree: replaceAt(tree, p, prod), label: msg('step.expSplit'), focus: prod.id, hints: { clones } };
+    }
+    if (e.op === 'Multiply') {
+      const inner = fn('Power', P.args[0], e.args[0]);
+      const pw = withArgs(P, [inner, rebuild('Multiply', e.args.slice(1), e)]);
+      return { tree: replaceAt(tree, p, pw), label: msg('step.powPowInv'), focus: pw.id };
     }
     return null;
   });
@@ -1479,13 +1660,15 @@ export const RULES = [
     available: (ctx) => ctx.targets.length > 0,
   },
   // frações
-  { id: 'join', key: 'j', group: 'fractions', run: (ctx) => joinFractions(ctx) ?? multiplyFractions(ctx) },
-  { id: 'split', key: 'f', group: 'fractions', run: splitFraction },
+  { id: 'join', key: 'j', group: 'fractions', ...either(splitProduct, splitFraction, joinFractions, multiplyFractions) },
+  {
+    id: 'expandfrac', key: '*', group: 'fractions', run: expandFraction,
+    input: true,
+    available: (ctx) => !!fractionAround(ctx.tree, ctx.focus),
+  },
   // potências
-  { id: 'powers', key: '^', group: 'powers', run: (ctx) => asPower(ctx) ?? powers(ctx) },
-  { id: 'asproduct', key: 'm', group: 'powers', run: powerAsProduct },
-  { id: 'binomial', key: 'b', group: 'powers', run: expandPower },
-  { id: 'notable', key: '2', group: 'powers', run: notableProducts },
+  { id: 'powers', key: '^', group: 'powers', ...either(asPower, powers, productOfPowers, powerOfProduct, splitExponent, powerAsProduct) },
+  { id: 'binomial', key: 'b', group: 'powers', ...either(expandPower, notableProducts) },
   // complexos
   { id: 'conj', key: 'z', group: 'complex', run: conjugateProps },
   { id: 'dconj', key: '~', group: 'complex', run: doubleConjugate },
@@ -1527,14 +1710,15 @@ export function applicable(ctx) {
       if (rule.available(ctx)) out.push({ rule, result: null });
       continue;
     }
-    let result = null;
+    let results = [];
     try {
-      result = rule.run(ctx);
+      results = rule.all ? rule.all(ctx) : [rule.run(ctx)];
     } catch (err) {
       console.error(`[Manip] regra ${rule.id}`, err);
     }
     // Erros explicam por que a regra não vale aqui; não entram no menu.
-    if (result && !result.error) out.push({ rule, result });
+    // Uma equivalência que se aplica nos dois sentidos aparece duas vezes.
+    for (const result of results) if (result && !result.error) out.push({ rule, result, alt: results.length > 1 });
   }
   return out;
 }

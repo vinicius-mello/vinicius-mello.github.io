@@ -577,6 +577,8 @@ function closeMenu() {
   stage.focus();
 }
 
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
 function hintEl(text) {
   return Object.assign(document.createElement('span'), { className: 'hint', textContent: text });
 }
@@ -585,7 +587,7 @@ function drawMenu() {
   const { items, index } = menu;
   const list = document.createElement('ul');
   let lastGroup = null;
-  items.forEach(({ rule }, i) => {
+  items.forEach(({ rule, result, alt }, i) => {
     if (rule.group !== lastGroup) {
       lastGroup = rule.group;
       const h = document.createElement('li');
@@ -597,7 +599,8 @@ function drawMenu() {
     li.className = 'menu-item' + (i === index ? ' active' : '');
     const k = document.createElement('kbd');
     k.textContent = rule.key ?? '·';
-    li.append(k, t(`rule.${rule.id}`));
+    // Equivalência com mais de uma forma aqui: cada uma diz o que faz.
+    li.append(k, alt ? capitalize(fmt(result.label)) : t(`rule.${rule.id}`));
     li.addEventListener('mousemove', () => {
       if (menu.index !== i && !menu.input) { menu.index = i; drawMenu(); }
     });
@@ -973,7 +976,14 @@ const COMMANDS = KEY_COMMANDS.map((c) => ({ ...c, run: ACTIONS[c.id] }));
 // uma operação que nunca valem juntas (ex.: "-"): vale a primeira que se
 // aplica. As que pedem texto abrem o campo; se nenhuma se aplica, um aviso
 // explica por quê.
-function runRuleKey(rules) {
+//
+// Equivalências (j, ^, b...) podem valer nos dois sentidos: a tecla aplica a
+// primeira forma e, repetida logo em seguida, troca o passo pela próxima.
+let cycle = null; // { key, alts, i, step }
+
+function runRuleKey(rules, key) {
+  if (cycle?.key === key && cycle.step === state() && !selected.size) return nextForm();
+  cycle = null;
   const ctx = ruleContext();
   let error = null;
   for (const rule of rules) {
@@ -981,14 +991,34 @@ function runRuleKey(rules) {
       if (rule.available(ctx)) return openMenu(rule.id);
       continue;
     }
-    const r = rule.run(ctx);
-    if (r?.tree || r?.action) return applyResult(r);
-    if (r?.error) error ??= r;
+    const alts = (rule.all ? rule.all(ctx) : [rule.run(ctx)]).filter((r) => r?.tree || r?.action || r?.error);
+    const r = alts.find((x) => x.tree || x.action);
+    if (r) {
+      applyResult(r);
+      const forms = alts.filter((x) => x.tree);
+      if (forms.length > 1) {
+        cycle = { key, alts: forms, i: 0, step: state() };
+        toast(t('toast.again', { key, i: 1, n: forms.length }));
+      }
+      return;
+    }
+    error ??= alts.find((x) => x.error);
   }
   const first = rules[0];
   if (error) toast(t(error.error, error.params));
   else toast(t(first.id === 'substsys' ? 'toast.substsys' : 'toast.notHere', { op: t(`rule.${first.id}`) }));
   bump();
+}
+
+// Troca o passo atual pela próxima forma da mesma equivalência.
+function nextForm() {
+  cycle.i = (cycle.i + 1) % cycle.alts.length;
+  const r = cycle.alts[cycle.i];
+  const step = { tree: r.tree, focusId: keepFocus(r.tree, r.focus ?? state().focusId), label: r.label, hints: r.hints };
+  history().replaceCurrent(step);
+  cycle.step = state();
+  refresh(true, null, r.hints);
+  toast(t('toast.again', { key: cycle.key, i: cycle.i + 1, n: cycle.alts.length }));
 }
 
 // Painel com todos os atalhos (tecla ?), montado a partir das listas acima
@@ -1084,7 +1114,7 @@ stage.addEventListener('keydown', (ev) => {
     if (selected.size) { selected.clear(); applyMarks(); }
     else if (presenting) togglePresenting();
   } else if (k === 'Enter') openMenu();
-  else if (rules.length) runRuleKey(rules);
+  else if (rules.length) runRuleKey(rules, k);
   else if (command) command.run();
   else return;
   ev.preventDefault();
