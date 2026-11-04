@@ -835,6 +835,8 @@ function stepsLatex() {
 }
 
 const EXPORTS = {
+  text: () => copyText(toAscii(state().tree), 'what.text'),
+  latex: () => copyText(toLatex(state().tree), 'what.latex'),
   'latex-steps': () => copyText(stepsLatex(), 'what.latexSteps'),
   mathjson: () => copyText(JSON.stringify(toMathJson(state().tree)), 'what.mathjson'),
   save: () => saveBlob(new Blob([JSON.stringify(serialize(), null, 2)], { type: 'application/json' }), 'manip.json'),
@@ -960,6 +962,7 @@ const recorder = createRecorder({
 const ACTIONS = {
   color: () => cycleColor(),
   edit: () => { input.value = toAscii(state().tree); input.focus(); input.select(); },
+  copy: () => copyText(toAscii(state().tree), 'what.text'),
   latex: () => copyText(toLatex(state().tree), 'what.latex'),
   present: () => togglePresenting(),
   keyboard: () => toggleKeyboard(),

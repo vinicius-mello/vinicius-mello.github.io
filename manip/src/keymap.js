@@ -6,6 +6,7 @@
 export const COMMANDS = [
   { id: 'color', key: 'C', label: 'keys.color' },
   { id: 'edit', key: 'E', label: 'keys.edit' },
+  { id: 'copy', key: 'Y', label: 'keys.copy' },
   { id: 'latex', key: 'L', label: 'keys.latex' },
   { id: 'present', key: 'P', label: 'keys.present' },
   { id: 'keyboard', key: 'K', label: 'keys.keyboard' },

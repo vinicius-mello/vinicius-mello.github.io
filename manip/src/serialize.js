@@ -12,7 +12,7 @@ const asciiAtomic = (n) => !COMPOUND.has(n.op) && !isRelation(n.op);
 const callStyle = (n) => asciiAtomic(n) && n.op !== 'Number' && n.op !== 'Symbol' && n.op !== 'Delimiter';
 
 // Igualdade estrutural ignorando parênteses digitados (Delimiter).
-function looseSame(a, b) {
+export function looseSame(a, b) {
   while (a.op === 'Delimiter') a = a.args[0];
   while (b.op === 'Delimiter') b = b.args[0];
   if (a.op !== b.op) return false;

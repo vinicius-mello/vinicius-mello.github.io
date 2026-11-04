@@ -19,7 +19,7 @@
 import { getAt, replaceAt, withArgs, fn, num, sym, same, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath } from '../ast.js';
 import { needsParens } from '../notation.js';
 import { parseInput } from '../input.js';
-import { toAscii } from '../serialize.js';
+import { toAscii, looseSame } from '../serialize.js';
 import { msg } from '../i18n.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
@@ -549,16 +549,33 @@ function joinFractions(ctx) {
     sp = parentPath(targets[0]);
     idx = sib;
   } else {
-    sp = getAt(tree, focus).op === 'Add' ? focus : parentPath(focus);
-    if (!sp || getAt(tree, sp)?.op !== 'Add') return null;
+    // A soma de frações mais próxima, subindo a partir do foco (que pode
+    // estar dentro de um numerador).
+    const fractions = (q) => getAt(tree, q).op === 'Add'
+      && getAt(tree, q).args.filter((t) => signed(t).body.op === 'Divide').length >= 2;
+    sp = focus;
+    while (sp.length && !fractions(sp)) sp = parentPath(sp);
+    if (!fractions(sp)) return null;
     idx = getAt(tree, sp).args.map((_, i) => i);
   }
   const S = getAt(tree, sp);
   if (S.op !== 'Add' || idx.length < 2) return null;
   const parts = idx.map((i) => ({ t: S.args[i], ...signed(S.args[i]) }));
   if (parts.some((x) => x.body.op !== 'Divide')) return null;
+  // Denominadores iguais, sem contar parênteses digitados. Se só a ordem dos
+  // fatores muda, explica: reordenar é um passo (Ctrl+setas).
   const den = parts[0].body.args[1];
-  if (parts.some((x) => !same(x.body.args[1], den))) return null;
+  const other = parts.find((x) => !looseSame(x.body.args[1], den));
+  if (other) {
+    const fs = (d) => factors(unparen(d)).map(unparen);
+    const a = fs(den);
+    const b = fs(other.body.args[1]).slice();
+    const reordered = a.length === b.length && a.every((f) => {
+      const k = b.findIndex((g) => looseSame(f, g));
+      return k >= 0 && b.splice(k, 1);
+    });
+    return { error: reordered ? 'err.denomOrder' : 'err.denoms', sp };
+  }
   const nums = parts.map((x) => (x.neg ? withArgs(x.t, [x.body.args[0]]) : x.body.args[0]));
   const frac = withArgs(parts[0].body, [fn('Add', ...nums), den]);
   let t2;
@@ -633,7 +650,7 @@ function splitProduct(ctx) {
       if (x.k < 0) factors(part).forEach((_, i) => picked[x.side].add(i));
       else picked[x.side].add(x.k);
     }
-  } else if (getAt(tree, focus).op === 'Divide') dp = focus;
+  } else if (targets.length === 1 && getAt(tree, focus).op === 'Divide') dp = focus;
   else return null;
 
   const D = getAt(tree, dp);
@@ -667,6 +684,20 @@ function splitProduct(ctx) {
   return { tree: t2, label: msg('step.splitProduct'), focus: (parent?.op === 'Multiply' ? parts[0] : prod).id };
 }
 
+// Formas da tecla j. Com o foco na soma de frações ou numa parcela dela, a
+// intenção é juntar: se não dá (denominadores diferentes), explica em vez
+// de separar a fração. Separar vale com o foco dentro dela.
+function fractionForms(ctx) {
+  const join = joinFractions(ctx);
+  if (join?.error) {
+    const { tree, focus } = ctx;
+    let tp = focus;
+    if (parentOf(tree, tp)?.op === 'Negate') tp = parentPath(tp);
+    if (focus.join() === join.sp.join() || parentPath(tp).join() === join.sp.join()) return join;
+  }
+  return [join, splitProduct(ctx), splitFraction(ctx), multiplyFractions(ctx)];
+}
+
 // A fração em foco (ou a mais próxima acima dele).
 function fractionAround(tree, p) {
   for (let q = p; q; q = q.length ? parentPath(q) : null) if (getAt(tree, q).op === 'Divide') return q;
@@ -688,6 +719,7 @@ function expandFraction(ctx) {
 }
 
 function splitFraction(ctx) {
+  if (ctx.targets.length > 1) return null;
   return atFocusOrParent(ctx, (p) => {
     const { tree } = ctx;
     const D = getAt(tree, p);
@@ -1660,7 +1692,7 @@ export const RULES = [
     available: (ctx) => ctx.targets.length > 0,
   },
   // frações
-  { id: 'join', key: 'j', group: 'fractions', ...either(splitProduct, splitFraction, joinFractions, multiplyFractions) },
+  { id: 'join', key: 'j', group: 'fractions', ...either(fractionForms) },
   {
     id: 'expandfrac', key: '*', group: 'fractions', run: expandFraction,
     input: true,
