@@ -480,9 +480,33 @@ const flip = (t) => (t.op === 'Negate' ? t.args[0] : fn('Negate', t));
 // (−1)(−1), mostrando os dois sinais trocados.
 function flipSigns(ctx) {
   const { tree } = ctx;
-  const p = ctx.targets[0];
-  const n = getAt(tree, p);
-  const parent = parentOf(tree, p);
+  let p = ctx.targets[0];
+  let n = getAt(tree, p);
+  let parent = parentOf(tree, p);
+
+  // Com o foco na soma (ou nos parênteses) de −(B + C), o sinal é o de fora.
+  if (n.op === 'Add' && parent?.op === 'Delimiter') { p = parentPath(p); n = parent; parent = parentOf(tree, p); }
+  if (sumOf(n) && parent?.op === 'Negate') { p = parentPath(p); n = parent; parent = parentOf(tree, p); }
+
+  // −(B + C) → (−B − C): o sinal entra nos parênteses (a − (b + c) → a + (−b − c)).
+  if (n.op === 'Negate' && sumOf(n.args[0])) {
+    const s = sumOf(n.args[0]);
+    const inner = withArgs(s, s.args.map(flip));
+    const node = parent?.op === 'Add' || parent?.op === 'Negate' ? fn('Delimiter', inner) : inner;
+    return { tree: replaceAt(tree, p, node), label: msg('step.signsIn'), focus: node.id };
+  }
+  // −(A(B + C)): o sinal de fora já é o que troca.
+  if (n.op === 'Negate' && n.args[0].op === 'Multiply') {
+    p = [...p, 0];
+    n = getAt(tree, p);
+    parent = parentOf(tree, p);
+  }
+  // (−B − C) numa soma → −(B + C): o sinal sai dos parênteses.
+  if (n.op === 'Delimiter' && sumOf(n) && parent?.op === 'Add') {
+    const s = sumOf(n);
+    const node = fn('Negate', fn('Delimiter', withArgs(s, s.args.map(flip))));
+    return { tree: replaceAt(tree, p, node), label: msg('step.signsOut'), focus: node.id };
+  }
 
   if (n.op === 'Add') {
     if (parent?.op === 'Multiply') return null; // é o fator de um produto: use o produto
