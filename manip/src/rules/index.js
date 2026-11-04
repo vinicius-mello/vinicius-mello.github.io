@@ -16,7 +16,7 @@
 //   strike: [ids]                    pedaços removidos são riscados
 //   clones: { idNovo: idOrigem }     cópias saem da posição do original
 
-import { getAt, replaceAt, withArgs, fn, num, sym, same, isLeaf, IMAGINARY, isImaginaryUnit, walk } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym, same, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath } from '../ast.js';
 import { needsParens } from '../notation.js';
 import { parseInput } from '../input.js';
 import { toAscii } from '../serialize.js';
@@ -329,11 +329,8 @@ function fractionSlot(tree, p) {
 function cancelFactors(ctx) {
   const { tree, targets, focus } = ctx;
   let A, B;
-  if (targets.length === 2) {
-    A = fractionSlot(tree, targets[0]);
-    B = fractionSlot(tree, targets[1]);
-    if (!A || !B || A.dp.join() !== B.dp.join() || A.side === B.side) return null;
-  } else if (targets.length === 1) {
+  if (targets.length === 2) return cancelSelected(tree, targets);
+  if (targets.length === 1) {
     A = fractionSlot(tree, focus);
     if (!A) return null;
     const D = getAt(tree, A.dp);
@@ -358,6 +355,51 @@ function cancelFactors(ctx) {
   args[B.side] = strip(B);
   return {
     tree: replaceAt(tree, A.dp, withArgs(D, args)),
+    label: msg('step.cancelFactors'),
+    hints: { strike: [x.id, y.id] },
+  };
+}
+
+// Onde fica um fator selecionado: no numerador ou no denominador, e em que
+// "escopos" (a fração e, se ela for fator de um produto, esse produto). Um
+// fator solto num produto conta como numerador: em 2·(x/2) o 2 cancela.
+function cancelSlot(tree, p) {
+  let q = p;
+  let mul = null;
+  if (parentOf(tree, q)?.op === 'Multiply') { q = parentPath(q); mul = q; }
+  if (parentOf(tree, q)?.op === 'Negate') q = parentPath(q);
+  if (parentOf(tree, q)?.op === 'Divide') {
+    const f = parentPath(q);
+    const scopes = [f];
+    let r = f;
+    if (parentOf(tree, r)?.op === 'Delimiter') r = parentPath(r);
+    if (parentOf(tree, r)?.op === 'Multiply') scopes.push(parentPath(r));
+    return { den: lastIndex(q) === 1, scopes };
+  }
+  return mul && { den: false, scopes: [mul] };
+}
+
+// Tira o fator em p: sai do produto ou vira 1.
+function removeFactor(tree, p) {
+  const parent = parentOf(tree, p);
+  if (parent?.op === 'Multiply') {
+    return replaceAt(tree, parentPath(p), rebuild('Multiply', parent.args.filter((_, i) => i !== lastIndex(p)), parent));
+  }
+  return replaceAt(tree, p, num(1));
+}
+
+// Dois fatores iguais selecionados, um em cima e outro embaixo, na mesma
+// fração ou em frações (e fatores) de um mesmo produto: (a/b)(b/c) → (a/1)(1/c).
+function cancelSelected(tree, targets) {
+  const [A, B] = targets.map((p) => cancelSlot(tree, p));
+  if (!A || !B || A.den === B.den) return null;
+  if (!A.scopes.some((x) => B.scopes.some((y) => x.join() === y.join()))) return null;
+  const [x, y] = targets.map((p) => getAt(tree, p));
+  if (!same(unparen(x), unparen(y))) return null;
+  // Pelo id: tirar o primeiro pode mudar o caminho do segundo.
+  const t1 = removeFactor(tree, targets[0]);
+  return {
+    tree: removeFactor(t1, findPath(t1, y.id)),
     label: msg('step.cancelFactors'),
     hints: { strike: [x.id, y.id] },
   };
@@ -534,6 +576,38 @@ function joinFractions(ctx) {
     focus: frac.id,
     hints: { merge: { to: den.id, from: parts.slice(1).map((x) => x.body.args[1].id) } },
   };
+}
+
+// (a/b)(c/d) → (ac)/(bd); um fator solto vai para o numerador: 2(x/3) → (2x)/3.
+// Vale para o produto em foco ou para os fatores selecionados dele.
+function multiplyFractions(ctx) {
+  const { tree, targets, focus } = ctx;
+  let mp, idx;
+  const sib = siblingsOf(targets);
+  if (sib && parentOf(tree, targets[0])?.op === 'Multiply') {
+    mp = parentPath(targets[0]);
+    idx = sib;
+  } else {
+    mp = getAt(tree, focus).op === 'Multiply' ? focus : parentPath(focus);
+    if (!mp || getAt(tree, mp)?.op !== 'Multiply') return null;
+    idx = getAt(tree, mp).args.map((_, i) => i);
+  }
+  const M = getAt(tree, mp);
+  if (idx.length < 2) return null;
+  const parts = idx.map((i) => unparen(M.args[i]));
+  const fracs = parts.filter((x) => x.op === 'Divide');
+  if (!fracs.length) return null;
+  const nums = parts.flatMap((x) => factors(x.op === 'Divide' ? x.args[0] : x));
+  const dens = fracs.flatMap((x) => factors(x.args[1]));
+  const frac = withArgs(fracs[0], [rebuild('Multiply', nums), rebuild('Multiply', dens)]);
+  let t2;
+  if (idx.length === M.args.length) t2 = place(tree, mp, frac);
+  else {
+    const args = M.args.filter((_, i) => !idx.includes(i) || i === idx[0]);
+    args[args.indexOf(M.args[idx[0]])] = frac;
+    t2 = replaceAt(tree, mp, withArgs(M, args));
+  }
+  return { tree: t2, label: msg('step.multFrac'), focus: frac.id };
 }
 
 function splitFraction(ctx) {
@@ -1405,7 +1479,7 @@ export const RULES = [
     available: (ctx) => ctx.targets.length > 0,
   },
   // frações
-  { id: 'join', key: 'j', group: 'fractions', run: joinFractions },
+  { id: 'join', key: 'j', group: 'fractions', run: (ctx) => joinFractions(ctx) ?? multiplyFractions(ctx) },
   { id: 'split', key: 'f', group: 'fractions', run: splitFraction },
   // potências
   { id: 'powers', key: '^', group: 'powers', run: (ctx) => asPower(ctx) ?? powers(ctx) },
