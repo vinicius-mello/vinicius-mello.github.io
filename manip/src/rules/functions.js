@@ -2,7 +2,8 @@
 // Como as demais, cada uma é um passo explícito; as equivalências valem nos
 // dois sentidos e são reunidas por tecla com either() (rules/index.js).
 
-import { getAt, replaceAt, withArgs, fn, num, sym, same } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym } from '../ast.js';
+import { matches as same } from './normal.js';
 import { msg } from '../i18n.js';
 import { evaluate } from './arith.js';
 import {

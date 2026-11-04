@@ -6,11 +6,10 @@
 // Sum/Product(índice, inferior, superior, termo): o índice é um Symbol.
 
 import { getAt, withArgs, fn, num, sym, walk, isBigOp, newId } from '../ast.js';
-import { looseSame as sameLoose, toAscii } from '../serialize.js';
 import { msg } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { evaluate } from './arith.js';
-import { equivalent } from './normal.js';
+import { literal, matches as same, attempt, noted } from './normal.js';
 import { unparen, signed, parentPath, lastIndex, cloneFrom, rebuild, place, atFocusOrParent } from './util.js';
 
 const copy = (n) => cloneFrom(n, {});
@@ -32,40 +31,8 @@ function freeOf(n, name) {
   return free;
 }
 
-// Achata somas dentro de somas e produtos dentro de produtos, sem parênteses:
-// ((n + 1) − (k + 1)) − 1 e (n + 1) − (k + 1) − 1 são a mesma expressão.
-function flatten(n) {
-  while (n.op === 'Delimiter') n = n.args[0];
-  if (!n.args) return n;
-  const args = n.args.map(flatten);
-  const assoc = n.op === 'Add' || n.op === 'Multiply';
-  return { ...n, args: assoc ? args.flatMap((a) => (a.op === n.op ? a.args : [a])) : args };
-}
-
-// Igualdade estrutural a menos de parênteses e de associatividade.
-const literal = (a, b) => sameLoose(flatten(a), flatten(b));
-
-// Para reconhecer um padrão, vale também a igualdade como polinômios
-// (normal.js): n − k − 1 serve onde se espera ((n + 1) − (k + 1)) − 1.
-// Nesse caso a igualdade usada fica anotada e aparece no rótulo do passo,
-// para o professor decidir se mostra a reorganização antes.
-let notes = [];
-function same(a, b) {
-  if (literal(a, b)) return true;
-  if (!equivalent(a, b)) return false;
-  const show = (x) => toAscii(x).replace(/-/g, '−').replace(/\*/g, '·');
-  const note = `${show(a)} = ${show(b)}`;
-  if (!notes.includes(note)) notes.push(note);
-  return true;
-}
-// Começa uma tentativa: esquece anotações de tentativas que não deram certo.
-const attempt = () => { notes = []; };
-// Rótulo do passo, com as igualdades usadas (e já consumidas).
-function label(key) {
-  const m = notes.length ? msg('step.using', { step: msg(key), eq: notes.join('; ') }) : msg(key);
-  notes = [];
-  return m;
-}
+// Rótulo do passo, com as igualdades usadas na comparação (normal.js).
+const label = (key) => noted(msg(key));
 
 // e + d, calculado quando dá: 5 → 6, n − 1 → n, n → n + 1.
 function offset(e, d) {
@@ -480,13 +447,7 @@ export function sumForms(ctx) {
   return n.op === 'Add' || n.op === 'Multiply' ? [...outer, ...inner] : [...inner, ...outer];
 }
 
-// Cada regra começa sem anotações pendentes.
-const fresh = (f) => (ctx) => {
-  attempt();
-  return f(ctx);
-};
-
-export const COMBINATORICS_RULES = [binomialFromFactorials, factorialCollect, stifelInverse, binomialForms, factorialForms].map(fresh);
+export const COMBINATORICS_RULES = [binomialFromFactorials, factorialCollect, stifelInverse, binomialForms, factorialForms];
 
 // ------------------------------------------------------- binômio de Newton
 

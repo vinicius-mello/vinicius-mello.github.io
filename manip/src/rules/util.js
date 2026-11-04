@@ -2,6 +2,7 @@
 
 import { getAt, newId, children, replaceAt, withArgs, fn, num } from '../ast.js';
 import { toAscii } from '../serialize.js';
+import { withNotes } from './normal.js';
 
 export const terms = (n) => (n.op === 'Add' ? n.args : [n]);
 export const factors = (n) => (n.op === 'Multiply' ? n.args : [n]);
@@ -82,6 +83,7 @@ export const isNum = (n, v) => n.op === 'Number' && Number(n.value) === v;
 // que ela pode produzir. `all` lista as que se aplicam, em ordem e sem
 // repetir; `run` aplica a primeira. Repetir a tecla alterna entre elas.
 export function either(...fns) {
+  fns = fns.map(withNotes);
   const all = (ctx) => {
     const out = [];
     let error = null;

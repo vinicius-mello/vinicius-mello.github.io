@@ -8,7 +8,8 @@
 // não são polinomiais (n!, sen x, a/b...), com os argumentos já em forma
 // normal: (n − k)! e (−k + n)! são o mesmo átomo.
 
-import { toAscii } from '../serialize.js';
+import { toAscii, looseSame } from '../serialize.js';
+import { msg } from '../i18n.js';
 import { evaluate } from './arith.js';
 
 const MAX_TERMS = 200;
@@ -100,14 +101,80 @@ const polyKey = (p) => [...p.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ?
   .map(([k, { coef }]) => `${coef.n}/${coef.d}${k && '·' + k}`).join(' + ') || '0';
 
 // Chave da forma normal; se a expansão crescer demais, a própria escrita.
+// A árvore é imutável, então a chave de cada nó é guardada.
+const keys = new WeakMap();
 export function keyOf(n) {
+  if (keys.has(n)) return keys.get(n);
+  let k;
   try {
-    return polyKey(polyOf(n));
+    k = polyKey(polyOf(n));
   } catch (e) {
-    if (e instanceof RangeError) return 'raw:' + toAscii(n);
-    throw e;
+    if (!(e instanceof RangeError)) throw e;
+    k = 'raw:' + toAscii(n);
   }
+  keys.set(n, k);
+  return k;
 }
 
 // Mesma forma normal: iguais como polinômios.
 export const equivalent = (a, b) => keyOf(a) === keyOf(b);
+
+// ------------------------------------------------ comparação nas regras
+//
+// As regras comparam subexpressões com matches(a, b): vale a igualdade
+// literal (a menos de parênteses e de associatividade) e, se ela falhar, a
+// igualdade como polinômios. No segundo caso a igualdade usada é anotada
+// e aparece no rótulo do passo ("…, usando −1 − k + n = n − k − 1"), para
+// o professor decidir se mostra a reorganização antes.
+
+// Achata somas dentro de somas e produtos dentro de produtos, sem parênteses:
+// ((n + 1) − (k + 1)) − 1 e (n + 1) − (k + 1) − 1 são a mesma expressão.
+function flatten(n) {
+  while (n.op === 'Delimiter') n = n.args[0];
+  if (!n.args) return n;
+  const args = n.args.map(flatten);
+  const assoc = n.op === 'Add' || n.op === 'Multiply';
+  return { ...n, args: assoc ? args.flatMap((a) => (a.op === n.op ? a.args : [a])) : args };
+}
+
+// Igualdade a menos de parênteses e de associatividade (sem anotação).
+export const literal = (a, b) => looseSame(flatten(a), flatten(b));
+
+let notes = [];
+const show = (x) => {
+  while (x.op === 'Delimiter') x = x.args[0];
+  return toAscii(x).replace(/-/g, '−').replace(/\*/g, '·');
+};
+
+export function matches(a, b) {
+  if (literal(a, b)) return true;
+  if (!equivalent(a, b)) return false;
+  const [x, y] = [show(a), show(b)];
+  if (!notes.includes(`${x} = ${y}`) && !notes.includes(`${y} = ${x}`)) notes.push(`${x} = ${y}`);
+  return true;
+}
+
+// Começa uma tentativa: esquece anotações de tentativas que não deram certo.
+export const attempt = () => { notes = []; };
+
+// Rótulo com as igualdades anotadas (que são consumidas).
+export function noted(label) {
+  const m = notes.length ? msg('step.using', { step: label, eq: notes.join('; ') }) : label;
+  notes = [];
+  return m;
+}
+
+// Envolve uma regra: começa sem anotações e põe as que sobrarem no rótulo
+// de cada resultado (uma regra pode devolver uma lista de formas).
+export function withNotes(f) {
+  return (ctx) => {
+    attempt();
+    const r = f(ctx);
+    if (!notes.length) return r;
+    const add = (x) => (x?.tree && x.label?.key !== 'step.using' ? { ...x, label: noted(x.label) } : x);
+    const pending = notes;
+    const out = Array.isArray(r) ? r.map((x) => { notes = pending; return add(x); }) : add(r);
+    notes = [];
+    return out;
+  };
+}

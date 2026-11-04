@@ -16,10 +16,11 @@
 //   strike: [ids]                    pedaços removidos são riscados
 //   clones: { idNovo: idOrigem }     cópias saem da posição do original
 
-import { getAt, replaceAt, withArgs, fn, num, sym, same, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym, same as identical, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath } from '../ast.js';
 import { needsParens } from '../notation.js';
 import { parseInput } from '../input.js';
-import { toAscii, looseSame } from '../serialize.js';
+import { toAscii } from '../serialize.js';
+import { matches as same, withNotes } from './normal.js';
 import { msg } from '../i18n.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
@@ -44,7 +45,7 @@ function calculate(ctx) {
     const v = evaluateComplex(n);
     if (!v) return null;
     const node = complexToNode(v);
-    if (same(node, n)) return null;
+    if (identical(node, n)) return null;
     return {
       tree: place(tree, p, node),
       label: msg('step.calc'),
@@ -572,6 +573,9 @@ function joinFractions(ctx) {
   } else {
     // A soma de frações mais próxima, subindo a partir do foco (que pode
     // estar dentro de um numerador).
+    // Uma seleção que não são parcelas vizinhas é para outra operação
+    // (separar a fração, por exemplo).
+    if (targets.length > 1) return null;
     const fractions = (q) => getAt(tree, q).op === 'Add'
       && getAt(tree, q).args.filter((t) => signed(t).body.op === 'Divide').length >= 2;
     sp = focus;
@@ -583,20 +587,10 @@ function joinFractions(ctx) {
   if (S.op !== 'Add' || idx.length < 2) return null;
   const parts = idx.map((i) => ({ t: S.args[i], ...signed(S.args[i]) }));
   if (parts.some((x) => x.body.op !== 'Divide')) return null;
-  // Denominadores iguais, sem contar parênteses digitados. Se só a ordem dos
-  // fatores muda, explica: reordenar é um passo (Ctrl+setas).
+  // Denominadores iguais: a menos de parênteses e, como polinômios, de
+  // ordem (o rótulo anota a igualdade usada).
   const den = parts[0].body.args[1];
-  const other = parts.find((x) => !looseSame(x.body.args[1], den));
-  if (other) {
-    const fs = (d) => factors(unparen(d)).map(unparen);
-    const a = fs(den);
-    const b = fs(other.body.args[1]).slice();
-    const reordered = a.length === b.length && a.every((f) => {
-      const k = b.findIndex((g) => looseSame(f, g));
-      return k >= 0 && b.splice(k, 1);
-    });
-    return { error: reordered ? 'err.denomOrder' : 'err.denoms', sp };
-  }
+  if (parts.some((x) => !same(x.body.args[1], den))) return { error: 'err.denoms', sp };
   const nums = parts.map((x) => (x.neg ? withArgs(x.t, [x.body.args[0]]) : x.body.args[0]));
   const frac = withArgs(parts[0].body, [fn('Add', ...nums), den]);
   let t2;
@@ -1768,6 +1762,9 @@ export const RULES = [
 ];
 
 // Regras aplicáveis ao contexto, já com o resultado (prévia).
+// Regras simples também anotam as igualdades usadas (as de either() já anotam).
+for (const r of RULES) if (!r.all) r.run = withNotes(r.run);
+
 export function applicable(ctx) {
   const out = [];
   for (const rule of RULES) {
