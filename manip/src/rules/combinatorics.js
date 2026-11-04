@@ -6,7 +6,7 @@
 // Sum/Product(índice, inferior, superior, termo): o índice é um Symbol.
 
 import { getAt, withArgs, fn, num, sym, walk, isBigOp, newId } from '../ast.js';
-import { looseSame } from '../serialize.js';
+import { looseSame as sameLoose } from '../serialize.js';
 import { msg } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { evaluate } from './arith.js';
@@ -30,6 +30,19 @@ function freeOf(n, name) {
   walk(n, (x) => { if (x.op === 'Symbol' && x.name === name) free = false; });
   return free;
 }
+
+// Achata somas dentro de somas e produtos dentro de produtos, sem parênteses:
+// ((n + 1) − (k + 1)) − 1 e (n + 1) − (k + 1) − 1 são a mesma expressão.
+function flatten(n) {
+  while (n.op === 'Delimiter') n = n.args[0];
+  if (!n.args) return n;
+  const args = n.args.map(flatten);
+  const assoc = n.op === 'Add' || n.op === 'Multiply';
+  return { ...n, args: assoc ? args.flatMap((a) => (a.op === n.op ? a.args : [a])) : args };
+}
+
+// Igualdade estrutural a menos de parênteses e de associatividade.
+const looseSame = (a, b) => sameLoose(flatten(a), flatten(b));
 
 // e + d, calculado quando dá: 5 → 6, n − 1 → n, n → n + 1.
 function offset(e, d) {
