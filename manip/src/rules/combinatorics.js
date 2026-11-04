@@ -6,14 +6,15 @@
 // Sum/Product(índice, inferior, superior, termo): o índice é um Symbol.
 
 import { getAt, withArgs, fn, num, sym, walk, isBigOp, newId } from '../ast.js';
-import { looseSame as sameLoose } from '../serialize.js';
+import { looseSame as sameLoose, toAscii } from '../serialize.js';
 import { msg } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { evaluate } from './arith.js';
+import { equivalent } from './normal.js';
 import { unparen, signed, parentPath, lastIndex, cloneFrom, rebuild, place, atFocusOrParent } from './util.js';
 
 const copy = (n) => cloneFrom(n, {});
-const done = (tree, p, node, label, hints) => ({ tree: place(tree, p, node), label: msg(label), focus: node.id, hints });
+const done = (tree, p, node, key, hints) => ({ tree: place(tree, p, node), label: label(key), focus: node.id, hints });
 
 // ------------------------------------------------------------ utilitários
 
@@ -42,7 +43,29 @@ function flatten(n) {
 }
 
 // Igualdade estrutural a menos de parênteses e de associatividade.
-const looseSame = (a, b) => sameLoose(flatten(a), flatten(b));
+const literal = (a, b) => sameLoose(flatten(a), flatten(b));
+
+// Para reconhecer um padrão, vale também a igualdade como polinômios
+// (normal.js): n − k − 1 serve onde se espera ((n + 1) − (k + 1)) − 1.
+// Nesse caso a igualdade usada fica anotada e aparece no rótulo do passo,
+// para o professor decidir se mostra a reorganização antes.
+let notes = [];
+function same(a, b) {
+  if (literal(a, b)) return true;
+  if (!equivalent(a, b)) return false;
+  const show = (x) => toAscii(x).replace(/-/g, '−').replace(/\*/g, '·');
+  const note = `${show(a)} = ${show(b)}`;
+  if (!notes.includes(note)) notes.push(note);
+  return true;
+}
+// Começa uma tentativa: esquece anotações de tentativas que não deram certo.
+const attempt = () => { notes = []; };
+// Rótulo do passo, com as igualdades usadas (e já consumidas).
+function label(key) {
+  const m = notes.length ? msg('step.using', { step: msg(key), eq: notes.join('; ') }) : msg(key);
+  notes = [];
+  return m;
+}
 
 // e + d, calculado quando dá: 5 → 6, n − 1 → n, n → n + 1.
 function offset(e, d) {
@@ -68,7 +91,7 @@ function minus(n, k) {
   const b = intOf(k);
   if (a !== null && b !== null) return intNode(a - b);
   const u = unparen(k);
-  if (u.op === 'Add' && u.args.length === 2 && looseSame(u.args[0], n) && u.args[1].op === 'Negate') {
+  if (u.op === 'Add' && u.args.length === 2 && literal(u.args[0], n) && u.args[1].op === 'Negate') {
     return copy(u.args[1].args[0]);
   }
   if (b !== null) return offset(n, -b);
@@ -100,7 +123,7 @@ function freshIndex(tree) {
 // Somatório/produtório com os mesmos índice e termo, outros limites.
 const bigLike = (S, a, b, body = copy(S.args[3])) => fn(S.op, copy(S.args[0]), a, b, body);
 const sameBounds = (S, T) => S.op === T.op && S.args[0].name === T.args[0].name
-  && looseSame(S.args[1], T.args[1]) && looseSame(S.args[2], T.args[2]);
+  && same(S.args[1], T.args[1]) && same(S.args[2], T.args[2]);
 
 // Somatório/produtório no foco ou acima dele.
 function bigAt(ctx) {
@@ -183,11 +206,12 @@ function factorialCollect(ctx) {
     if (run) return done(tree, p, fn('Factorial', num(top)), 'step.factCollect');
     for (let i = 0; i + 1 < M.args.length; i++) {
       for (const [x, f] of [[M.args[i], M.args[i + 1]], [M.args[i + 1], M.args[i]]]) {
-        if (f.op !== 'Factorial' || !looseSame(f.args[0], offset(x, -1))) continue;
+        attempt();
+        if (f.op !== 'Factorial' || !same(f.args[0], offset(x, -1))) continue;
         const node = withArgs(f, [unparen(x)]);
         const args = M.args.slice();
         args.splice(i, 2, node);
-        return { tree: place(tree, p, rebuild('Multiply', args, M)), label: msg('step.factCollect'), focus: node.id };
+        return { tree: place(tree, p, rebuild('Multiply', args, M)), label: label('step.factCollect'), focus: node.id };
       }
     }
     return null;
@@ -205,12 +229,12 @@ function binomialForms(ctx) {
     const [n, k] = B.args;
     const out = [];
     const kv = intOf(k);
-    if (kv === 0 || looseSame(k, n)) out.push(done(tree, p, num(1), 'step.binomEdge'));
-    else if (kv === 1 || looseSame(k, offset(n, -1))) out.push(done(tree, p, copy(n), 'step.binomEdge'));
+    if (kv === 0 || same(k, n)) out.push(done(tree, p, num(1), 'step.binomEdge'));
+    else if (kv === 1 || same(k, offset(n, -1))) out.push(done(tree, p, copy(n), 'step.binomEdge'));
     const def = fn('Divide', fn('Factorial', copy(n)), fn('Multiply', fn('Factorial', copy(k)), fn('Factorial', minus(n, k))));
     out.push(done(tree, p, def, 'step.binomDef'));
     out.push(done(tree, p, withArgs(B, [n, minus(n, k)]), 'step.binomSym'));
-    if ((kv === null || kv >= 1) && !looseSame(k, n)) {
+    if ((kv === null || kv >= 1) && !literal(k, n)) {
       const stifel = fn('Add', fn('Binomial', offset(n, -1), offset(k, -1)), fn('Binomial', offset(n, -1), copy(k)));
       out.push(done(tree, p, stifel, 'step.stifel'));
     }
@@ -228,9 +252,13 @@ function binomialFromFactorials(ctx) {
     if (den.op !== 'Multiply' || den.args.length !== 2 || !den.args.every((f) => f.op === 'Factorial')) return null;
     const n = D.args[0].args[0];
     const [a, b] = den.args.map((f) => f.args[0]);
-    const sums = (x, y) => looseSame(y, minus(n, x))
-      || (intOf(x) !== null && intOf(y) !== null && intOf(x) + intOf(y) === intOf(n));
-    const k = sums(a, b) ? a : sums(b, a) ? b : null;
+    // k é o fator mais simples (n!/((n − k)! k!) também dá C(n, k)); a
+    // igualdade literal vale antes da polinomial.
+    const size = (x) => { let c = 0; walk(x, () => c++); return c; };
+    const order = size(b) < size(a) ? [[b, a], [a, b]] : [[a, b], [b, a]];
+    const numeric = (x, y) => intOf(x) !== null && intOf(y) !== null && intOf(x) + intOf(y) === intOf(n);
+    const k = order.find(([x, y]) => literal(y, minus(n, x)) || numeric(x, y))?.[0]
+      ?? order.find(([x, y]) => same(y, minus(n, x)))?.[0];
     if (!k) return null;
     return done(tree, p, fn('Binomial', n, k), 'step.binomDefInv');
   });
@@ -243,11 +271,12 @@ function stifelInverse(ctx) {
   const { tree } = ctx;
   const S = getAt(tree, c.p);
   for (const [i, j] of pairs(S, c.at)) {
+    attempt();
     const [x, y] = [S.args[i], S.args[j]];
-    if (x.op !== 'Binomial' || y.op !== 'Binomial' || !looseSame(x.args[0], y.args[0])) continue;
-    if (!looseSame(y.args[1], offset(x.args[1], 1))) continue;
+    if (x.op !== 'Binomial' || y.op !== 'Binomial' || !same(x.args[0], y.args[0])) continue;
+    if (!same(y.args[1], offset(x.args[1], 1))) continue;
     const node = fn('Binomial', offset(x.args[0], 1), y.args[1]);
-    return { tree: mergePair(tree, c.p, Math.min(i, j), Math.max(i, j), node), label: msg('step.stifelInv'), focus: node.id };
+    return { tree: mergePair(tree, c.p, Math.min(i, j), Math.max(i, j), node), label: label('step.stifelInv'), focus: node.id };
   }
   return null;
 }
@@ -282,7 +311,7 @@ function closedForm(S) {
       : fn('Divide', fn('Multiply', copy(r), fn('Add', fn('Power', copy(r), copy(n)), fn('Negate', num(1)))), rm1());
     return [node, 'step.sumGeometric'];
   }
-  if (lo === 0 && f.op === 'Binomial' && isK(f.args[1]) && looseSame(f.args[0], n)) {
+  if (lo === 0 && f.op === 'Binomial' && isK(f.args[1]) && same(f.args[0], n)) {
     return [fn('Power', num(2), copy(n)), 'step.sumClosed'];
   }
   return null;
@@ -346,8 +375,8 @@ function bigForms(ctx) {
     const v = body.args[1].args[0];
     const next = (x) => instantiate(x, name, fn('Add', sym(name), num(1)));
     let node = null;
-    if (looseSame(u, next(v))) node = fn('Add', instantiate(v, name, offset(b, 1)), fn('Negate', instantiate(v, name, a)));
-    else if (looseSame(v, next(u))) node = fn('Add', instantiate(u, name, a), fn('Negate', instantiate(u, name, offset(b, 1))));
+    if (same(u, next(v))) node = fn('Add', instantiate(v, name, offset(b, 1)), fn('Negate', instantiate(v, name, a)));
+    else if (same(v, next(u))) node = fn('Add', instantiate(u, name, a), fn('Negate', instantiate(u, name, offset(b, 1))));
     if (node) out.push(done(tree, p, node, 'step.telescope'));
   }
 
@@ -390,9 +419,10 @@ function bigJoinForms(ctx) {
     const isSum = op === 'Sum';
     const parts = C.args.map((t) => (isSum ? signed(t) : { neg: false, body: t }));
     for (const [i, j] of pairs(C, c.at)) {
+      attempt();
       const [x, y] = [parts[i], parts[j]];
-      const add = (node, label) => out.push({
-        tree: mergePair(tree, c.p, Math.min(i, j), Math.max(i, j), node), label: msg(label), focus: node.id,
+      const add = (node, key) => out.push({
+        tree: mergePair(tree, c.p, Math.min(i, j), Math.max(i, j), node), label: label(key), focus: node.id,
       });
       if (x.body.op !== op || x.neg) continue;
       const S = x.body;
@@ -405,18 +435,21 @@ function bigJoinForms(ctx) {
         add(withArgs(S, [k, a, b, inner]), 'step.bigJoin');
       }
       // Σ_a^m f + Σ_(m+1)^b f = Σ_a^b f
-      if (!y.neg && T.op === op && T.args[0].name === k.name && looseSame(T.args[3], f)
-        && looseSame(T.args[1], offset(b, 1))) {
+      attempt();
+      if (!y.neg && T.op === op && T.args[0].name === k.name && same(T.args[3], f)
+        && same(T.args[1], offset(b, 1))) {
         add(withArgs(S, [k, a, T.args[2], f]), 'step.bigRanges');
       }
+      attempt();
       // Σ_a^b f + f(b + 1) = Σ_a^(b+1) f  ·  f(a − 1) + Σ_a^b f = Σ_(a−1)^b f
       const t = C.args[j];
-      if (looseSame(t, instantiate(f, k.name, offset(b, 1)))) add(withArgs(S, [k, a, offset(b, 1), f]), 'step.bigAbsorb');
-      else if (looseSame(t, instantiate(f, k.name, offset(a, -1)))) add(withArgs(S, [k, offset(a, -1), b, f]), 'step.bigAbsorb');
+      if (same(t, instantiate(f, k.name, offset(b, 1)))) add(withArgs(S, [k, a, offset(b, 1), f]), 'step.bigAbsorb');
+      else if (same(t, instantiate(f, k.name, offset(a, -1)))) add(withArgs(S, [k, offset(a, -1), b, f]), 'step.bigAbsorb');
     }
   }
 
   // c·Σ f = Σ c·f  ·  −Σ f = Σ(−f)
+  attempt();
   const pull = atFocusOrParent(ctx, (p) => {
     const M = getAt(tree, p);
     if (M.op === 'Negate' && M.args[0].op === 'Sum') {
@@ -440,18 +473,26 @@ function bigJoinForms(ctx) {
 
 // O nível da soma (juntar) vem antes quando o foco está nela.
 export function sumForms(ctx) {
+  attempt();
   const n = getAt(ctx.tree, ctx.focus);
   const inner = bigForms(ctx);
   const outer = bigJoinForms(ctx);
   return n.op === 'Add' || n.op === 'Multiply' ? [...outer, ...inner] : [...inner, ...outer];
 }
 
-export const COMBINATORICS_RULES = [binomialFromFactorials, factorialCollect, stifelInverse, binomialForms, factorialForms];
+// Cada regra começa sem anotações pendentes.
+const fresh = (f) => (ctx) => {
+  attempt();
+  return f(ctx);
+};
+
+export const COMBINATORICS_RULES = [binomialFromFactorials, factorialCollect, stifelInverse, binomialForms, factorialForms].map(fresh);
 
 // ------------------------------------------------------- binômio de Newton
 
 // (a + b)ⁿ = Σ_(k=0)^n C(n, k) a^(n−k) bᵏ
 export function binomialTheorem(ctx) {
+  attempt();
   return atFocusOrParent(ctx, (p) => {
     const { tree } = ctx;
     const P = getAt(tree, p);
@@ -470,6 +511,7 @@ export function binomialTheorem(ctx) {
 
 // Σ_(k=0)^n C(n, k) a^(n−k) bᵏ = (a + b)ⁿ
 export function binomialTheoremInverse(ctx) {
+  attempt();
   const p = bigAt(ctx);
   if (!p) return null;
   const { tree } = ctx;
@@ -477,9 +519,9 @@ export function binomialTheoremInverse(ctx) {
   const [k, a, n, f] = S.args;
   if (S.op !== 'Sum' || intOf(a) !== 0 || f.op !== 'Multiply' || f.args.length !== 3) return null;
   const isK = (x) => x.op === 'Symbol' && x.name === k.name;
-  const C = f.args.find((x) => x.op === 'Binomial' && looseSame(x.args[0], n) && isK(x.args[1]));
+  const C = f.args.find((x) => x.op === 'Binomial' && same(x.args[0], n) && isK(x.args[1]));
   const B = f.args.find((x) => x.op === 'Power' && isK(x.args[1]));
-  const A = f.args.find((x) => x.op === 'Power' && looseSame(x.args[1], minus(n, k)));
+  const A = f.args.find((x) => x.op === 'Power' && same(x.args[1], minus(n, k)));
   if (!C || !A || !B || A === B || !freeOf(A.args[0], k.name) || !freeOf(B.args[0], k.name)) return null;
   const node = fn('Power', fn('Add', A.args[0], B.args[0]), n);
   return done(tree, p, node, 'step.binomialInv');

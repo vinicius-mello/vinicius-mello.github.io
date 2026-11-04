@@ -268,6 +268,7 @@ const STRINGS = {
     'step.zero': 'zero absorve',
     'step.powZero': 'potência de expoente zero',
     'step.powOne': 'potência de base 1',
+    'step.using': '{step}, usando {eq}',
     'step.parens': 'removeu parênteses',
     'step.wrapParens': 'pôs entre parênteses',
     'step.group': 'agrupou',
@@ -585,6 +586,7 @@ const STRINGS = {
     'step.zero': 'zero absorbs',
     'step.powZero': 'zero exponent',
     'step.powOne': 'power of 1',
+    'step.using': '{step}, using {eq}',
     'step.parens': 'removed parentheses',
     'step.wrapParens': 'wrapped in parentheses',
     'step.group': 'grouped',
@@ -691,7 +693,8 @@ export const onLangChange = (f) => listeners.push(f);
 
 export function t(key, params = {}) {
   const s = STRINGS[lang][key] ?? STRINGS.pt[key] ?? key;
-  return s.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? '');
+  // Um parâmetro pode ser outro rótulo (msg), traduzido junto.
+  return s.replace(/\{(\w+)\}/g, (_, k) => (params[k]?.key ? t(params[k].key, params[k].params) : params[k] ?? ''));
 }
 
 export const msg = (key, params) => (params ? { key, params } : { key });
