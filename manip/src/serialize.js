@@ -6,10 +6,10 @@ import { ASCII_RELATIONS, LATEX_RELATIONS, isRelation } from './relations.js';
 import { parseAscii } from './parse-ascii.js';
 
 // Escrito como um bloco só: número, símbolo, (…) ou nome(…).
-const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate']);
+const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate', 'Sum', 'Product']);
 const asciiAtomic = (n) => !COMPOUND.has(n.op) && !isRelation(n.op);
 // Escrito como nome(…): sqrt(x), conj(z), sin(x)...
-const callStyle = (n) => asciiAtomic(n) && n.op !== 'Number' && n.op !== 'Symbol' && n.op !== 'Delimiter';
+const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial'].includes(n.op);
 
 // Igualdade estrutural ignorando parênteses digitados (Delimiter).
 export function looseSame(a, b) {
@@ -66,6 +66,11 @@ export function toAscii(n) {
       if (n.args.length === 2 && simpleBase(n.args[1])) return `log_${toAscii(n.args[1])}(${toAscii(n.args[0])})`;
       return `log(${n.args.map(toAscii).join(', ')})`;
     case 'Delimiter': return `(${toAscii(n.args[0])})`;
+    case 'Factorial': return `${sub(n.args[0], 0)}!`;
+    case 'Sum': case 'Product': {
+      const [k, a, b, body] = n.args;
+      return `${n.op === 'Sum' ? 'sum' : 'prod'}_(${toAscii(k)}=${toAscii(a)})^${group(b)} ${sub(body, 3)}`;
+    }
     case 'System': return n.args.map(toAscii).join('; ');
     case 'Root': return `root(${toAscii(n.args[0])}, ${toAscii(n.args[1])})`;
     default: return `${FUNCTION_NAMES[n.op] ?? n.op}(${n.args.map(toAscii).join(', ')})`;
@@ -121,6 +126,12 @@ export function toLatex(n) {
     case 'Real': return `\\operatorname{Re}\\left(${toLatex(n.args[0])}\\right)`;
     case 'Imaginary': return `\\operatorname{Im}\\left(${toLatex(n.args[0])}\\right)`;
     case 'Delimiter': return `\\left(${toLatex(n.args[0])}\\right)`;
+    case 'Factorial': return `${sub(n.args[0], 0)}!`;
+    case 'Binomial': return `\\binom{${toLatex(n.args[0])}}{${toLatex(n.args[1])}}`;
+    case 'Sum': case 'Product': {
+      const [k, a, b, body] = n.args;
+      return `\\${n.op === 'Sum' ? 'sum' : 'prod'}_{${toLatex(k)}=${toLatex(a)}}^{${toLatex(b)}} ${sub(body, 3)}`;
+    }
     case 'Log':
       if (n.args.length === 2) return `\\log_{${toLatex(n.args[1])}}${sub2(n)}`;
       return `\\log${sub2(n)}`;

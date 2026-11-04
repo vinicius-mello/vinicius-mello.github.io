@@ -2,7 +2,7 @@
 // Não simplifica nada: a árvore reflete exatamente o que foi digitado.
 // A gramática está em parser.js; aqui fica só a divisão em tokens.
 
-import { FUNCTIONS, GREEK, IMAGINARY } from './ast.js';
+import { FUNCTIONS, GREEK, IMAGINARY, BIG_OPERATORS } from './ast.js';
 import { parseTokens, ParseError } from './parser.js';
 import { RELATION_INPUT } from './relations.js';
 
@@ -22,7 +22,7 @@ function tokenize(src) {
       splitWord(m[0], i, toks);
     } else if ((m = /^(<=|>=|!=|[<>=≤≥≠])/.exec(rest))) {
       toks.push({ t: 'rel', v: RELATION_INPUT[m[0]], pos: i });
-    } else if ('+-*/^(),|;·×÷−'.includes(c)) {
+    } else if ('+-*/^(),|;·×÷−!_'.includes(c)) {
       const v = { '·': '*', '×': '*', '÷': '/', '−': '-' }[c] ?? c;
       toks.push({ t: v, pos: i });
       m = [c];
@@ -42,6 +42,12 @@ function splitWord(word, pos, toks) {
   let i = 0;
   while (i < base.length) {
     const rest = base.slice(i);
+    const big = Object.keys(BIG_OPERATORS).find((k) => rest.startsWith(k));
+    if (big) {
+      toks.push({ t: 'big', v: BIG_OPERATORS[big], pos: pos + i });
+      i += big.length;
+      continue;
+    }
     const f = Object.keys(FUNCTIONS)
       .filter((k) => rest.startsWith(k))
       .sort((a, b) => b.length - a.length)[0];

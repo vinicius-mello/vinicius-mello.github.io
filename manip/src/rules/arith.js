@@ -73,7 +73,20 @@ function ratSqrt(r) {
 }
 
 // Valor de uma subárvore puramente numérica (pode conter i), ou null.
-export function evaluateComplex(n) {
+// Inteiro de um valor (real, sem decimais), ou null.
+const asInt = (v) => (v && isZero(v.im) && v.re.d === 1n && !v[DECIMAL] ? v.re.n : null);
+const MAX_FACTORIAL = 1000n;
+const MAX_TERMS = 1000n;
+
+function factorial(n) {
+  let r = 1n;
+  for (let k = 2n; k <= n; k++) r *= k;
+  return r;
+}
+
+// `env` dá valores aos índices de somatórios: { k: valor }.
+export function evaluateComplex(n, env = {}) {
+  const ev = (x, e = env) => evaluateComplex(x, e);
   const dec = (v, ...from) => {
     if (v && from.some((x) => x?.[DECIMAL])) v[DECIMAL] = true;
     return v;
@@ -84,43 +97,69 @@ export function evaluateComplex(n) {
       if (n.value.includes('.')) v[DECIMAL] = true;
       return v;
     }
-    case 'Symbol': return n.name === 'ImaginaryUnit' ? cx(ZERO(), rat(1n)) : null;
-    case 'Delimiter': return evaluateComplex(n.args[0]);
+    case 'Symbol':
+      if (n.name in env) return env[n.name];
+      return n.name === 'ImaginaryUnit' ? cx(ZERO(), rat(1n)) : null;
+    case 'Delimiter': return ev(n.args[0]);
     case 'Negate': {
-      const a = evaluateComplex(n.args[0]);
+      const a = ev(n.args[0]);
       return a && dec(cneg(a), a);
     }
     case 'Add': case 'Multiply': {
       let acc = null;
       for (const c of n.args) {
-        const v = evaluateComplex(c);
+        const v = ev(c);
         if (!v) return null;
         acc = acc ? dec(n.op === 'Add' ? cadd(acc, v) : cmul(acc, v), acc, v) : v;
       }
       return acc;
     }
     case 'Divide': {
-      const a = evaluateComplex(n.args[0]);
-      const b = evaluateComplex(n.args[1]);
+      const a = ev(n.args[0]);
+      const b = ev(n.args[1]);
       return a && b && dec(cdiv(a, b), a, b);
     }
     case 'Power': {
-      const a = evaluateComplex(n.args[0]);
-      const b = evaluateComplex(n.args[1]);
+      const a = ev(n.args[0]);
+      const b = ev(n.args[1]);
       return a && b && dec(cpow(a, b), a, b);
     }
     case 'Conjugate': {
-      const a = evaluateComplex(n.args[0]);
+      const a = ev(n.args[0]);
       return a && dec(cconj(a), a);
     }
     case 'Real': case 'Imaginary': {
-      const a = evaluateComplex(n.args[0]);
+      const a = ev(n.args[0]);
       return a && dec(cx(n.op === 'Real' ? a.re : a.im), a);
     }
     case 'Abs': {
-      const a = evaluateComplex(n.args[0]);
+      const a = ev(n.args[0]);
       const r = a && ratSqrt(norm2(a));
       return r && dec(cx(r), a);
+    }
+    case 'Factorial': {
+      const k = asInt(ev(n.args[0]));
+      return k === null || k < 0n || k > MAX_FACTORIAL ? null : cx(rat(factorial(k)));
+    }
+    case 'Binomial': {
+      const m = asInt(ev(n.args[0]));
+      const k = asInt(ev(n.args[1]));
+      if (m === null || k === null || m < 0n || m > MAX_FACTORIAL) return null;
+      if (k < 0n || k > m) return cx(rat(0n));
+      return cx(rat(factorial(m) / (factorial(k) * factorial(m - k))));
+    }
+    case 'Sum': case 'Product': {
+      const [idx, lo, hi, body] = n.args;
+      const a = asInt(ev(lo));
+      const b = asInt(ev(hi));
+      if (a === null || b === null || b - a >= MAX_TERMS) return null;
+      let acc = cx(rat(n.op === 'Sum' ? 0n : 1n));
+      for (let k = a; k <= b; k++) {
+        const v = ev(body, { ...env, [idx.name]: cx(rat(k)) });
+        if (!v) return null;
+        acc = dec(n.op === 'Sum' ? cadd(acc, v) : cmul(acc, v), acc, v);
+      }
+      return acc;
     }
     default: return null;
   }

@@ -1,9 +1,9 @@
 // Regras de notação compartilhadas pelo renderizador e pelos serializadores:
 // quando um filho precisa de parênteses implícitos e como juntar fatores.
 
-import { isLeaf, FUNCTION_NAMES } from './ast.js';
+import { isLeaf, FUNCTION_NAMES, isBigOp } from './ast.js';
 
-const OWN_NOTATION = new Set(['Sqrt', 'Root', 'Abs', 'Conjugate']);
+const OWN_NOTATION = new Set(['Sqrt', 'Root', 'Abs', 'Conjugate', 'Binomial']);
 // Funções escritas sempre com parênteses: Re(z), Im(z), arg(z).
 const ALWAYS_PARENS = new Set(['Real', 'Imaginary', 'Argument']);
 export const isFunctionOp = (op) => op in FUNCTION_NAMES && !OWN_NOTATION.has(op);
@@ -27,7 +27,13 @@ export function needsParens(child, parent, index) {
     case 'Negate':
       return c === 'Add' || c === 'Negate';
     case 'Multiply':
+      // Σ no meio de um produto engoliria os fatores seguintes: (Σ k)·x.
+      if (isBigOp(child) && index < parent.args.length - 1) return true;
       return c === 'Add' || c === 'Multiply' || (c === 'Negate' && index > 0);
+    case 'Factorial':
+      return !isLeaf(child) && c !== 'Delimiter' && c !== 'Binomial';
+    case 'Sum': case 'Product':
+      return index === 3 && c === 'Add';
     case 'Power':
       return index === 0 && !isLeaf(child) && c !== 'Delimiter' && !OWN_NOTATION.has(c);
     default:
@@ -42,7 +48,7 @@ export function needsParens(child, parent, index) {
 function startsWithDigit(n) {
   if (n.op === 'Number') return true;
   if (n.op === 'Symbol' || n.op === 'Delimiter' || n.op === 'Divide' || OWN_NOTATION.has(n.op)) return false;
-  if (n.op === 'Power' || n.op === 'Multiply') return startsWithDigit(n.args[0]);
+  if (n.op === 'Power' || n.op === 'Multiply' || n.op === 'Factorial') return startsWithDigit(n.args[0]);
   return false;
 }
 

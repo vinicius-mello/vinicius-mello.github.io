@@ -5,6 +5,8 @@
 //   rel                    relação entre os lados (v = Equal, Less, ...)
 //   ;                      separa as equações de um sistema
 //   frac, sqrt, { } [ ]    construções do LaTeX
+//   big (v = Sum/Product)  somatório/produtório, seguido de _(k=a)^b e do termo
+//   binom, !               \binom{n}{k} e fatorial (pós-fixo)
 // Parênteses digitados viram Delimiter, exceto onde a notação já mostra o
 // agrupamento (numerador/denominador, expoente, argumento de função).
 
@@ -22,8 +24,8 @@ export class ParseError extends Error {
 }
 
 const unwrap = (n) => (n.op === 'Delimiter' ? n.args[0] : n);
-const ARITY = { Root: 2 };
-const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|']);
+const ARITY = { Root: 2, Binomial: 2 };
+const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|', 'big', 'binom']);
 
 export function parseTokens(toks) {
   let k = 0;
@@ -71,8 +73,15 @@ export function parseTokens(toks) {
     return power();
   }
 
+  // n! (e (n + 1)!): o fatorial se liga ao átomo, antes da potência.
+  function postfix() {
+    let a = atom();
+    while (peek().t === '!') { next(); a = fn('Factorial', unwrap(a)); }
+    return a;
+  }
+
   function power() {
-    const base = atom();
+    const base = postfix();
     if (peek().t !== '^') return base;
     next();
     return fn('Power', base, unwrap(signedFactor()));
@@ -129,6 +138,28 @@ export function parseTokens(toks) {
         absDepth--;
         expect('|');
         return fn('Abs', e);
+      }
+      case 'big': {
+        // sum_(k=1)^n termo  ·  \\sum_{k=1}^{n} termo
+        if (peek().t !== '_') throw new ParseError('err.bounds', peek().pos);
+        next();
+        const open = next();
+        if (open.t !== '(' && open.t !== '{') throw new ParseError('err.bounds', open.pos);
+        const index = next();
+        if (index.t !== 'id') throw new ParseError('err.bounds', index.pos);
+        const eq = next();
+        if (eq.t !== 'rel' || eq.v !== 'Equal') throw new ParseError('err.bounds', eq.pos);
+        const lower = expr();
+        expect(open.t === '(' ? ')' : '}');
+        if (peek().t !== '^') throw new ParseError('err.bounds', peek().pos);
+        next();
+        const upper = unwrap(postfix());
+        // O termo vai até o próximo + ou −, como no LaTeX.
+        return fn(tok.v, sym(index.v), lower, upper, unwrap(term()));
+      }
+      case 'binom': {
+        const a = braced();
+        return fn('Binomial', a, braced());
       }
       case 'frac': {
         const a = braced();

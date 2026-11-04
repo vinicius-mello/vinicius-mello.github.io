@@ -25,6 +25,7 @@ import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } fr
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
+import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
 import { monomial as normalMonomial, sameMonomial, negateMonomial, squareRoot } from './monomial.js';
 import {
   terms, factors, unparen, signed, parentPath, lastIndex, parentOf,
@@ -1678,7 +1679,7 @@ function openName(ctx) {
 // "group.<nome>"). Cada operação tem uma tecla (minúscula, dígito ou
 // símbolo) que vale tanto direto na fórmula quanto com o menu aberto; as
 // maiúsculas ficam para os comandos da interface (app.js).
-export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'functions', 'complex', 'relation', 'system', 'names'];
+export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'functions', 'sums', 'complex', 'relation', 'system', 'names'];
 
 export const RULES = [
   // aritmética
@@ -1720,7 +1721,7 @@ export const RULES = [
   },
   // potências
   { id: 'powers', key: '^', group: 'powers', ...either(asPower, powers, productOfPowers, powerOfProduct, splitExponent, ...RADICAL_RULES, powerAsProduct) },
-  { id: 'binomial', key: 'b', group: 'powers', ...either(expandPower, notableProducts) },
+  { id: 'binomial', key: 'b', group: 'powers', ...either(expandPower, notableProducts, binomialTheorem, binomialTheoremInverse) },
   // complexos
   { id: 'conj', key: 'z', group: 'complex', run: conjugateProps },
   { id: 'dconj', key: '~', group: 'complex', run: doubleConjugate },
@@ -1730,6 +1731,9 @@ export const RULES = [
   // funções: logaritmos/exponenciais e trigonometria dividem a tecla f
   { id: 'logs', key: 'f', group: 'functions', ...either(...LOG_RULES) },
   { id: 'trig', key: 'f', group: 'functions', ...either(...TRIG_RULES) },
+
+  { id: 'factorial', key: '!', group: 'sums', ...either(...COMBINATORICS_RULES) },
+  { id: 'sums', key: 'm', group: 'sums', ...either(sumForms) },
   // equação e inequação
   {
     id: 'sides', key: '=', group: 'relation', run: onRelation(bothSides),

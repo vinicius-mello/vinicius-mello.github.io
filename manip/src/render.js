@@ -157,6 +157,26 @@ export function render(n, parent = null, index = 0) {
     case 'Delimiter':
       e.append(wrapParens(kid(n.args[0], 0), n.id));
       break;
+    case 'Factorial':
+      e.append(kid(n.args[0], 0), op('!', n.id + '!', 'post'));
+      break;
+    case 'Binomial':
+      // (n k): uma coluna entre parênteses, sem barra.
+      e.append(wrapParens(el('span', 'binombox', null,
+        el('span', 'btop', null, kid(n.args[0], 0)),
+        el('span', 'bbot', null, kid(n.args[1], 1))), n.id));
+      break;
+    case 'Sum': case 'Product': {
+      // Σ grande com os limites em cima e embaixo; o termo vem ao lado.
+      const [k, a, b, body] = n.args;
+      e.append(
+        el('span', 'bigop', null,
+          el('span', 'limit upper', null, kid(b, 2)),
+          el('span', 'bigsym', n.id + 'Σ', n.op === 'Sum' ? '∑' : '∏'),
+          el('span', 'limit lower', null, kid(k, 0), op('=', n.id + '=', 'lim'), kid(a, 1))),
+        el('span', 'summand', null, kid(body, 3)));
+      break;
+    }
     default: {
       const name = functionLabel(n.op, FUNCTION_NAMES[n.op] ?? n.op);
       e.classList.add('func');

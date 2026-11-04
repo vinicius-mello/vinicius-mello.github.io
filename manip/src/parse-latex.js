@@ -8,6 +8,7 @@ import { RELATION_INPUT } from './relations.js';
 
 const COMMANDS = {
   frac: 'frac', dfrac: 'frac', tfrac: 'frac', sqrt: 'sqrt',
+  binom: 'binom', dbinom: 'binom', tbinom: 'binom',
   cdot: '*', times: '*', div: '/',
   lvert: '|', rvert: '|', vert: '|',
 };
@@ -45,6 +46,7 @@ function tokenize(src) {
         continue;
       }
       if (COMMANDS[name]) push(COMMANDS[name], i);
+      else if (name === 'sum' || name === 'prod') push('big', i, name === 'sum' ? 'Sum' : 'Product');
       else if (RELATION_COMMANDS[name]) push('rel', i, RELATION_COMMANDS[name]);
       else if (FUNCTION_COMMANDS[name]) push('fn', i, FUNCTION_COMMANDS[name]);
       else if (name === 'imaginaryI') push('id', i, IMAGINARY);
@@ -81,6 +83,7 @@ function tokenize(src) {
       i++;
     } else if (c === '_') {
       const last = toks[toks.length - 1];
+      if (last?.t === 'big') { push('_', i); i++; continue; }
       const isLog = last?.t === 'fn' && last.v === 'Log';
       if (last?.t !== 'id' && !isLog) throw new ParseError('err.subNoVar', i);
       if (last.v === IMAGINARY) last.v = 'i';
@@ -100,7 +103,7 @@ function tokenize(src) {
     } else if ((m = /^(<=|>=|[<>=≤≥≠])/.exec(src.slice(i)))) {
       push('rel', i, RELATION_INPUT[m[0]]);
       i += m[0].length;
-    } else if ('+-*/^(),{}|'.includes(c) || CHARS[c]) {
+    } else if ('+-*/^(),{}|!'.includes(c) || CHARS[c]) {
       push(CHARS[c] ?? c, i);
       i++;
     } else {

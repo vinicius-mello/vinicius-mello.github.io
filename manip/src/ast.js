@@ -81,10 +81,16 @@ export const FUNCTIONS = {
   sinh: 'Sinh', cosh: 'Cosh', tanh: 'Tanh',
   ln: 'Ln', log: 'Log', exp: 'Exp', abs: 'Abs', sqrt: 'Sqrt', root: 'Root',
   conj: 'Conjugate', re: 'Real', im: 'Imaginary', arg: 'Argument',
+  binom: 'Binomial',
 };
 export const FUNCTION_NAMES = Object.fromEntries(
   Object.entries(FUNCTIONS).map(([k, v]) => [v, k]),
 );
+
+// Somatório e produtório: Sum(índice, inferior, superior, termo), na ordem
+// em que aparecem na tela (MathJSON: ["Sum", termo, ["Limits", k, a, b]]).
+export const BIG_OPERATORS = { sum: 'Sum', prod: 'Product' };
+export const isBigOp = (n) => n.op === 'Sum' || n.op === 'Product';
 
 // Grafias brasileiras aceitas na entrada (sen x, tg x, \\sen...).
 Object.assign(FUNCTIONS, {

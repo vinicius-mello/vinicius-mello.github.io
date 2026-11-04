@@ -24,6 +24,8 @@ export const EXAMPLES = {
   binomial: { src: '(a + b)^3 = 0', focus: [0] },
   logs: { src: 'y = log(a b)', focus: [1] },
   trig: { src: 'y = sin(2x)', focus: [1] },
+  factorial: { src: 'y = binom(n, k)', focus: [1] },
+  sums: { src: 'S = sum_(k=1)^n (2k + 1)', focus: [1] },
   conj: { src: 'w = conj(a b)', focus: [1] },
   dconj: { src: 'w = conj(conj(z))', focus: [1] },
   conjprod: { src: 'w = z conj(z)', focus: [1] },

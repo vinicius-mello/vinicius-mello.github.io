@@ -896,6 +896,7 @@ kbd { min-width: 1.8em; }
 }
 
 .kb-frac > span + span { border-top: 1.5px solid currentColor; }
+.kb-binom > span + span { border-top: 0; }
 
 .kb-imag { font-style: normal; }
 .kb-conj { display: inline-block; border-top: 1.5px solid currentColor; padding-top: 1px; line-height: 1; }
@@ -1074,3 +1075,38 @@ body.presenting #stage:focus-visible::after { display: none; }
 /* sen²x e log₂x: expoente e base junto do nome da função */
 .fexp { font-size: .7em; vertical-align: .55em; margin: 0 .1em 0 -.08em; }
 .fbase { font-size: .7em; vertical-align: -.35em; margin: 0 .12em 0 -.08em; }
+
+/* Fatorial e número binomial */
+.op.post { margin-left: .03em; font-style: normal; }
+.binombox {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  padding: 0 .08em;
+  line-height: 1.1;
+}
+.binombox > .btop { padding-bottom: .16em; }
+.binombox .binombox, .binombox .fracbox { font-size: .84em; }
+
+/* Somatório e produtório */
+.bigop {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0 .12em 0 .06em;
+  line-height: 1;
+}
+.bigsym {
+  font-size: 1.9em;
+  line-height: .95;
+  font-style: normal;
+  font-family: var(--math);
+}
+.limit { font-size: .62em; white-space: nowrap; }
+.limit .op.lim { margin: 0 .08em; }
+.limit.upper { padding-bottom: .1em; }
+.limit.lower { padding-top: .12em; }
+.summand { display: inline; }
+.bigop .bigop .bigsym, .limit .bigsym { font-size: 1.4em; }
