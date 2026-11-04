@@ -574,6 +574,15 @@ function signs(ctx) {
 const baseOf = (x) => (x.op === 'Power' ? x.args[0] : x);
 const expOf = (x) => (x.op === 'Power' ? x.args[1] : num(1));
 
+// Expoente já calculado quando é numérico (2 + 3 → 5); simbólico fica
+// indicado (n + 2). Expoente 1 devolve a própria base.
+function powerWith(p, base, e) {
+  const r = evaluate(e);
+  if (r && r.n === r.d) return base;
+  const exp = r ? ratToNode(r) : e;
+  return p ? withArgs(p, [base, exp]) : fn('Power', base, exp);
+}
+
 function powers(ctx) {
   const { tree, targets, focus } = ctx;
 
@@ -582,11 +591,11 @@ function powers(ctx) {
     const M = getAt(tree, pp);
     const a = M.args[i];
     const b = M.args[j];
-    // a·a (sem expoentes) é a definição de potência: regra "aspower".
+    // a·a (sem expoentes) é a definição de potência: feito por asPower.
     if (!same(baseOf(a), baseOf(b)) || (a.op !== 'Power' && b.op !== 'Power')) return null;
     const pw = a.op === 'Power'
-      ? withArgs(a, [a.args[0], fn('Add', a.args[1], expOf(b))])
-      : fn('Power', a, fn('Add', num(1), expOf(b)));
+      ? powerWith(a, a.args[0], fn('Add', a.args[1], expOf(b)))
+      : powerWith(null, a, fn('Add', num(1), expOf(b)));
     const args = M.args.filter((_, k) => k !== j);
     args[args.indexOf(a)] = pw;
     return {
@@ -624,7 +633,7 @@ function powers(ctx) {
     if (n.op === 'Divide' && same(baseOf(n.args[0]), baseOf(n.args[1]))) {
       const [a, b] = n.args;
       const e = fn('Add', expOf(a), fn('Negate', expOf(b)));
-      const pw = a.op === 'Power' ? withArgs(a, [a.args[0], e]) : fn('Power', a, e);
+      const pw = a.op === 'Power' ? powerWith(a, a.args[0], e) : powerWith(null, a, e);
       return {
         tree: replaceAt(tree, p, pw),
         label: msg('step.expSub'),
@@ -635,7 +644,7 @@ function powers(ctx) {
     // (x^a)^b → x^(a·b)
     if (n.op === 'Power' && unparen(n.args[0]).op === 'Power') {
       const inner = unparen(n.args[0]);
-      const pw = withArgs(n, [inner.args[0], fn('Multiply', inner.args[1], n.args[1])]);
+      const pw = powerWith(n, inner.args[0], fn('Multiply', inner.args[1], n.args[1]));
       return { tree: replaceAt(tree, p, pw), label: msg('step.powPow'), focus: pw.id };
     }
     return null;
@@ -1394,8 +1403,7 @@ export const RULES = [
   { id: 'join', key: 'j', group: 'fractions', run: joinFractions },
   { id: 'split', key: 'f', group: 'fractions', run: splitFraction },
   // potências
-  { id: 'powers', key: 'o', group: 'powers', run: powers },
-  { id: 'aspower', key: 'u', group: 'powers', run: asPower },
+  { id: 'powers', key: '^', group: 'powers', run: (ctx) => asPower(ctx) ?? powers(ctx) },
   { id: 'asproduct', key: 'm', group: 'powers', run: powerAsProduct },
   { id: 'binomial', key: 'b', group: 'powers', run: expandPower },
   { id: 'notable', key: '2', group: 'powers', run: notableProducts },

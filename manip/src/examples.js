@@ -21,7 +21,6 @@ export const EXAMPLES = {
   join: { src: 'x/2 + y/2 = 1', focus: [0] },
   split: { src: '(x + y)/2 = 1', focus: [0] },
   powers: { src: 'x^2 x^3 = 1', focus: [0] },
-  aspower: { src: 'a a b = 0', focus: [0] },
   asproduct: { src: '(a + b)^2 = 0', focus: [0] },
   binomial: { src: '(a + b)^3 = 0', focus: [0] },
   notable: { src: 'x^2 + 6x + 9 = 0', focus: [0] },

@@ -734,8 +734,16 @@ function applyResult(r) {
   commit(tree, r.label, r.focus ?? state().focusId, null, r.hints);
 }
 
+// Tecla do evento. Shift + letra é sempre maiúscula (comando), mesmo que o
+// evento venha com a letra minúscula (alguns teclados virtuais e automações).
+// No ABNT2 (e no US internacional) o ^ é tecla morta: chega como "Dead".
+function keyOf(ev) {
+  if (ev.key === 'Dead' && ev.shiftKey && (ev.code === 'Quote' || ev.code === 'Digit6')) return '^';
+  return ev.shiftKey && /^[a-z]$/.test(ev.key) ? ev.key.toUpperCase() : ev.key;
+}
+
 function menuKey(ev) {
-  const k = ev.key;
+  const k = keyOf(ev);
   if (k === 'Escape') closeMenu();
   else if (!menu.items.length) return;
   else if (k === 'ArrowDown') { menu.index = (menu.index + 1) % menu.items.length; drawMenu(); }
@@ -1044,9 +1052,7 @@ stage.addEventListener('keydown', (ev) => {
     menuKey(ev);
     return;
   }
-  // Shift + letra é sempre maiúscula (comando), mesmo que o evento venha
-  // com a letra minúscula (alguns teclados virtuais e automações).
-  const k = ev.shiftKey && /^[a-z]$/.test(ev.key) ? ev.key.toUpperCase() : ev.key;
+  const k = keyOf(ev);
   const ctrl = ev.ctrlKey || ev.metaKey;
   const nav = { ArrowLeft: left, ArrowRight: right, ArrowUp: up, ArrowDown: down };
   // Ctrl (ou Alt, já que no macOS Ctrl+setas troca de mesa) + setas movem o termo.
