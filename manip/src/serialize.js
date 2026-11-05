@@ -1,15 +1,18 @@
 // Serialização da árvore para ASCII (reeditar no campo de entrada) e LaTeX.
 
-import { FUNCTION_NAMES, GREEK, IMAGINARY } from './ast.js';
+import { FUNCTION_NAMES, GREEK, IMAGINARY, INFINITY, sameTag } from './ast.js';
 import { needsParens, needsDot, isFunctionPower, simpleBase } from './notation.js';
 import { ASCII_RELATIONS, LATEX_RELATIONS, isRelation } from './relations.js';
 import { parseAscii } from './parse-ascii.js';
 
 // Escrito como um bloco só: número, símbolo, (…) ou nome(…).
-const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate', 'Sum', 'Product']);
+const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate', 'Sum', 'Product', 'Limit', 'D', 'Integrate']);
 const asciiAtomic = (n) => !COMPOUND.has(n.op) && !isRelation(n.op);
 // Escrito como nome(…): sqrt(x), conj(z), sin(x)...
-const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial'].includes(n.op);
+const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial', 'EvalAt'].includes(n.op);
+const primes = (n) => "'".repeat(n.primes ?? 0);
+// Expoente de d²/dx² (vazio na primeira derivada).
+const orderOf = (n) => n.order ?? 1;
 
 // Igualdade estrutural ignorando parênteses digitados (Delimiter).
 export function looseSame(a, b) {
@@ -18,6 +21,7 @@ export function looseSame(a, b) {
   if (a.op !== b.op) return false;
   if (a.op === 'Number') return a.value === b.value;
   if (a.op === 'Symbol') return a.name === b.name;
+  if (!sameTag(a, b)) return false;
   return a.args.length === b.args.length && a.args.every((c, i) => looseSame(c, b.args[i]));
 }
 
@@ -47,7 +51,26 @@ export function toAscii(n) {
   const group = (c) => (asciiAtomic(c) ? toAscii(c) : `(${toAscii(c)})`);
   switch (n.op) {
     case 'Number': return n.value;
-    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name;
+    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name;
+    case 'Call': return n.name + primes(n) + (n.args.length ? `(${n.args.map(toAscii).join(', ')})` : '');
+    case 'Limit': {
+      const [x, a, f] = n.args;
+      return `lim_(${toAscii(x)}->${toAscii(a)}${n.dir ? '^' + n.dir : ''}) ${sub(f, 2)}`;
+    }
+    case 'D': {
+      const [x, f] = n.args;
+      const o = orderOf(n) > 1 ? '^' + orderOf(n) : '';
+      return `d${o}/d${toAscii(x)}${o} ${sub(f, 1)}`;
+    }
+    case 'Integrate': {
+      const x = n.args[0], f = n.args[n.args.length - 1];
+      const lims = n.args.length === 4 ? `_${group(n.args[1])}^${group(n.args[2])}` : '';
+      return `int${lims} ${sub(f, n.args.length - 1)} d${toAscii(x)}`;
+    }
+    case 'EvalAt': {
+      const [x, a, b, F] = n.args;
+      return `[${toAscii(F)}]_(${toAscii(x)}=${toAscii(a)})^${group(b)}`;
+    }
     case 'Equal': case 'NotEqual': case 'Less': case 'LessEqual': case 'Greater': case 'GreaterEqual':
       return `${toAscii(n.args[0])} ${ASCII_RELATIONS[n.op]} ${toAscii(n.args[1])}`;
     case 'Add':
@@ -79,6 +102,7 @@ export function toAscii(n) {
 
 function latexSymbol(name) {
   if (name === IMAGINARY) return '\\mathrm{i}';
+  if (name === INFINITY) return '\\infty';
   const [base, sub] = name.split('_');
   const b = GREEK.includes(base) ? `\\${base}` : base;
   return sub === undefined ? b : `${b}_{${sub}}`;
@@ -97,6 +121,25 @@ export function toLatex(n) {
   switch (n.op) {
     case 'Number': return n.value;
     case 'Symbol': return latexSymbol(n.name);
+    case 'Call': return latexSymbol(n.name) + primes(n) + (n.args.length ? `\\left(${n.args.map(toLatex).join(', ')}\\right)` : '');
+    case 'Limit': {
+      const [x, a, f] = n.args;
+      return `\\lim_{${toLatex(x)} \\to ${toLatex(a)}${n.dir ? `^{${n.dir}}` : ''}} ${sub(f, 2)}`;
+    }
+    case 'D': {
+      const [x, f] = n.args;
+      const o = orderOf(n) > 1 ? `^{${orderOf(n)}}` : '';
+      return `\\frac{\\mathrm{d}${o}}{\\mathrm{d}${toLatex(x)}${o}} ${sub(f, 1)}`;
+    }
+    case 'Integrate': {
+      const x = n.args[0], f = n.args[n.args.length - 1];
+      const lims = n.args.length === 4 ? `_{${toLatex(n.args[1])}}^{${toLatex(n.args[2])}}` : '';
+      return `\\int${lims} ${sub(f, n.args.length - 1)} \\, \\mathrm{d}${toLatex(x)}`;
+    }
+    case 'EvalAt': {
+      const [x, a, b, F] = n.args;
+      return `\\left. ${toLatex(F)} \\right|_{${toLatex(x)}=${toLatex(a)}}^{${toLatex(b)}}`;
+    }
     case 'Equal': case 'NotEqual': case 'Less': case 'LessEqual': case 'Greater': case 'GreaterEqual':
       return `${toLatex(n.args[0])} ${LATEX_RELATIONS[n.op]} ${toLatex(n.args[1])}`;
     case 'Add':

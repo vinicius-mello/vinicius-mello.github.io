@@ -3,6 +3,9 @@
 
 import { isLeaf, FUNCTION_NAMES, isBigOp } from './ast.js';
 
+// lim, d/dx e Σ engolem os fatores à direita: no meio de um produto vão entre parênteses.
+const greedy = (n) => isBigOp(n) || n.op === 'Limit' || n.op === 'D';
+
 const OWN_NOTATION = new Set(['Sqrt', 'Root', 'Abs', 'Conjugate', 'Binomial']);
 // Funções escritas sempre com parênteses: Re(z), Im(z), arg(z).
 const ALWAYS_PARENS = new Set(['Real', 'Imaginary', 'Argument']);
@@ -28,14 +31,18 @@ export function needsParens(child, parent, index) {
       return c === 'Add' || c === 'Negate';
     case 'Multiply':
       // Σ no meio de um produto engoliria os fatores seguintes: (Σ k)·x.
-      if (isBigOp(child) && index < parent.args.length - 1) return true;
+      if (greedy(child) && index < parent.args.length - 1) return true;
       return c === 'Add' || c === 'Multiply' || (c === 'Negate' && index > 0);
     case 'Factorial':
       return !isLeaf(child) && c !== 'Delimiter' && c !== 'Binomial';
     case 'Sum': case 'Product':
       return index === 3 && c === 'Add';
+    case 'Limit':
+      return index === 2 && c === 'Add';
+    case 'D':
+      return index === 1 && (c === 'Add' || c === 'Multiply' || c === 'Negate' || greedy(child));
     case 'Power':
-      return index === 0 && !isLeaf(child) && c !== 'Delimiter' && !OWN_NOTATION.has(c);
+      return index === 0 && !isLeaf(child) && c !== 'Delimiter' && c !== 'Call' && !OWN_NOTATION.has(c);
     default:
       if (ALWAYS_PARENS.has(parent.op)) return c !== 'Delimiter';
       if (isFunctionOp(parent.op)) return !isLeaf(child) && c !== 'Delimiter';

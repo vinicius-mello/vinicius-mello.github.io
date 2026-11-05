@@ -194,6 +194,8 @@ const STRINGS = {
     'err.expected': 'Esperava “{t}”',
     'err.arity': 'Esperava {n} argumento(s)',
     'err.bounds': 'Somatório e produtório pedem limites: sum_(k=1)^n …',
+    'err.limit': 'O limite pede a variável e o ponto: lim_(x->0) …',
+    'err.differential': 'Falta o dx no fim da integral: int x^2 dx',
     'err.incomplete': 'Expressão incompleta',
     'err.unexpected': '“{t}” inesperado',
 
@@ -515,6 +517,8 @@ const STRINGS = {
     'err.expected': 'Expected “{t}”',
     'err.arity': 'Expected {n} argument(s)',
     'err.bounds': 'Sums and products need limits: sum_(k=1)^n …',
+    'err.limit': 'A limit needs the variable and the point: lim_(x->0) …',
+    'err.differential': 'Missing dx at the end of the integral: int x^2 dx',
     'err.incomplete': 'Incomplete expression',
     'err.unexpected': 'Unexpected “{t}”',
 

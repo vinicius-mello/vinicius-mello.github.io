@@ -23,6 +23,10 @@ const ROOT = '<sup>n</sup>√<span class="kb-box"></span>';
 const POW2 = '<i>x</i><sup>2</sup>';
 const POWN = '<i>x</i><sup><span class="kb-box sm"></span></sup>';
 const BINOM = '<span class="kb-binom"><span class="kb-paren">(</span><span class="kb-frac"><span>n</span><span>k</span></span><span class="kb-paren">)</span></span>';
+const DDX = '<span class="kb-frac"><span>d</span><span>d<i>x</i></span></span>';
+const LIM = 'lim<sub class="kb-lim"><i>x</i>→<i>a</i></sub>';
+const INTAB = '∫<span class="kb-lims"><sup><i>b</i></sup><sub><i>a</i></sub></span>';
+const EVAL = '[ ]<span class="kb-lims"><sup><i>b</i></sup><sub><i>a</i></sub></span>';
 const SUB = '<i>x</i><sub><span class="kb-box sm"></span></sub>';
 
 const PAGES = {
@@ -59,6 +63,15 @@ const PAGES = {
       k(BINOM, 'binom(|, )', '\\binom{|}{}', 'op'),
       k('∑', 'sum_(k=|)^n ', '\\sum_{k=|}^{n} ', 'op'),
       k('∏', 'prod_(k=|)^n ', '\\prod_{k=|}^{n} ', 'op'),
+    ],
+    [
+      k(LIM, 'lim_(x->|) ', '\\lim_{x \\to |} ', 'op'),
+      k(DDX, 'd/dx (|)', '\\frac{d}{dx}\\left(|\\right)', 'op'),
+      k('∫', 'int (|) dx', '\\int | \\, dx', 'op'),
+      k(INTAB, 'int_(|)^() () dx', '\\int_{|}^{} \\, dx', 'op'),
+      k(EVAL, '[|]_()^()', '\\left. | \\right|_{}^{}', 'op'),
+      k('∞', 'oo', '\\infty ', 'math'),
+      k("<i>f</i>′", "f'(|)", "f'(|)", 'math'),
     ],
   ],
 };

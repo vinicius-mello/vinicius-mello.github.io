@@ -65,11 +65,17 @@ export function reserveIds(n) {
 }
 
 
+// Atributos que fazem parte do significado de um nó (além dos argumentos):
+// nome e linhas de f'(x), lado de um limite, ordem de uma derivada.
+export const sameTag = (a, b) => a.name === b.name && a.primes === b.primes && a.dir === b.dir && a.order === b.order;
+export const tagOf = (n) => [n.name, n.primes, n.dir, n.order].map((x) => x ?? '').join('|');
+
 // Igualdade estrutural (ignora ids e propriedades visuais).
 export function same(a, b) {
   if (a.op !== b.op) return false;
   if (a.op === 'Number') return a.value === b.value;
   if (a.op === 'Symbol') return a.name === b.name;
+  if (!sameTag(a, b)) return false;
   const x = children(a), y = children(b);
   return x.length === y.length && x.every((c, i) => same(c, y[i]));
 }
@@ -91,6 +97,20 @@ export const FUNCTION_NAMES = Object.fromEntries(
 // em que aparecem na tela (MathJSON: ["Sum", termo, ["Limits", k, a, b]]).
 export const BIG_OPERATORS = { sum: 'Sum', prod: 'Product' };
 export const isBigOp = (n) => n.op === 'Sum' || n.op === 'Product';
+
+// Cálculo (a variável vem primeiro, como o índice de Σ):
+//   Limit(x, a, f)            lim_(x→a) f, com dir '+' ou '-' nos laterais
+//   D(x, f)                   d/dx f, com order para d²/dx²
+//   Integrate(x, f)           ∫ f dx
+//   Integrate(x, a, b, f)     ∫ₐᵇ f dx
+//   EvalAt(x, a, b, F)        [F]ₐᵇ = F(b) − F(a)
+//   Call(...args)             f(x), f'(x): name e primes como atributos
+export const INFINITY = 'PositiveInfinity';
+export const isInfinity = (n) => n.op === 'Symbol' && n.name === INFINITY;
+export const isCalculus = (n) => n.op === 'Limit' || n.op === 'D' || n.op === 'Integrate' || n.op === 'EvalAt';
+// Letras lidas como função quando vêm coladas a "(": f(x), g(x + 1).
+export const FUNCTION_LETTERS = new Set(['f', 'g']);
+export const call = (name, args, primes = 0) => ({ ...fn('Call', ...args), name, primes });
 
 // Grafias brasileiras aceitas na entrada (sen x, tg x, \\sen...).
 Object.assign(FUNCTIONS, {

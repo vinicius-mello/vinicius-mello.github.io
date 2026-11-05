@@ -1112,3 +1112,42 @@ body.presenting #stage:focus-visible::after { display: none; }
 .limit.lower { padding-top: .12em; }
 .summand { display: inline; }
 .bigop .bigop .bigsym, .limit .bigsym { font-size: 1.4em; }
+
+/* Cálculo: funções do usuário, limites, derivadas e integrais */
+.fname.call { font-style: italic; margin: 0 .02em 0 0; }
+.primes { font-style: normal; margin-left: .02em; }
+.op.comma { margin: 0 .2em 0 0; }
+.infty { font-style: normal; }
+.limop { vertical-align: baseline; margin: 0 .2em 0 0; }
+.limname { font-style: normal; line-height: 1.15; }
+.limop .limit.lower { padding-top: .05em; }
+.limit .side { font-size: .8em; vertical-align: .55em; margin-left: .02em; }
+.dee { font-style: normal; }
+.dorder { font-size: .65em; vertical-align: .6em; margin-left: .02em; }
+.dfrac { margin-right: .16em; }
+.dfrac > .num, .dfrac > .den { line-height: 1.1; }
+.intop {
+  display: inline-flex;
+  align-items: stretch;
+  vertical-align: middle;
+  margin: 0 .12em 0 .04em;
+}
+.intsym { font-family: var(--math); font-size: 2.1em; line-height: 1.05; font-style: normal; }
+.intlimits {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  line-height: 1;
+}
+.intop > .intlimits { margin: .1em 0 .05em .02em; }
+.intop > .intlimits > .limit.lower { margin-left: -.3em; }
+.differential { margin-left: .2em; }
+.formula .n.EvalAt { display: inline-flex; align-items: stretch; vertical-align: middle; }
+.EvalAt > .intlimits { margin: -.15em 0 -.25em .04em; }
+.paren.brack { width: .2em; }
+.intlimits .limit.upper, .intlimits .limit.lower { padding: 0; }
+
+/* Teclado: limite, integral definida, [F]ₐᵇ */
+.kb-lim { font-size: .6em; }
+.kb-lims { display: inline-flex; flex-direction: column; font-size: .6em; line-height: 1; vertical-align: middle; margin-left: .05em; }
+.kb-lims sup, .kb-lims sub { vertical-align: 0; }

@@ -10,6 +10,7 @@
 
 import { toAscii, looseSame } from '../serialize.js';
 import { msg } from '../i18n.js';
+import { tagOf } from '../ast.js';
 import { evaluate } from './arith.js';
 
 const MAX_TERMS = 200;
@@ -94,7 +95,7 @@ function polyOf(n) {
     default:
   }
   // Átomo: operador e argumentos em forma normal (o índice de Σ entra como nome).
-  return atom(`${n.op}(${(n.args ?? []).map(keyOf).join(',')})`);
+  return atom(`${n.op}${tagOf(n)}(${(n.args ?? []).map(keyOf).join(',')})`);
 }
 
 const polyKey = (p) => [...p.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

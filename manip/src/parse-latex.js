@@ -2,7 +2,7 @@
 // \cdot, \times, \div, \left( \right), letras gregas e funções (\sin, \ln…).
 // Só divide em tokens; a gramática é a mesma do ASCII (parser.js).
 
-import { FUNCTIONS, GREEK, IMAGINARY } from './ast.js';
+import { FUNCTIONS, GREEK, IMAGINARY, INFINITY } from './ast.js';
 import { parseTokens, ParseError } from './parser.js';
 import { RELATION_INPUT } from './relations.js';
 
@@ -11,6 +11,7 @@ const COMMANDS = {
   binom: 'binom', dbinom: 'binom', tbinom: 'binom',
   cdot: '*', times: '*', div: '/',
   lvert: '|', rvert: '|', vert: '|',
+  lim: 'lim', int: 'int', to: 'to', rightarrow: 'to', longrightarrow: 'to',
 };
 // Comandos que viram funções: conjugado com barra, Re e Im.
 const FUNCTION_COMMANDS = { overline: 'Conjugate', bar: 'Conjugate', Re: 'Real', Im: 'Imaginary' };
@@ -26,12 +27,26 @@ function tokenize(src) {
   const toks = [];
   const brackets = []; // '[' de \sqrt[n] fecha com ']'; os demais viram parênteses
   const push = (t, pos, v) => toks.push(v === undefined ? { t, pos } : { t, v, pos });
+  let evals = 0; // \left. abertos: o \right| correspondente fecha [F]_a^b
   let i = 0;
   while (i < src.length) {
     const c = src[i];
     const prev = toks[toks.length - 1]?.t;
     let m;
     if (/\s|&/.test(c)) { i++; continue; }
+
+    // \left. F \right|_a^b · \mathrm{d}x · f^{\prime}
+    const rest = src.slice(i);
+    if ((m = /^\\left\s*\./.exec(rest))) { evals++; push('evopen', i); i += m[0].length; continue; }
+    if (evals && (m = /^\\(right|[bB]igg?)\s*\|/.exec(rest))) { evals--; push('evclose', i); i += m[0].length; continue; }
+    if ((m = /^\\(mathrm|operatorname)\s*\{\s*d\s*\}/.exec(rest))) { toks.push({ t: 'id', v: 'd', pos: i, end: i + m[0].length }); i += m[0].length; continue; }
+    if ((m = /^(\^\s*\{\s*((\\prime\s*)+)\}|')/.exec(rest)) && toks[toks.length - 1]?.t === 'id') {
+      const last = toks[toks.length - 1];
+      last.primes = (last.primes ?? 0) + (m[2] ? m[2].match(/prime/g).length : 1);
+      last.end = i + m[0].length;
+      i += m[0].length;
+      continue;
+    }
 
     if (c === '\\') {
       const name = /^[A-Za-z]+/.exec(src.slice(i + 1))?.[0];
@@ -50,6 +65,7 @@ function tokenize(src) {
       else if (RELATION_COMMANDS[name]) push('rel', i, RELATION_COMMANDS[name]);
       else if (FUNCTION_COMMANDS[name]) push('fn', i, FUNCTION_COMMANDS[name]);
       else if (name === 'imaginaryI') push('id', i, IMAGINARY);
+      else if (name === 'infty') push('id', i, INFINITY);
       else if (GREEK.includes(name)) push('id', i, name);
       else if (FUNCTIONS[name]) push('fn', i, FUNCTIONS[name]);
       else if (name === 'operatorname') {
@@ -64,6 +80,9 @@ function tokenize(src) {
         i += 1 + name.length + (env ? env[0].length : 0);
         continue;
       } else if (!SPACING.has(name)) throw new ParseError('err.unknownCmd', i, { name });
+      // f\left(x\right): o parêntese continua colado ao nome da função.
+      const last = toks[toks.length - 1];
+      if (name === 'left' && last?.t === 'id' && last.end === i) last.end = i + 5;
       if (name === 'left' || name === 'right') {
         // \left. e \right. são delimitadores vazios
         if (src[i + 1 + name.length] === '.') i++;
@@ -79,11 +98,11 @@ function tokenize(src) {
       push('num', i, m[0]);
       i += m[0].length;
     } else if (/[A-Za-z]/.test(c)) {
-      push('id', i, c === 'i' ? IMAGINARY : c);
+      toks.push({ t: 'id', v: c === 'i' ? IMAGINARY : c, pos: i, end: i + 1 });
       i++;
     } else if (c === '_') {
       const last = toks[toks.length - 1];
-      if (last?.t === 'big') { push('_', i); i++; continue; }
+      if (['big', 'lim', 'int', 'evclose'].includes(last?.t)) { push('_', i); i++; continue; }
       const isLog = last?.t === 'fn' && last.v === 'Log';
       if (last?.t !== 'id' && !isLog) throw new ParseError('err.subNoVar', i);
       if (last.v === IMAGINARY) last.v = 'i';
