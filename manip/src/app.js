@@ -742,6 +742,8 @@ function applyResult(r) {
 // No ABNT2 (e no US internacional) o ^ é tecla morta: chega como "Dead".
 function keyOf(ev) {
   if (ev.key === 'Dead' && ev.shiftKey && (ev.code === 'Quote' || ev.code === 'Digit6')) return '^';
+  // No US internacional o apóstrofo (derivadas) também é tecla morta.
+  if (ev.key === 'Dead' && !ev.shiftKey && ev.code === 'Quote') return "'";
   return ev.shiftKey && /^[a-z]$/.test(ev.key) ? ev.key.toUpperCase() : ev.key;
 }
 

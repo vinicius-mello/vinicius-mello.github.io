@@ -22,6 +22,7 @@ import { parseInput } from '../input.js';
 import { toAscii } from '../serialize.js';
 import { matches as same, withNotes } from './normal.js';
 import { msg } from '../i18n.js';
+import { DERIVATIVE_RULES } from './calculus.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
@@ -1702,7 +1703,7 @@ function openName(ctx) {
 // "group.<nome>"). Cada operação tem uma tecla (minúscula, dígito ou
 // símbolo) que vale tanto direto na fórmula quanto com o menu aberto; as
 // maiúsculas ficam para os comandos da interface (app.js).
-export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'functions', 'sums', 'complex', 'relation', 'system', 'names'];
+export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'functions', 'sums', 'calculus', 'complex', 'relation', 'system', 'names'];
 
 export const RULES = [
   // aritmética
@@ -1757,6 +1758,7 @@ export const RULES = [
 
   { id: 'factorial', key: '!', group: 'sums', ...either(...COMBINATORICS_RULES) },
   { id: 'sums', key: 'm', group: 'sums', ...either(sumForms) },
+  { id: 'derivs', key: "'", group: 'calculus', ...either(...DERIVATIVE_RULES) },
   // equação e inequação
   {
     id: 'sides', key: '=', group: 'relation', run: onRelation(bothSides),

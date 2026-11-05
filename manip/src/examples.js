@@ -25,6 +25,7 @@ export const EXAMPLES = {
   logs: { src: 'y = log(a b)', focus: [1] },
   trig: { src: 'y = sin(2x)', focus: [1] },
   factorial: { src: 'y = binom(n, k)', focus: [1] },
+  derivs: { src: 'y = d/dx (x^2 sin x)', focus: [1] },
   sums: { src: 'S = sum_(k=1)^n (2k + 1)', focus: [1] },
   conj: { src: 'w = conj(a b)', focus: [1] },
   dconj: { src: 'w = conj(conj(z))', focus: [1] },

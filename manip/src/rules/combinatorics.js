@@ -5,7 +5,7 @@
 //
 // Sum/Product(índice, inferior, superior, termo): o índice é um Symbol.
 
-import { getAt, withArgs, fn, num, sym, walk, isBigOp, newId } from '../ast.js';
+import { getAt, withArgs, fn, num, sym, walk, isBigOp, isCalculus, newId } from '../ast.js';
 import { msg } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { evaluate } from './arith.js';
@@ -18,14 +18,14 @@ const done = (tree, p, node, key, hints) => ({ tree: place(tree, p, node), label
 // ------------------------------------------------------------ utilitários
 
 // Valor inteiro de uma subexpressão numérica, ou null.
-function intOf(n) {
+export function intOf(n) {
   const v = evaluate(n);
   return v && v.d === 1n ? Number(v.n) : null;
 }
-const intNode = (v) => (v < 0 ? fn('Negate', num(-v)) : num(v));
+export const intNode = (v) => (v < 0 ? fn('Negate', num(-v)) : num(v));
 
 // A expressão não contém o símbolo `name`.
-function freeOf(n, name) {
+export function freeOf(n, name) {
   let free = true;
   walk(n, (x) => { if (x.op === 'Symbol' && x.name === name) free = false; });
   return free;
@@ -35,7 +35,7 @@ function freeOf(n, name) {
 const label = (key) => noted(msg(key));
 
 // e + d, calculado quando dá: 5 → 6, n − 1 → n, n → n + 1.
-function offset(e, d) {
+export function offset(e, d) {
   if (d === 0) return copy(e);
   const v = intOf(e);
   if (v !== null) return intNode(v + d);
@@ -68,10 +68,10 @@ function minus(n, k) {
 // Cópia de `body` com o índice trocado por `value` (cópias novas de tudo,
 // que na animação saem do original). Somatórios internos com o mesmo
 // índice não são tocados.
-function instantiate(body, name, value, clones = {}) {
+export function instantiate(body, name, value, clones = {}) {
   const go = (n) => {
     if (n.op === 'Symbol' && n.name === name) return cloneFrom(value, {});
-    if (isBigOp(n) && n.args[0].name === name) return cloneFrom(n, clones);
+    if ((isBigOp(n) || isCalculus(n)) && n.args[0].name === name) return cloneFrom(n, clones);
     const c = { ...n, id: newId() };
     clones[c.id] = n.id;
     if (n.args) c.args = n.args.map(go);
@@ -81,10 +81,10 @@ function instantiate(body, name, value, clones = {}) {
 }
 
 // Nome livre para um índice novo.
-function freshIndex(tree) {
+export function freshIndex(tree, names = ['k', 'j', 'm', 'r', 's', 't', 'u', 'v']) {
   const used = new Set();
   walk(tree, (x) => { if (x.op === 'Symbol') used.add(x.name); });
-  return ['k', 'j', 'm', 'r', 's', 't', 'u', 'v'].find((c) => !used.has(c)) ?? 'k';
+  return names.find((c) => !used.has(c)) ?? names[0];
 }
 
 // Somatório/produtório com os mesmos índice e termo, outros limites.
