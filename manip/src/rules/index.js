@@ -22,6 +22,7 @@ import { parseInput } from '../input.js';
 import { toAscii } from '../serialize.js';
 import { matches as same, withNotes } from './normal.js';
 import { msg } from '../i18n.js';
+import { rewrite, rewriteSuggestion } from './rewrite.js';
 import { DERIVATIVE_RULES, LIMIT_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
@@ -1751,6 +1752,12 @@ export const RULES = [
     input: true,
     suggest: completeSquareSuggestion,
     available: (ctx) => ctx.targets.every((p) => !isRelation(getAt(ctx.tree, p).op) && getAt(ctx.tree, p).op !== 'System'),
+  },
+  {
+    id: 'rewrite', key: 'o', group: 'structure', run: rewrite,
+    input: true,
+    suggest: rewriteSuggestion,
+    available: (ctx) => ctx.targets.length === 1 && getAt(ctx.tree, ctx.targets[0]).op !== 'System',
   },
   {
     id: 'subst', key: 's', group: 'structure', run: substitute,

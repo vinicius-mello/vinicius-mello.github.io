@@ -17,6 +17,7 @@ export const EXAMPLES = {
   parens: { src: 'a + (b + c) = 0', focus: [0, 1] },
   group: { src: 'a + b + c = 0', focus: [0, 1], sel: [[0, 1], [0, 2]] },
   addsub: { src: 'x^2 + 6x = 7', focus: [0], input: '9' },
+  rewrite: { src: 'x^2 - 1 = 0', focus: [0], input: '(x - 1)(x + 1)' },
   subst: { src: 'x + y = 10', focus: [0, 1], input: '2x' },
   join: { src: 'x/2 + y/2 = 1', focus: [0] },
   expandfrac: { src: 'x = 1/2', focus: [1], input: '3' },
