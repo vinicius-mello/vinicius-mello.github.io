@@ -16,6 +16,7 @@ import { shiftSideways, shiftOut, shiftIn } from './moves.js';
 import { History } from './history.js';
 import { applicable, RULES, GROUPS } from './rules/index.js';
 import { createKeyboard } from './keyboard.js';
+import { SYNTAX } from './syntax.js';
 import { createRecorder } from './recorder.js';
 import { COMMANDS as KEY_COMMANDS, NAV_KEYS } from './keymap.js';
 import { isRelation, LATEX_RELATIONS } from './relations.js';
@@ -1041,18 +1042,12 @@ function nextForm() {
   toast(t('toast.again', { key: cycle.key, i: cycle.i + 1, n: cycle.alts.length }));
 }
 
-// Painel com todos os atalhos (tecla ?), montado a partir das listas acima
-// e das operações: nunca fica desatualizado.
+// Ajuda (tecla ? ou botão Ajuda), em duas abas: os atalhos, montados a
+// partir das listas acima e das operações, e a sintaxe da entrada
+// (syntax.js). Nada fica desatualizado.
 let helpEl = null;
-function toggleHelp() {
-  if (helpEl) {
-    helpEl.remove();
-    helpEl = null;
-    return stage.focus();
-  }
-  helpEl = document.createElement('div');
-  helpEl.className = 'menu help-panel';
-  helpEl.tabIndex = -1;
+let helpTab = 'keys';
+function shortcutsPane() {
   // rows: [teclas (lista), texto]
   const section = (title, rows) => {
     const sec = document.createElement('section');
@@ -1080,19 +1075,78 @@ function toggleHelp() {
     target: '_blank',
     textContent: t('help.print'),
   });
+  const pane = document.createElement('div');
+  pane.append(Object.assign(document.createElement('p'), { className: 'hint', textContent: t('help.hint') }), print, cols);
+  return pane;
+}
+
+// Tabela: o quê · ASCII · LaTeX · como aparece (desenhado com o parser).
+function syntaxPane() {
+  const pane = document.createElement('div');
+  pane.append(Object.assign(document.createElement('p'), { className: 'hint', textContent: t('syntax.hint') }));
+  const table = document.createElement('table');
+  table.className = 'syntax';
+  const cell = (tag, cls, ...kids) => {
+    const c = document.createElement(tag);
+    if (cls) c.className = cls;
+    c.append(...kids);
+    return c;
+  };
+  const head = cell('tr', null, ...['syntax.what', 'syntax.ascii', 'syntax.latex', 'syntax.shows'].map((k) => cell('th', null, t(k))));
+  table.append(cell('thead', null, head));
+  for (const [group, rows] of SYNTAX) {
+    const body = cell('tbody');
+    body.append(cell('tr', 'group', Object.assign(cell('th', null, t(group)), { colSpan: 4 })));
+    for (const [key, ascii, latex] of rows) {
+      let shown = '';
+      try { shown = staticFormula(parseInput(ascii), 'formula syntax-ex'); } catch { /* exemplo inválido: o teste avisa */ }
+      body.append(cell('tr', null, cell('td', null, t(key)), cell('td', null, cell('code', null, ascii)),
+        cell('td', null, cell('code', null, latex)), cell('td', null, shown)));
+    }
+    table.append(body);
+  }
+  pane.append(table);
+  return pane;
+}
+
+function toggleHelp(tab) {
+  if (helpEl && !tab) {
+    helpEl.remove();
+    helpEl = null;
+    return stage.focus();
+  }
+  helpEl?.remove();
+  if (tab) helpTab = tab;
+  helpEl = document.createElement('div');
+  helpEl.className = 'menu help-panel';
+  helpEl.tabIndex = -1;
+  const tabs = document.createElement('div');
+  tabs.className = 'help-tabs';
+  tabs.setAttribute('role', 'tablist');
+  for (const [id, label] of [['keys', 'help.keysTab'], ['syntax', 'syntax.tab']]) {
+    const b = Object.assign(document.createElement('button'), { type: 'button', textContent: t(label) });
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(id === helpTab));
+    b.addEventListener('click', () => toggleHelp(id));
+    tabs.append(b);
+  }
   helpEl.append(
     Object.assign(document.createElement('h2'), { textContent: t('help.title') }),
-    Object.assign(document.createElement('p'), { className: 'hint', textContent: t('help.hint') }),
-    print,
-    cols,
+    tabs,
+    helpTab === 'keys' ? shortcutsPane() : syntaxPane(),
   );
   helpEl.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' || ev.key === '?') { toggleHelp(); ev.preventDefault(); }
+    else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+      toggleHelp(helpTab === 'keys' ? 'syntax' : 'keys');
+      ev.preventDefault();
+    }
   });
   helpEl.addEventListener('click', (ev) => { if (ev.target === helpEl) toggleHelp(); });
   document.body.append(helpEl);
   helpEl.focus();
 }
+$('#help-toggle').addEventListener('click', () => toggleHelp(helpEl ? undefined : helpTab));
 
 stage.addEventListener('keydown', (ev) => {
   // Gravando: só avançar e encerrar (tratados pelo gravador); nada de editar.
