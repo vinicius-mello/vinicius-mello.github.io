@@ -6,6 +6,9 @@ import { getAt, replaceAt, withArgs, fn, num, sym } from '../ast.js';
 import { matches as same } from './normal.js';
 import { msg } from '../i18n.js';
 import { evaluate } from './arith.js';
+import { numeric } from './calculus.js';
+import { parseAscii } from '../parse-ascii.js';
+import { walk } from '../ast.js';
 import {
   factors, unparen, signed, parentPath, parentOf, siblingsOf, cloneFrom,
   rebuild, place, atFocusOrParent, isNum,
@@ -377,7 +380,84 @@ function angleSumInv(ctx) {
   return { tree: replaceTerms(tree, where.sp, where.idx, node), label: msg('step.angleSumInv'), focus: node.id };
 }
 
+// ------------------------------------------------- valores notáveis
+
+// Ângulo como múltiplo racional de π (só números e π): 2π/3 → { n: 2, d: 3 }.
+function angleOf(x) {
+  let ok = true;
+  let hasPi = false;
+  walk(x, (n) => {
+    if (n.op === 'Symbol') { if (n.name === 'pi') hasPi = true; else ok = false; }
+  });
+  if (!ok) return null;
+  const v = numeric(x, {}) / Math.PI;
+  if (!Number.isFinite(v)) return null;
+  for (const d of [1, 2, 3, 4, 6]) {
+    const n = Math.round(v * d);
+    if (Math.abs(v - n / d) < 1e-12) return (hasPi || n === 0) ? { n, d } : null;
+  }
+  return null;
+}
+
+// Valores exatos possíveis (positivos); o sinal vem da conta.
+const EXACT = ['0', '1', '1/2', 'sqrt(2)/2', 'sqrt(3)/2', 'sqrt(3)/3', 'sqrt(3)', '2', 'sqrt(2)', '2sqrt(3)/3'];
+let exact = null;
+const TRIG_FLOAT = {
+  Sin: Math.sin, Cos: Math.cos, Tan: Math.tan,
+  Sec: (t) => 1 / Math.cos(t), Csc: (t) => 1 / Math.sin(t), Cot: (t) => Math.cos(t) / Math.sin(t),
+};
+// Onde a função não está definida: tg e sec em cos = 0; cotg e cossec em sen = 0.
+const UNDEFINED_AT = { Tan: Math.cos, Sec: Math.cos, Cot: Math.sin, Csc: Math.sin };
+
+// π·n/d como nó: π, π/3, 2π/3, −π/2.
+function piTimes({ n, d }) {
+  if (n === 0) return num(0);
+  const k = Math.abs(n);
+  const top = k === 1 ? sym('pi') : fn('Multiply', num(k), sym('pi'));
+  const node = d === 1 ? top : fn('Divide', top, num(d));
+  return n < 0 ? fn('Negate', node) : node;
+}
+
+// sen(π/6) → 1/2 · cos π → −1 · tg(π/4) → 1 · arcsen(1/2) → π/6
+function trigValue(ctx) {
+  return atFocusOrParent(ctx, (p) => {
+    const { tree } = ctx;
+    const n = getAt(tree, p);
+    if (n.args?.length !== 1) return null;
+    const x = n.args[0];
+    let node = null;
+    if (TRIG_FLOAT[n.op]) {
+      const a = angleOf(x);
+      if (!a) return null;
+      const t = (Math.PI * a.n) / a.d;
+      if (UNDEFINED_AT[n.op] && Math.abs(UNDEFINED_AT[n.op](t)) < 1e-12) {
+        return { error: 'err.trigUndefined', params: { f: n.op } };
+      }
+      const v = TRIG_FLOAT[n.op](t);
+      exact ??= EXACT.map((e) => [e, numeric(parseAscii(e), {})]);
+      const hit = exact.find(([, w]) => Math.abs(Math.abs(v) - w) < 1e-9);
+      if (!hit) return null;
+      node = parseAscii(hit[0]);
+      if (v < -1e-12) node = fn('Negate', node);
+    } else if (n.op === 'Arcsin' || n.op === 'Arccos' || n.op === 'Arctan') {
+      // só argumentos numéricos (sem π)
+      let free = true;
+      walk(x, (m) => { if (m.op === 'Symbol') free = false; });
+      const v = free && numeric(x, {});
+      if (!free || !Number.isFinite(v)) return null;
+      const r = { Arcsin: Math.asin, Arccos: Math.acos, Arctan: Math.atan }[n.op](v) / Math.PI;
+      if (!Number.isFinite(r)) return null;
+      const d = [1, 2, 3, 4, 6].find((q) => Math.abs(r * q - Math.round(r * q)) < 1e-12);
+      if (!d) return null;
+      node = piTimes({ n: Math.round(r * d), d });
+    }
+    if (!node) return null;
+    return { tree: place(tree, p, node), label: msg('step.trigValue'), focus: node.id };
+  });
+}
+
 export const TRIG_RULES = [
+  trigValue,
   pythagorasSum, doubleAngleInvSum, angleSumInv, doubleAngleInvProduct,
   trigQuotient, trigParity, doubleAngle, angleSum, pythagorasTerm,
 ];
