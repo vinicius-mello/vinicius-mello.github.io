@@ -39,6 +39,8 @@ export function needsParens(child, parent, index) {
       return index === 3 && c === 'Add';
     case 'Limit':
       return index === 2 && c === 'Add';
+    case 'Integrate':
+      return index === parent.args.length - 1 && c === 'Add';
     case 'D':
       return index === 1 && (c === 'Add' || c === 'Multiply' || c === 'Negate' || greedy(child));
     case 'Power':
