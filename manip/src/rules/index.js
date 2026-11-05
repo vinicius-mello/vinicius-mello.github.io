@@ -22,7 +22,7 @@ import { parseInput } from '../input.js';
 import { toAscii } from '../serialize.js';
 import { matches as same, withNotes } from './normal.js';
 import { msg } from '../i18n.js';
-import { DERIVATIVE_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
+import { DERIVATIVE_RULES, LIMIT_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
@@ -1759,6 +1759,7 @@ export const RULES = [
   { id: 'factorial', key: '!', group: 'sums', ...either(...COMBINATORICS_RULES) },
   { id: 'sums', key: 'm', group: 'sums', ...either(sumForms) },
   { id: 'derivs', key: "'", group: 'calculus', ...either(...DERIVATIVE_RULES) },
+  { id: 'limits', key: 'a', group: 'calculus', ...either(...LIMIT_RULES) },
   // u: as formas da integral; sem nenhuma, pede a substituição (por partes
   // e as formas da integral definida ficam depois, no menu ou repetindo u).
   { id: 'integrals', key: 'u', group: 'calculus', ...either(...INTEGRAL_RULES) },

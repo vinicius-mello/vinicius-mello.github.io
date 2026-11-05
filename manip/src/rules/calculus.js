@@ -513,3 +513,175 @@ export function byParts(ctx) {
     : fn('Add', uv, neg(rest));
   return { tree: place(tree, p, node), label: msg('step.iParts', { u: toAscii(u), v: toAscii(v) }), focus: node.id };
 }
+
+// ----------------------------------------------------------------- limites
+
+// Valores de teste para as outras letras (constantes do problema).
+function envFor(n, x, value) {
+  const env = { [x]: value };
+  let k = 0;
+  walk(n, (s) => {
+    if (s.op === 'Symbol' && !(s.name in env) && !['e', 'pi', INFINITY].includes(s.name)) env[s.name] = SAMPLES[k++ % SAMPLES.length] + 1;
+  });
+  return env;
+}
+
+// Como g se comporta quando x → a: 'zero', 'inf', 'finite' ou null.
+function behaviour(g, x, a, dir) {
+  const at = (t) => numeric(g, envFor(g, x, t));
+  const A = numeric(a, envFor(a, x, 0));
+  if (Math.abs(A) === Infinity || unparen(a).op === 'Negate' && Math.abs(numeric(unparen(a).args[0], {})) === Infinity) {
+    const s = Math.sign(A) || -1;
+    const [v1, v2] = [at(s * 1e4), at(s * 1e8)].map(Math.abs);
+    if (!Number.isFinite(v2) || (v2 > 1e3 && v2 > v1)) return 'inf';
+    if (v2 < 1e-3 && v2 < v1) return 'zero';
+    return Number.isFinite(v2) ? 'finite' : null;
+  }
+  if (!Number.isFinite(A)) return null;
+  const v = at(A);
+  if (Number.isFinite(v)) return Math.abs(v) < 1e-9 ? 'zero' : 'finite';
+  const s = dir === '-' ? -1 : 1;
+  const [v1, v2] = [at(A + s * 1e-4), at(A + s * 1e-8)].map(Math.abs);
+  return v2 > v1 && v2 > 1e3 ? 'inf' : null;
+}
+
+// Pode substituir x por a: o ponto é finito e nenhuma conta explode.
+// Devolve null (pode) ou o erro.
+function substitutable(f, x, a) {
+  const A = numeric(a, envFor(a, x, 0));
+  if (!Number.isFinite(A)) return { error: 'err.limInf' };
+  let bad = null;
+  walk(f, (n) => {
+    if (bad || n.op !== 'Divide') return;
+    const [u, v] = n.args.map((g) => numeric(g, envFor(f, x, A)));
+    if (Math.abs(v) < 1e-12) bad = Math.abs(u) < 1e-12 ? { error: 'err.lim00' } : { error: 'err.limDiv0' };
+  });
+  if (bad) return bad;
+  return Number.isFinite(numeric(f, envFor(f, x, A))) ? null : { error: 'err.limSubst' };
+}
+
+// Limites notáveis com u → 0 (ou u → ∞), na variável u da própria expressão.
+const NOTABLE = [
+  ['sin(u)/u', '1'], ['u/sin(u)', '1'], ['tan(u)/u', '1'], ['(1 - cos(u))/u', '0'],
+  ['(e^u - 1)/u', '1'], ['(exp(u) - 1)/u', '1'], ['ln(1 + u)/u', '1'], ['(1 + u)^(1/u)', 'e'],
+];
+let notable = null;
+
+// Casa f com o modelo, achando quem faz o papel de u; devolve u ou null.
+function bindU(f, model) {
+  let u = null;
+  const go = (a, m) => {
+    a = unparen(a); m = unparen(m);
+    if (m.op === 'Symbol' && m.name === 'u') {
+      if (u) return literal(a, u);
+      u = a;
+      return true;
+    }
+    if (m.op !== a.op) return false;
+    if (m.op === 'Number') return a.value === m.value;
+    if (m.op === 'Symbol') return a.name === m.name;
+    return a.args.length === m.args.length && a.args.every((c, i) => go(c, m.args[i]));
+  };
+  return go(f, model) ? u : null;
+}
+
+function limitForms(ctx) {
+  const p = calcAt(ctx, 'Limit');
+  if (!p) return [];
+  const { tree } = ctx;
+  const L = getAt(tree, p);
+  const [xs, a, body] = L.args;
+  const x = xs.name;
+  const f = unparen(body);
+  const out = [];
+  const add = (node, key, params) => out.push(done(tree, p, node, key, params));
+  const lim = (g) => (L.dir ? { ...fn('Limit', sym(x), copy(a), g), dir: L.dir } : fn('Limit', sym(x), copy(a), g));
+
+  // constante · substituição direta (recusada nas formas indeterminadas)
+  if (freeOf(f, x)) add(copy(f), 'step.lConst');
+  else {
+    const why = substitutable(f, x, a);
+    if (!why) {
+      const clones = {};
+      const node = instantiate(f, x, a, clones);
+      out.push({ ...done(tree, p, node, 'step.lSubst'), hints: { clones } });
+    } else if (why.error !== 'err.limInf') out.push(why);
+  }
+
+  // limites notáveis
+  notable ??= NOTABLE.map(([m, v]) => [parseInput(m), parseInput(v)]);
+  for (const [model, value] of notable) {
+    const u = bindU(f, model);
+    if (u && !freeOf(u, x) && behaviour(u, x, a, L.dir) === 'zero') {
+      add(copy(value), 'step.lNotable', { f: toAscii(model).replace(/u/g, 'u') });
+      break;
+    }
+  }
+  // (1 + 1/u)^u → e, (1 + k/u)^u → eᵏ, com u → ∞
+  if (f.op === 'Power') {
+    const [b, e] = f.args.map(unparen);
+    const t = b.op === 'Add' && b.args.length === 2 && unparen(b.args[0]).op === 'Number' && unparen(b.args[0]).value === '1' ? unparen(b.args[1]) : null;
+    if (t?.op === 'Divide' && literal(t.args[1], e) && freeOf(t.args[0], x) && behaviour(e, x, a, L.dir) === 'inf') {
+      const k = t.args[0];
+      add(isNumOne(unparen(k)) ? sym('e') : pow(sym('e'), copy(k)), 'step.lNotable', { f: '(1 + k/u)^u' });
+    }
+  }
+  // lim_(h→0) (f(x + h) − f(x))/h = f′(x): a definição de derivada ao contrário
+  if (f.op === 'Divide' && isVar(f.args[1], x) && unparen(a).op === 'Number' && unparen(a).value === '0') {
+    const top = unparen(f.args[0]);
+    if (top.op === 'Add' && top.args.length === 2 && top.args[1].op === 'Negate') {
+      const [A, B] = [top.args[0], top.args[1].args[0]];
+      const names = new Set();
+      walk(B, (s) => { if (s.op === 'Symbol' && s.name !== x) names.add(s.name); });
+      for (const v of names) {
+        if (literal(A, instantiate(B, v, fn('Add', sym(v), sym(x))))) { add(deriv(v, copy(B)), 'step.lDeriv'); break; }
+      }
+    }
+  }
+  // c/xⁿ → 0 com x → ±∞
+  if (f.op === 'Divide' && freeOf(f.args[0], x) && behaviour(f.args[1], x, a, L.dir) === 'inf') add(num(0), 'step.lInfZero');
+
+  // propriedades: soma, constante, produto, quociente (denominador ≠ 0), potência
+  if (f.op === 'Add') add(fn('Add', ...f.args.map((t) => (t.op === 'Negate' ? neg(lim(t.args[0])) : lim(t)))), 'step.lSum');
+  else if (f.op === 'Negate') add(neg(lim(f.args[0])), 'step.lPull');
+  else if (f.op === 'Multiply') {
+    const consts = f.args.filter((g) => freeOf(g, x));
+    const rest = f.args.filter((g) => !freeOf(g, x));
+    if (consts.length && rest.length) add(mul(...consts, lim(rebuild('Multiply', rest))), 'step.lPull');
+    if (rest.length > 1) add(mul(...consts.map(copy), ...rest.map((g) => lim(copy(g)))), 'step.lProduct');
+  } else if (f.op === 'Divide') {
+    const [u, v] = f.args;
+    const bu = behaviour(u, x, a, L.dir);
+    const bv = behaviour(v, x, a, L.dir);
+    if (freeOf(v, x) && !freeOf(u, x)) add(fn('Divide', lim(u), v), 'step.lPull');
+    else if (bv === 'finite') add(fn('Divide', lim(u), lim(v)), 'step.lQuotient');
+    // L'Hôpital nas formas 0/0 e ∞/∞
+    if ((bu === 'zero' && bv === 'zero') || (bu === 'inf' && bv === 'inf')) {
+      add(lim(fn('Divide', deriv(x, copy(u)), deriv(x, copy(v)))), 'step.lHopital', { form: bu === 'zero' ? '0/0' : '∞/∞' });
+    }
+  } else if (f.op === 'Power' && freeOf(f.args[1], x)) add(pow(lim(f.args[0]), f.args[1]), 'step.lPower');
+  else if (f.op === 'Sqrt') add(fn('Sqrt', lim(f.args[0])), 'step.lPower');
+
+  return out;
+}
+
+// Trocar a variável: x → a vira h → 0 (x = a + h); x → ∞ vira t → 0⁺ (x = 1/t).
+function limitChange(ctx) {
+  const p = calcAt(ctx, 'Limit');
+  if (!p) return null;
+  const { tree } = ctx;
+  const L = getAt(tree, p);
+  const [xs, a, body] = L.args;
+  const x = xs.name;
+  const infinite = behaviour(sym(x), x, a, L.dir) === 'inf';
+  const zero = unparen(a).op === 'Number' && unparen(a).value === '0';
+  if (zero || freeOf(body, x)) return null;
+  const h = freshIndex(tree, infinite ? ['t', 's', 'h'] : ['h', 't', 's']);
+  const value = infinite ? fn('Divide', num(1), sym(h)) : fn('Add', copy(a), sym(h));
+  const node = { ...fn('Limit', sym(h), num(0), instantiate(body, x, value)) };
+  if (infinite) node.dir = numeric(a, {}) > 0 ? '+' : '-';
+  else if (L.dir) node.dir = L.dir;
+  return done(tree, p, node, 'step.lChange', { v: `${x} = ${toAscii(value)}` });
+}
+
+export const LIMIT_RULES = [limitForms, limitChange];

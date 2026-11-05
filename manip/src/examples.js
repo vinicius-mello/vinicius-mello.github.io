@@ -26,6 +26,7 @@ export const EXAMPLES = {
   trig: { src: 'y = sin(2x)', focus: [1] },
   factorial: { src: 'y = binom(n, k)', focus: [1] },
   derivs: { src: 'y = d/dx (x^2 sin x)', focus: [1] },
+  limits: { src: 'y = lim_(x->2) (x^2 + 1)', focus: [1] },
   integrals: { src: 'y = int_0^1 x^2 dx', focus: [1] },
   intsubst: { src: 'y = int 2x cos(x^2) dx', focus: [1], input: 'u = x^2' },
   intparts: { src: 'y = int x e^x dx', focus: [1], input: 'u = x' },
