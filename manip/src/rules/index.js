@@ -489,8 +489,10 @@ function flipSigns(ctx) {
   if (n.op === 'Add' && parent?.op === 'Delimiter') { p = parentPath(p); n = parent; parent = parentOf(tree, p); }
   if (sumOf(n) && parent?.op === 'Negate') { p = parentPath(p); n = parent; parent = parentOf(tree, p); }
 
-  // Integral: como nos parênteses, o sinal entra no integrando e sai dele.
-  if (n.op === 'Integrate' && parent?.op === 'Negate') { p = parentPath(p); n = parent; parent = parentOf(tree, p); }
+  // Integral e somatório: como nos parênteses, o sinal entra no termo e sai dele.
+  const hasTerm = (x) => x.op === 'Integrate' || x.op === 'Sum';
+  const which = (x) => (x.op === 'Sum' ? 'Sum' : 'Int');
+  if (hasTerm(n) && parent?.op === 'Negate') { p = parentPath(p); n = parent; parent = parentOf(tree, p); }
   const integrand = (I, body) => withArgs(I, [...I.args.slice(0, -1), body]);
   // −f, ou −b − c (vira b + c); sem sinal para tirar, null.
   const minusOf = (b) => {
@@ -499,18 +501,18 @@ function flipSigns(ctx) {
     return u.op === 'Add' && u.args.every((t) => t.op === 'Negate') ? withArgs(u, u.args.map(flip)) : null;
   };
   const flipBody = (b) => (sumOf(b) ? withArgs(sumOf(b), sumOf(b).args.map(flip)) : flip(b));
-  // −∫ f dx → ∫ −f dx (a − ∫ f dx → a + ∫ −f dx)
-  if (n.op === 'Negate' && n.args[0].op === 'Integrate') {
+  // −∫ f dx → ∫ −f dx (a − ∫ f dx → a + ∫ −f dx) · −Σ f → Σ −f
+  if (n.op === 'Negate' && hasTerm(n.args[0])) {
     const I = n.args[0];
     const node = integrand(I, flipBody(I.args[I.args.length - 1]));
-    return { tree: replaceAt(tree, p, node), label: msg('step.signsInInt'), focus: node.id };
+    return { tree: replaceAt(tree, p, node), label: msg(`step.signsIn${which(I)}`), focus: node.id };
   }
-  if (n.op === 'Integrate') {
+  if (hasTerm(n)) {
     const body = n.args[n.args.length - 1];
     const out = minusOf(body);
-    // ∫ −f dx → −∫ f dx · ∫ f dx → −∫ −f dx
+    // ∫ −f dx → −∫ f dx · ∫ f dx → −∫ −f dx (e o mesmo com Σ)
     const node = fn('Negate', integrand(n, out ?? flipBody(body)));
-    return { tree: replaceAt(tree, p, node), label: msg(out ? 'step.signsOutInt' : 'step.flipSigns'), focus: node.id };
+    return { tree: replaceAt(tree, p, node), label: msg(out ? `step.signsOut${which(n)}` : 'step.flipSigns'), focus: node.id };
   }
 
   // −(B + C) → (−B − C): o sinal entra nos parênteses (a − (b + c) → a + (−b − c)).
