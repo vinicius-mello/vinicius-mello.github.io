@@ -1151,3 +1151,12 @@ body.presenting #stage:focus-visible::after { display: none; }
 .kb-lim { font-size: .6em; }
 .kb-lims { display: inline-flex; flex-direction: column; font-size: .6em; line-height: 1; vertical-align: middle; margin-left: .05em; }
 .kb-lims sup, .kb-lims sub { vertical-align: 0; }
+
+/* Justificativa do passo, entre um passo e o seguinte */
+.board-why {
+  margin: 0;
+  font: italic clamp(15px, 1.6vw, 22px)/1.3 var(--math);
+  color: var(--muted);
+}
+.board-why::before { content: "↓ "; font-style: normal; }
+.board > .board-why:last-child { color: var(--accent); }

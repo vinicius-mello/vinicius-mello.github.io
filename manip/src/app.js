@@ -249,12 +249,21 @@ function drawBoard() {
     stage.prepend(board);
   }
   const h = history();
-  const prev = h.steps.slice(Math.max(0, h.index - 2), h.index);
-  board.replaceChildren(...prev.map((s, i) => {
+  const from = Math.max(0, h.index - 2);
+  const prev = h.steps.slice(from, h.index);
+  // A justificativa de cada passo fica entre ele e o anterior; a do passo
+  // atual, logo acima da fórmula.
+  const why = (j, opacity) => {
+    const e = Object.assign(document.createElement('p'), { className: 'board-why', textContent: fmt(h.steps[j].label) });
+    if (opacity) e.style.opacity = opacity;
+    return e;
+  };
+  board.replaceChildren(...prev.flatMap((s, i) => {
     const f = staticFormula(s.tree, 'formula board-step');
-    f.style.opacity = String(0.3 + (0.4 * (i + 1)) / prev.length);
-    return f;
-  }));
+    const opacity = String(0.3 + (0.4 * (i + 1)) / prev.length);
+    f.style.opacity = opacity;
+    return i > 0 ? [why(from + i, opacity), f] : [f];
+  }), ...(h.index > 0 ? [why(h.index)] : []));
   board.querySelectorAll('.formula').forEach((f) => fit(f, stageWidth(), stage.clientHeight * 0.2));
 }
 
