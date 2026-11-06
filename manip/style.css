@@ -1139,6 +1139,8 @@ body.presenting #stage:focus-visible::after { display: none; }
 .primes { font-style: normal; margin-left: .02em; }
 .op.comma { margin: 0 .2em 0 0; }
 .infty { font-style: normal; }
+/* reticências: ⋯ na altura dos sinais, com o respiro de um termo */
+.dots { font-style: normal; padding: 0 0.08em; letter-spacing: 0.02em; }
 .limop { vertical-align: baseline; margin: 0 .2em 0 0; }
 .limname { font-style: normal; line-height: 1.15; }
 .limop .limit.lower { padding-top: .05em; }

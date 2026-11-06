@@ -2,7 +2,7 @@
 // Não simplifica nada: a árvore reflete exatamente o que foi digitado.
 // A gramática está em parser.js; aqui fica só a divisão em tokens.
 
-import { FUNCTIONS, GREEK, IMAGINARY, BIG_OPERATORS, INFINITY } from './ast.js';
+import { FUNCTIONS, GREEK, IMAGINARY, BIG_OPERATORS, INFINITY, DOTS } from './ast.js';
 import { parseTokens, ParseError } from './parser.js';
 import { RELATION_INPUT } from './relations.js';
 
@@ -19,6 +19,8 @@ function tokenize(src) {
     if ((m = /^d(?:\^(\d+))?\/d([A-Za-z])(?:\^(\d+))?(?![A-Za-z])/.exec(rest)) && m[1] === m[3]) {
       // d/dx, d^2/dx^2
       toks.push({ t: 'deriv', v: m[2], order: Number(m[1] ?? 1), pos: i });
+    } else if ((m = /^(\.\.\.|…|⋯)/.exec(rest))) {
+      toks.push({ t: 'id', v: DOTS, pos: i, end: i + m[0].length });
     } else if ((m = /^(->|→)/.exec(rest))) {
       toks.push({ t: 'to', pos: i });
     } else if (c === "'" || c === '′') {

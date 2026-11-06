@@ -107,6 +107,11 @@ export const isBigOp = (n) => n.op === 'Sum' || n.op === 'Product';
 //   Call(...args)             f(x), f'(x): name e primes como atributos
 export const INFINITY = 'PositiveInfinity';
 export const isInfinity = (n) => n.op === 'Symbol' && n.name === INFINITY;
+// Reticências dentro de uma soma ou produto: a + … + c, a·…·c. É um átomo
+// opaco: as operações termo a termo passam pelos termos explícitos e o … fica.
+export const DOTS = 'ContinuationPlaceholder';
+export const isDots = (n) => n.op === 'Symbol' && n.name === DOTS;
+export const hasDots = (n) => (n.args ?? []).some((c) => isDots(c) || (c.op === 'Negate' && isDots(c.args[0])));
 export const isCalculus = (n) => n.op === 'Limit' || n.op === 'D' || n.op === 'Integrate' || n.op === 'EvalAt';
 // Letras lidas como função quando vêm coladas a "(": f(x), g(x + 1).
 export const FUNCTION_LETTERS = new Set(['f', 'g']);

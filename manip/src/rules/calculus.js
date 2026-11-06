@@ -5,7 +5,7 @@
 // Nós (ast.js): D(x, f) com order · Integrate(x, f) e Integrate(x, a, b, f)
 // · Limit(x, a, f) com dir · EvalAt(x, a, b, F) · Call (f(x), f'(x)).
 
-import { getAt, replaceAt, fn, num, sym, call, walk, INFINITY } from '../ast.js';
+import { getAt, replaceAt, fn, num, sym, call, walk, INFINITY, DOTS } from '../ast.js';
 import { msg } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { parseInput } from '../input.js';
@@ -521,7 +521,7 @@ function envFor(n, x, value) {
   const env = { [x]: value };
   let k = 0;
   walk(n, (s) => {
-    if (s.op === 'Symbol' && !(s.name in env) && !['e', 'pi', INFINITY].includes(s.name)) env[s.name] = SAMPLES[k++ % SAMPLES.length] + 1;
+    if (s.op === 'Symbol' && !(s.name in env) && !['e', 'pi', INFINITY, DOTS].includes(s.name)) env[s.name] = SAMPLES[k++ % SAMPLES.length] + 1;
   });
   return env;
 }

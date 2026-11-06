@@ -2,7 +2,7 @@
 // \cdot, \times, \div, \left( \right), letras gregas e funções (\sin, \ln…).
 // Só divide em tokens; a gramática é a mesma do ASCII (parser.js).
 
-import { FUNCTIONS, GREEK, IMAGINARY, INFINITY } from './ast.js';
+import { FUNCTIONS, GREEK, IMAGINARY, INFINITY, DOTS } from './ast.js';
 import { parseTokens, ParseError } from './parser.js';
 import { RELATION_INPUT } from './relations.js';
 
@@ -66,6 +66,7 @@ function tokenize(src) {
       else if (FUNCTION_COMMANDS[name]) push('fn', i, FUNCTION_COMMANDS[name]);
       else if (name === 'imaginaryI') push('id', i, IMAGINARY);
       else if (name === 'infty') push('id', i, INFINITY);
+      else if (['cdots', 'ldots', 'dots', 'dotsb', 'dotsc', 'dotsm'].includes(name)) push('id', i, DOTS);
       else if (GREEK.includes(name)) push('id', i, name);
       else if (FUNCTIONS[name]) push('fn', i, FUNCTIONS[name]);
       else if (name === 'operatorname') {
@@ -94,6 +95,9 @@ function tokenize(src) {
     if (prev === '^' && /\d/.test(c)) {
       push('num', i, c); // x^23 é x²·3 em LaTeX
       i++;
+    } else if ((m = /^(\.\.\.|…|⋯)/.exec(src.slice(i)))) {
+      push('id', i, DOTS);
+      i += m[0].length;
     } else if ((m = /^(\d+(\.\d+)?|\.\d+)/.exec(src.slice(i)))) {
       push('num', i, m[0]);
       i += m[0].length;

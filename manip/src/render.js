@@ -4,7 +4,7 @@
 // recebem data-key derivada do nó dono, para que animate.js consiga
 // acompanhar cada pedaço entre dois estados.
 
-import { GREEK, FUNCTION_NAMES, IMAGINARY, INFINITY } from './ast.js';
+import { GREEK, FUNCTION_NAMES, IMAGINARY, INFINITY, DOTS } from './ast.js';
 import { needsParens, needsDot, isFunctionPower, simpleBase } from './notation.js';
 import { functionLabel } from './i18n.js';
 import { RELATIONS } from './relations.js';
@@ -64,6 +64,7 @@ const op = (text, key, cls = 'bin') => el('span', 'op ' + cls, key, text);
 function symbolContent(name) {
   if (name === IMAGINARY) return [el('span', 'imag', null, 'i')];
   if (name === INFINITY) return [el('span', 'infty', null, '∞')];
+  if (name === DOTS) return [el('span', 'dots', null, '⋯')];
   const [base, sub] = name.split('_');
   const greek = GREEK.includes(base);
   const b = el('span', greek ? 'greek' : 'var', null, greek ? GREEK_CHARS[base] : base);

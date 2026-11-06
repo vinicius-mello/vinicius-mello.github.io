@@ -15,7 +15,7 @@
 // Parênteses digitados viram Delimiter, exceto onde a notação já mostra o
 // agrupamento (numerador/denominador, expoente, argumento de função).
 
-import { num, sym, fn, call, walk, FUNCTION_LETTERS, INFINITY, IMAGINARY } from './ast.js';
+import { num, sym, fn, call, walk, FUNCTION_LETTERS, INFINITY, IMAGINARY, DOTS } from './ast.js';
 
 // A mensagem é uma chave de i18n.js (com parâmetros), traduzida na hora de
 // mostrar.
@@ -53,7 +53,7 @@ function derivFrac(a, b) {
 // Variável de [F]_a^b quando não foi escrita: a única letra de F (ou x).
 function guessVariable(F) {
   const names = new Set();
-  walk(F, (n) => { if (n.op === 'Symbol' && ![INFINITY, IMAGINARY, 'e', 'pi', 'C'].includes(n.name)) names.add(n.name); });
+  walk(F, (n) => { if (n.op === 'Symbol' && ![INFINITY, IMAGINARY, DOTS, 'e', 'pi', 'C'].includes(n.name)) names.add(n.name); });
   return names.size === 1 ? [...names][0] : 'x';
 }
 

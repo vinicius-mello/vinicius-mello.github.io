@@ -1,7 +1,7 @@
 // Regras de notação compartilhadas pelo renderizador e pelos serializadores:
 // quando um filho precisa de parênteses implícitos e como juntar fatores.
 
-import { isLeaf, FUNCTION_NAMES, isBigOp } from './ast.js';
+import { isLeaf, FUNCTION_NAMES, isBigOp, isDots } from './ast.js';
 
 // lim, d/dx e Σ engolem os fatores à direita: no meio de um produto vão entre parênteses.
 const greedy = (n) => isBigOp(n) || n.op === 'Limit' || n.op === 'D';
@@ -65,6 +65,7 @@ function startsWithDigit(n) {
 export function needsDot(prev, next, nextIndex, parent) {
   if (needsParens(next, parent, nextIndex)) return false;
   if (startsWithDigit(next)) return true;
+  if (isDots(prev) || isDots(next)) return true;
   if (next.op === 'Negate') return true;
   return false;
 }

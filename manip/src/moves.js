@@ -9,6 +9,7 @@ import { getAt, replaceAt, withArgs, fn, num } from './ast.js';
 import { msg } from './i18n.js';
 import { toAscii } from './serialize.js';
 import { evaluate } from './rules/arith.js';
+import { keepsEnds } from './rules/dots.js';
 import { isRelation, isInequality, FLIP, relationAt } from './relations.js';
 
 const terms = (n) => (n.op === 'Add' ? n.args : [n]);
@@ -110,8 +111,11 @@ function transposeIn(tree, path, dir) {
   }
 }
 
+// Um movimento não pode separar as reticências do termo ao lado delas.
+const guarded = (tree, r) => (r?.tree && !keepsEnds(tree, r.tree) ? { error: 'err.dotsEnds' } : r);
+
 export function shiftSideways(tree, path, dir) {
-  return swap(tree, path, dir) ?? transpose(tree, path, dir);
+  return guarded(tree, swap(tree, path, dir) ?? transpose(tree, path, dir));
 }
 
 // Um grupo do mesmo tipo do pai: Add dentro de Add, ou (Add) entre parênteses.
@@ -122,7 +126,9 @@ function groupOf(node, op) {
 }
 
 // Shift+↑: tira o nó de dentro do grupo e o coloca logo depois dele.
-export function shiftOut(tree, path) {
+export const shiftOut = (tree, path) => guarded(tree, shiftOutRaw(tree, path));
+
+function shiftOutRaw(tree, path) {
   if (path.length < 2) return null;
   const pp = path.slice(0, -1);
   const parent = getAt(tree, pp);
@@ -147,7 +153,9 @@ export function shiftOut(tree, path) {
 }
 
 // Shift+↓: coloca o nó dentro do grupo vizinho (preferindo o da direita).
-export function shiftIn(tree, path) {
+export const shiftIn = (tree, path) => guarded(tree, shiftInRaw(tree, path));
+
+function shiftInRaw(tree, path) {
   if (path.length === 0) return null;
   const pp = path.slice(0, -1);
   const parent = getAt(tree, pp);

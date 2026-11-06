@@ -31,6 +31,7 @@ export const SYNTAX = [
     ['syntax.factorial', 'n! + binom(n, k)', 'n! + \\binom{n}{k}'],
     ['syntax.sum', 'sum_(k=1)^n k^2', '\\sum_{k=1}^{n} k^2'],
     ['syntax.prod', 'prod_(k=1)^n k', '\\prod_{k=1}^{n} k'],
+    ['syntax.dots', 'a(b_1 + ... + b_n)', 'a\\left(b_{1} + \\cdots + b_{n}\\right)'],
   ]],
   ['syntax.calculus', [
     ['syntax.limit', 'lim_(x->0) sin(x)/x', '\\lim_{x \\to 0} \\frac{\\sin x}{x}'],

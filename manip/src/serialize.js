@@ -1,6 +1,6 @@
 // Serialização da árvore para ASCII (reeditar no campo de entrada) e LaTeX.
 
-import { FUNCTION_NAMES, GREEK, IMAGINARY, INFINITY, sameTag } from './ast.js';
+import { FUNCTION_NAMES, GREEK, IMAGINARY, INFINITY, DOTS, sameTag } from './ast.js';
 import { needsParens, needsDot, isFunctionPower, simpleBase } from './notation.js';
 import { ASCII_RELATIONS, LATEX_RELATIONS, isRelation } from './relations.js';
 import { parseAscii } from './parse-ascii.js';
@@ -51,7 +51,7 @@ export function toAscii(n) {
   const group = (c) => (asciiAtomic(c) ? toAscii(c) : `(${toAscii(c)})`);
   switch (n.op) {
     case 'Number': return n.value;
-    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name;
+    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name === DOTS ? '...' : n.name;
     case 'Call': return n.name + primes(n) + (n.args.length ? `(${n.args.map(toAscii).join(', ')})` : '');
     case 'Limit': {
       const [x, a, f] = n.args;
@@ -103,6 +103,7 @@ export function toAscii(n) {
 function latexSymbol(name) {
   if (name === IMAGINARY) return '\\mathrm{i}';
   if (name === INFINITY) return '\\infty';
+  if (name === DOTS) return '\\cdots';
   const [base, sub] = name.split('_');
   const b = GREEK.includes(base) ? `\\${base}` : base;
   return sub === undefined ? b : `${b}_{${sub}}`;

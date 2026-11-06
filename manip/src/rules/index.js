@@ -17,6 +17,7 @@
 //   clones: { idNovo: idOrigem }     cópias saem da posição do original
 
 import { getAt, replaceAt, withArgs, fn, num, sym, same as identical, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath } from '../ast.js';
+import { wrapDots } from './dots.js';
 import { needsParens } from '../notation.js';
 import { parseInput } from '../input.js';
 import { toAscii } from '../serialize.js';
@@ -1830,6 +1831,10 @@ export const RULES = [
 // Regras aplicáveis ao contexto, já com o resultado (prévia).
 // Regras simples também anotam as igualdades usadas (as de either() já anotam).
 for (const r of RULES) if (!r.all) r.run = withNotes(r.run);
+// Reticências: o … absorve o que a regra fizer termo a termo; as regras
+// que juntam termos (ab + … + ac → a(b + … + c)) também o veem como um termo.
+const DOTS_INVERSE = new Set(['factor', 'join', 'powers', 'logs', 'derivs', 'integrals', 'limits']);
+for (const r of RULES) if (!r.input) wrapDots(r, DOTS_INVERSE.has(r.id));
 
 export function applicable(ctx) {
   const out = [];

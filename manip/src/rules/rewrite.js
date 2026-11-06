@@ -9,7 +9,7 @@
 // Onde a conta não dá (somatórios, integrais, f(x)...), o passo entra marcado
 // como não conferido.
 
-import { getAt, replaceAt, walk, children, IMAGINARY } from '../ast.js';
+import { getAt, replaceAt, walk, children, IMAGINARY, DOTS } from '../ast.js';
 import { msg, getLang } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { parseInput } from '../input.js';
@@ -20,7 +20,7 @@ import { numeric } from './calculus.js';
 // variável percorre a lista com um deslocamento diferente.
 const VALUES = [0.7312, -1.3841, 2.1197, -0.4423, 1.6629, -2.5378, 0.2911, 3.0417];
 const POINTS = 8;
-const CONSTANTS = new Set(['e', 'pi', IMAGINARY]);
+const CONSTANTS = new Set(['e', 'pi', IMAGINARY, DOTS]);
 
 function variables(...trees) {
   const names = new Set();

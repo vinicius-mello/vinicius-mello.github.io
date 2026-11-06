@@ -63,6 +63,7 @@ const PAGES = {
       k(BINOM, 'binom(|, )', '\\binom{|}{}', 'op'),
       k('∑', 'sum_(k=|)^n ', '\\sum_{k=|}^{n} ', 'op'),
       k('∏', 'prod_(k=|)^n ', '\\prod_{k=|}^{n} ', 'op'),
+      k('⋯', ' + ... + ', ' + \\cdots + ', 'math'),
     ],
     [
       k(LIM, 'lim_(x->|) ', '\\lim_{x \\to |} ', 'op'),
