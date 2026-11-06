@@ -5,10 +5,12 @@
 //
 // Sum/Product(índice, inferior, superior, termo): o índice é um Symbol.
 
-import { getAt, withArgs, fn, num, sym, walk, isBigOp, isCalculus, newId } from '../ast.js';
+import { getAt, withArgs, fn, num, sym, walk, isBigOp, isCalculus, newId, isInfinity, DOTS } from '../ast.js';
 import { msg } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { evaluate } from './arith.js';
+import { parseAscii } from '../parse-ascii.js';
+import { toAscii } from '../serialize.js';
 import { literal, matches as same, attempt, noted } from './normal.js';
 import { unparen, signed, parentPath, lastIndex, cloneFrom, rebuild, place, atFocusOrParent } from './util.js';
 
@@ -27,8 +29,33 @@ export const intNode = (v) => (v < 0 ? fn('Negate', num(-v)) : num(v));
 // A expressão não contém o símbolo `name`.
 export function freeOf(n, name) {
   let free = true;
-  walk(n, (x) => { if (x.op === 'Symbol' && x.name === name) free = false; });
+  walk(n, (x) => { if (x.op === 'Symbol' && (x.name === name || subUses(x.name, name))) free = false; });
   return free;
+}
+
+// Índice no subscrito: aₖ, a_(k+1). O subscrito é texto; lido como expressão.
+function subExpr(symbol) {
+  const i = symbol.indexOf('_');
+  if (i < 0) return null;
+  try { return parseAscii(symbol.slice(i + 1)); } catch { return null; }
+}
+function subUses(symbol, name) {
+  const s = symbol.split('_')[1];
+  if (s === undefined || !s.includes(name)) return false;
+  const e = subExpr(symbol);
+  let used = false;
+  if (e) walk(e, (x) => { if (x.op === 'Symbol' && x.name === name) used = true; });
+  return used;
+}
+// a_k com k = n − 1 → a_(n−1); com k = 2 → a_2.
+function subInstance(n, name, value) {
+  const base = n.name.slice(0, n.name.indexOf('_'));
+  const e = subExpr(n.name);
+  const go = (x) => (x.op === 'Symbol' && x.name === name ? value : x.args ? { ...x, args: x.args.map(go) } : x);
+  const v = go(e);
+  const k = intOf(v);
+  const text = k !== null ? String(k) : toAscii(v).replace(/\s+/g, '');
+  return { ...n, id: newId(), name: `${base}_${text}` };
 }
 
 // Rótulo do passo, com as igualdades usadas na comparação (normal.js).
@@ -71,6 +98,7 @@ function minus(n, k) {
 export function instantiate(body, name, value, clones = {}) {
   const go = (n) => {
     if (n.op === 'Symbol' && n.name === name) return cloneFrom(value, {});
+    if (n.op === 'Symbol' && subUses(n.name, name)) return subInstance(n, name, value);
     if ((isBigOp(n) || isCalculus(n)) && n.args[0].name === name) return cloneFrom(n, clones);
     const c = { ...n, id: newId() };
     clones[c.id] = n.id;
@@ -253,6 +281,7 @@ function stifelInverse(ctx) {
 // Fórmulas fechadas: Σk, Σk², Σk³, Σrᵏ, ΣC(n, k) e Πk = n!.
 function closedForm(S) {
   const [k, a, n, f] = S.args;
+  if (isInfinity(n)) return null;
   const lo = intOf(a);
   const isK = (x) => x.op === 'Symbol' && x.name === k.name;
   const n1 = () => offset(n, 1);
@@ -357,8 +386,22 @@ function bigForms(ctx) {
     out.push(done(tree, p, fn(isSum ? 'Add' : 'Multiply', ...parts), 'step.bigSplit'));
   }
 
+  // com reticências: f(a) + f(a + 1) + … + f(b) · f(a) + f(a + 1) + f(a + 2) + …
+  if (!writeOut || hi - lo + 1 > 4) {
+    const clones = {};
+    const item = (v) => instantiate(f, name, v, clones);
+    const inf = isInfinity(b);
+    // o … guarda o termo geral (e com ele o número de termos)
+    const dots = { ...sym(DOTS), term: { k: name, a: copy(a), b: copy(b), f: copy(f) } };
+    const items = inf
+      ? [item(a), item(offset(a, 1)), item(offset(a, 2)), dots]
+      : [item(a), item(offset(a, 1)), dots, item(b)];
+    const wrap = (t) => (isSum && (t.op === 'Add' || (t.op === 'Negate' && t !== items[0])) ? fn('Delimiter', t) : !isSum && t.op === 'Add' ? fn('Delimiter', t) : t);
+    out.push(done(tree, p, fn(isSum ? 'Add' : 'Multiply', ...items.map(wrap)), 'step.bigWriteDots', { clones }));
+  }
+
   // separar o último e o primeiro termos (não com limites numéricos vazios)
-  if (!(lo !== null && hi !== null && hi < lo)) {
+  if (!(lo !== null && hi !== null && hi < lo) && !isInfinity(b)) {
     const op = isSum ? 'Add' : 'Multiply';
     const last = fn(op, withArgs(S, [k, a, offset(b, -1), f]), instantiate(f, name, b));
     out.push(done(tree, p, last, 'step.bigPeelLast'));

@@ -9,6 +9,7 @@ import { getAt, replaceAt, fn, num, sym, call, walk, INFINITY, DOTS } from '../a
 import { msg } from '../i18n.js';
 import { isRelation } from '../relations.js';
 import { parseInput } from '../input.js';
+import { parseAscii } from '../parse-ascii.js';
 import { toAscii } from '../serialize.js';
 import { evaluate } from './arith.js';
 import { literal, matches, noted } from './normal.js';
@@ -207,13 +208,49 @@ const FLOAT = {
   Sqrt: Math.sqrt, Abs: Math.abs,
 };
 
+// a_k com k = 3 no ambiente → a_3. Um a_i sem valor no ambiente recebe um
+// valor fixo derivado do nome (a₁ + … + aₙ com n = 7 usa a₁ … a₇).
+const SUBS = new Map();
+function subscripted(name, env) {
+  const i = name.indexOf('_');
+  if (i < 0) return undefined;
+  const s = name.slice(i + 1);
+  if (!SUBS.has(s)) {
+    let e = null;
+    try { e = parseAscii(s); } catch { /* subscrito que não é expressão */ }
+    SUBS.set(s, e);
+  }
+  const e = SUBS.get(s);
+  const v = e && !/^\d+$/.test(s) ? numeric(e, env) : Number(s);
+  if (!Number.isInteger(v)) return undefined;
+  const key = `${name.slice(0, i)}_${v}`;
+  if (key in env) return env[key];
+  let h = 7;
+  for (const c of key) h = (h * 31 + c.charCodeAt(0)) % 9973;
+  return 0.35 + (h % 1000) / 613;
+}
+
 export function numeric(n, env) {
   const ev = (x) => numeric(x, env);
   switch (n.op) {
     case 'Number': return Number(n.value);
-    case 'Symbol':
+    case 'Symbol': {
       if (n.name in env) return env[n.name];
+      const s = subscripted(n.name, env);
+      if (s !== undefined) return s;
       return n.name === 'e' ? Math.E : n.name === 'pi' ? Math.PI : n.name === INFINITY ? Infinity : NaN;
+    }
+    case 'Sum': case 'Product': {
+      const [k, a, b, f] = n.args;
+      const [lo, hi] = [ev(a), ev(b)];
+      if (!Number.isInteger(lo) || !Number.isInteger(hi) || hi - lo > 5000) return NaN;
+      let acc = n.op === 'Sum' ? 0 : 1;
+      for (let i = lo; i <= hi; i++) {
+        const v = numeric(f, { ...env, [k.name]: i });
+        acc = n.op === 'Sum' ? acc + v : acc * v;
+      }
+      return acc;
+    }
     case 'Delimiter': return ev(n.args[0]);
     case 'Negate': return -ev(n.args[0]);
     case 'Add': return n.args.reduce((acc, c) => acc + ev(c), 0);

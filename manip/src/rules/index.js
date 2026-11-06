@@ -16,8 +16,9 @@
 //   strike: [ids]                    pedaços removidos são riscados
 //   clones: { idNovo: idOrigem }     cópias saem da posição do original
 
-import { getAt, replaceAt, withArgs, fn, num, sym, same as identical, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym, same as identical, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath, hasDots } from '../ast.js';
 import { wrapDots } from './dots.js';
+import { dotsForms, dotsZip } from './dotsterm.js';
 import { needsParens } from '../notation.js';
 import { parseInput } from '../input.js';
 import { toAscii } from '../serialize.js';
@@ -1584,11 +1585,14 @@ function combineEquations(sign) {
     if (!eq) return null;
     const { j, A, B } = eq;
     const clones = {};
+    // Uma soma com reticências entra inteira, entre parênteses: misturar
+    // os termos de duas sequências mudaria o que cada … representa.
+    const parts = (x) => (x.op === 'Add' && hasDots(x) ? [fn('Delimiter', x)] : terms(x));
     const side = (k) => {
       const mine = B.args[k];
       const other = cloneFrom(A.args[k], clones);
-      const extra = sign > 0 ? terms(other) : [fn('Negate', other)];
-      return fn('Add', ...terms(mine), ...extra);
+      const extra = sign > 0 ? parts(other) : [fn('Negate', other)];
+      return fn('Add', ...parts(mine), ...extra);
     };
     const eqNew = withArgs(B, [side(0), side(1)]);
     const args = ctx.tree.args.slice();
@@ -1791,7 +1795,7 @@ export const RULES = [
   { id: 'trig', key: 'f', group: 'functions', ...either(...TRIG_RULES) },
 
   { id: 'factorial', key: '!', group: 'sums', ...either(...COMBINATORICS_RULES) },
-  { id: 'sums', key: 'm', group: 'sums', ...either(sumForms) },
+  { id: 'sums', key: 'm', group: 'sums', ...either(sumForms, dotsForms, dotsZip) },
   { id: 'derivs', key: "'", group: 'calculus', ...either(...DERIVATIVE_RULES) },
   { id: 'limits', key: 'a', group: 'calculus', ...either(...LIMIT_RULES) },
   // u: as formas da integral; sem nenhuma, pede a substituição (por partes

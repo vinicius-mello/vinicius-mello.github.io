@@ -43,6 +43,12 @@ function asciiProduct(n, sub) {
   return parts.join('*');
 }
 
+// a_1, a_n; subscrito composto entre parênteses: a_(n-1).
+const asciiName = (name) => {
+  const [base, s] = name.split('_');
+  return s === undefined || /^(\d+|[A-Za-z])$/.test(s) ? name : `${base}_(${s})`;
+};
+
 export function toAscii(n) {
   const sub = (c, i) => {
     const s = toAscii(c);
@@ -51,7 +57,7 @@ export function toAscii(n) {
   const group = (c) => (asciiAtomic(c) ? toAscii(c) : `(${toAscii(c)})`);
   switch (n.op) {
     case 'Number': return n.value;
-    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name === DOTS ? '...' : n.name;
+    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name === DOTS ? '...' : asciiName(n.name);
     case 'Call': return n.name + primes(n) + (n.args.length ? `(${n.args.map(toAscii).join(', ')})` : '');
     case 'Limit': {
       const [x, a, f] = n.args;

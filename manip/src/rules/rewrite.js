@@ -15,6 +15,8 @@ import { isRelation } from '../relations.js';
 import { parseInput } from '../input.js';
 import { toAscii, looseSame } from '../serialize.js';
 import { numeric } from './calculus.js';
+import { treeHasDots } from './dots.js';
+import { dotsAsSums } from './dotsterm.js';
 
 // Valores de teste (positivos e negativos, longe de 0 e de inteiros); cada
 // variável percorre a lista com um deslocamento diferente.
@@ -22,12 +24,46 @@ const VALUES = [0.7312, -1.3841, 2.1197, -0.4423, 1.6629, -2.5378, 0.2911, 3.041
 const POINTS = 8;
 const CONSTANTS = new Set(['e', 'pi', IMAGINARY, DOTS]);
 
+// Índices e subscritos com letra (a_k, a_n) não são variáveis: o valor
+// vem do índice (calculus.js, numeric).
 function variables(...trees) {
   const names = new Set();
-  for (const t of trees) walk(t, (n) => { if (n.op === 'Symbol' && !CONSTANTS.has(n.name)) names.add(n.name); });
-  return [...names].sort();
+  const bound = new Set();
+  for (const t of trees) {
+    walk(t, (n) => {
+      if (n.op === 'Sum' || n.op === 'Product') bound.add(n.args[0].name);
+      if (n.op === 'Symbol' && !CONSTANTS.has(n.name) && !/_.*[A-Za-z]/.test(n.name)) names.add(n.name);
+      if (n.op === 'Symbol' && /_.*[A-Za-z]/.test(n.name)) {
+        for (const m of n.name.slice(n.name.indexOf('_') + 1).match(/[A-Za-z]+/g)) names.add(m);
+      }
+    });
+  }
+  return [...names].filter((v) => !bound.has(v)).sort();
 }
-const pointsFor = (names) => Array.from({ length: POINTS }, (_, j) => Object.fromEntries(names.map((v, i) => [v, VALUES[(j + 3 * i) % VALUES.length]])));
+// Letras nos limites de Σ (o n de a₁ + … + aₙ) recebem inteiros.
+const INTS = [4, 7, 5, 9, 6, 8, 3, 10];
+function integerNames(...trees) {
+  const out = new Set();
+  for (const t of trees) {
+    walk(t, (n) => {
+      if (n.op !== 'Sum' && n.op !== 'Product') return;
+      for (const b of n.args.slice(1, 3)) walk(b, (x) => { if (x.op === 'Symbol') out.add(x.name); });
+      walk(n.args[3], (x) => {
+        if (x.op === 'Symbol' && x.name.includes('_')) for (const m of x.name.slice(x.name.indexOf('_') + 1).match(/[A-Za-z]+/g) ?? []) if (m !== n.args[0].name) out.add(m);
+      });
+    });
+    walk(t, (x) => {
+      if (x.op === 'Symbol' && /_.*[A-Za-z]/.test(x.name)) for (const m of x.name.slice(x.name.indexOf('_') + 1).match(/[A-Za-z]+/g)) out.add(m);
+    });
+  }
+  return out;
+}
+const pointsFor = (names, ints = new Set()) => Array.from({ length: POINTS }, (_, j) => Object.fromEntries(
+  names.map((v, i) => [v, ints.has(v) ? INTS[(j + 3 * i) % INTS.length] : VALUES[(j + 3 * i) % VALUES.length]]),
+));
+
+// Reticências viram Σ para a conta (sem padrão reconhecível, não dá para conferir).
+const forCheck = (t) => (treeHasDots(t) ? dotsAsSums(t) : t);
 
 const close = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 const fmtNum = (v) => {
@@ -38,7 +74,9 @@ const fmtPoint = (env) => Object.entries(env).map(([k, v]) => `${k === IMAGINARY
 
 // 'ok', 'unchecked' ou { error, params }.
 function sameValue(a, b) {
-  const pts = pointsFor(variables(a, b));
+  [a, b] = [forCheck(a), forCheck(b)];
+  if (!a || !b) return 'unchecked';
+  const pts = pointsFor(variables(a, b), integerNames(a, b));
   let valid = 0;
   for (const env of pts) {
     const [x, y] = [numeric(a, env), numeric(b, env)];
@@ -54,7 +92,9 @@ const FLIP = { Less: 'Greater', Greater: 'Less', LessEqual: 'GreaterEqual', Grea
 function sameRelation(R, S) {
   const flipped = FLIP[R.op] === S.op;
   if (R.op !== S.op && !flipped) return { error: 'err.rewriteRel' };
-  const pts = pointsFor(variables(R, S));
+  [R, S] = [forCheck(R), forCheck(S)];
+  if (!R || !S) return 'unchecked';
+  const pts = pointsFor(variables(R, S), integerNames(R, S));
   const diff = (E, env) => numeric(E.args[0], env) - numeric(E.args[1], env);
   let ratio = null;
   let valid = 0;

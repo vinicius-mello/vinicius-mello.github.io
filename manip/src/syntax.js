@@ -10,7 +10,7 @@ export const SYNTAX = [
     ['syntax.implicit', '2x y', '2xy'],
     ['syntax.power', 'x^2 + x^(n+1)', 'x^2 + x^{n+1}'],
     ['syntax.parens', '2(x + 1)', '2\\left(x + 1\\right)'],
-    ['syntax.sub', 'x_1 + a_n', 'x_1 + a_{n}'],
+    ['syntax.sub', 'x_1 + a_n + a_(n-1)', 'x_1 + a_{n} + a_{n-1}'],
     ['syntax.greek', 'alpha + pi', '\\alpha + \\pi'],
     ['syntax.relations', 'x <= 3', 'x \\le 3'],
     ['syntax.system', 'x + y = 3; x - y = 1', '\\begin{cases} x + y = 3 \\\\ x - y = 1 \\end{cases}'],

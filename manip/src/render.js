@@ -69,7 +69,7 @@ function symbolContent(name) {
   const greek = GREEK.includes(base);
   const b = el('span', greek ? 'greek' : 'var', null, greek ? GREEK_CHARS[base] : base);
   if (sub === undefined) return [b];
-  return [b, el('span', 'subscript', null, sub)];
+  return [b, el('span', 'subscript', null, sub.replace(/-/g, '−'))];
 }
 
 export function render(n, parent = null, index = 0) {

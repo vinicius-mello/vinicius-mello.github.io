@@ -34,6 +34,12 @@ function tokenize(src) {
       m = [c];
     } else if ((m = /^(\d+(\.\d+)?|\.\d+)/.exec(rest))) {
       toks.push({ t: 'num', v: m[0], pos: i });
+    } else if ((m = /^[A-Za-z]+_\([^()=<>]*\)/.exec(rest)) && !/(sum|prod|lim|int)_/.test(m[0])) {
+      // a_(n-1): subscrito composto
+      const [word, inner] = [m[0].slice(0, m[0].indexOf('_')), m[0].slice(m[0].indexOf('_') + 2, -1)];
+      splitWord(word + '_x', i, toks);
+      const last = toks[toks.length - 1];
+      last.v = last.v.slice(0, -1) + inner.replace(/\s+/g, '').replace(/−/g, '-');
     } else if ((m = /^[A-Za-z]+(_(\d+|[A-Za-z]))?/.exec(rest))) {
       splitWord(m[0], i, toks);
     } else if ((m = /^(<=|>=|!=|[<>=≤≥≠])/.exec(rest))) {
