@@ -1146,7 +1146,7 @@ body.presenting #stage:focus-visible::after { display: none; }
 .limop .limit.lower { padding-top: .05em; }
 .limit .side { font-size: .8em; vertical-align: .55em; margin-left: .02em; }
 .dee { font-style: normal; }
-.dsub { font-size: .6em; vertical-align: -.45em; margin-right: .08em; }
+.dsub { font-size: .6em; vertical-align: -.45em; margin-right: .14em; }
 .dsub .n { font-size: inherit; }
 .dorder { font-size: .65em; vertical-align: .6em; margin-left: .02em; }
 .dfrac { margin-right: .16em; }

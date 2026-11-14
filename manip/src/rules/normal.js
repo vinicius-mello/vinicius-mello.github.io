@@ -142,7 +142,7 @@ function flatten(n) {
 export const literal = (a, b) => looseSame(flatten(a), flatten(b));
 
 let notes = [];
-const show = (x) => {
+export const show = (x) => {
   while (x.op === 'Delimiter') x = x.args[0];
   return toAscii(x).replace(/-/g, '−').replace(/\*/g, '·');
 };

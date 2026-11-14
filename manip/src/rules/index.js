@@ -22,7 +22,7 @@ import { dotsForms, dotsZip } from './dotsterm.js';
 import { needsParens } from '../notation.js';
 import { parseInput, NAME_RE } from '../input.js';
 import { toAscii } from '../serialize.js';
-import { matches as same, withNotes, attempt, noted } from './normal.js';
+import { matches as same, withNotes, attempt, noted, show } from './normal.js';
 import { msg } from '../i18n.js';
 import { rewrite, rewriteSuggestion } from './rewrite.js';
 import { DERIVATIVE_RULES, differentiateBy, variableSuggestion, fullDerivative, LIMIT_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
@@ -1726,7 +1726,12 @@ function expandDerivative(ctx) {
   if (!def) return null;
   const x = D.args[0].name;
   const node = tidy(fullDerivative(def, x, ctx.definitions));
-  return { tree: replaceAt(tree, focus, node), label: msg('step.expandD', { name, x }), focus: node.id };
+  // num produto, um produto calculado entra nele (3K²·∂ₓK → 3K²·2x, não 3K²(2x))
+  const parent = focus.length ? getAt(tree, parentPath(focus)) : null;
+  const tree2 = parent?.op === 'Multiply' && node.op === 'Multiply'
+    ? replaceAt(tree, parentPath(focus), withArgs(parent, spliceFlat(parent, lastIndex(focus), [node])))
+    : replaceAt(tree, focus, node);
+  return { tree: tree2, label: msg('step.expandD', { name, x }), focus: findPath(tree2, node.id) ? node.id : parent.id };
 }
 
 // Arruma o que o cálculo deixa: retira os 0 e 1 neutros (0·u, u + 0, 1·u,
@@ -1806,19 +1811,31 @@ function foldName(ctx) {
     for (const v of vars) {
       const dv = tidy(fullDerivative(def, v, defs));
       if (dv.op === 'Number' || (dv.op === 'Negate' && dv.args[0].op === 'Number')) continue;
-      candidates.push({ def: dv, label: `∂${v}${name}`, node: () => ({ ...fn('D', sym(v), chip(name)), partial: true }) });
+      candidates.push({ def: dv, label: partialName(v, name), node: () => ({ ...fn('D', sym(v), chip(name)), partial: true }) });
     }
   }
   // (calcular as derivadas consome anotações: as comparações vêm depois)
   attempt();
   const out = [];
   for (const c of candidates) {
-    let node = null;
-    if (same(expr, c.def)) node = c.node();
-    else if (same(fn('Negate', expr), c.def)) node = fn('Negate', c.node());
-    if (node) out.push({ tree: place2(node), label: noted(msg('step.fold', { name: c.label })), focus: node.id });
+    const label = msg('step.fold', { name: c.label });
+    if (same(expr, c.def)) {
+      const node = c.node();
+      out.push({ tree: place2(node), label: noted(label), focus: node.id });
+    } else if (same(fn('Negate', expr), c.def)) {
+      // sinal trocado: anota a igualdade como o professor a escreveria
+      attempt();
+      const node = fn('Negate', c.node());
+      out.push({ tree: place2(node), label: msg('step.using', { step: label, eq: `${show(expr)} = −(${show(c.def)})` }), focus: node.id });
+    }
   }
   return out;
+}
+
+// ∂ₓK no rótulo: a variável no índice quando há o caractere (senão ∂yK).
+const SUBSCRIPTS = { a: 'ₐ', e: 'ₑ', h: 'ₕ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ', l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ' };
+function partialName(v, name) {
+  return `∂${[...v].every((c) => SUBSCRIPTS[c]) ? [...v].map((c) => SUBSCRIPTS[c]).join('') : v}${name}`;
 }
 
 const NOT_VARIABLES = [IMAGINARY, INFINITY, DOTS, 'e', 'pi'];
