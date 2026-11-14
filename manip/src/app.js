@@ -1230,8 +1230,17 @@ function toggleHelp(tab) {
     b.addEventListener('click', () => toggleHelp(id));
     tabs.append(b);
   }
+  // Manual completo (no idioma atual): a página e o PDF.
+  const link = (textContent, href) => Object.assign(document.createElement('a'), { textContent, href, target: '_blank', rel: 'noopener' });
+  const manual = document.createElement('p');
+  manual.className = 'help-manual';
+  manual.append(
+    link(t('help.manual'), `manual.html?lang=${getLang()}`), ' · ',
+    link(t('help.manualPdf'), getLang() === 'en' ? 'docs/manip-manual-en.pdf' : 'docs/manip-manual.pdf'),
+  );
   helpEl.append(
     Object.assign(document.createElement('h2'), { textContent: t('help.title') }),
+    manual,
     tabs,
     helpTab === 'keys' ? shortcutsPane() : syntaxPane(),
   );

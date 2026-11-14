@@ -971,6 +971,8 @@ kbd { min-width: 1.8em; }
 .syntax td:nth-child(2) code { white-space: nowrap; }
 @media (max-width: 700px) { .syntax th:nth-child(3), .syntax td:nth-child(3) { display: none; } }
 .help-print { display: inline-block; margin-bottom: 14px; font-size: 13px; color: var(--accent); }
+.help-manual { margin: 2px 0 4px; font-size: 14px; color: var(--muted); }
+.help-manual a { color: var(--accent); }
 .help-cols { columns: 3 260px; column-gap: 28px; }
 .help-cols section { break-inside: avoid; margin-bottom: 16px; }
 .help-cols h3 {
