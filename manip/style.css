@@ -380,6 +380,9 @@ body {
 #names { list-style: none; margin: 0; padding: 0; }
 #names li { padding: 6px 20px; cursor: pointer; }
 #names li:hover { background: var(--focus-bg); }
+/* identidade: "Q:" e a equação, na mesma linha */
+#names li.identity { display: flex; align-items: baseline; gap: 6px; }
+#names .identity-name { font: italic 600 15px/1 var(--math, serif); flex: none; }
 
 #history { list-style: none; margin: 0; padding: 0; counter-reset: step; }
 

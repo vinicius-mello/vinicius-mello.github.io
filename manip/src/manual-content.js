@@ -28,6 +28,7 @@ export function runExample(ex, tree = readWith(ex.src, ex.defs)) {
     targets: ex.sel ?? [ex.focus ?? []],
     input: ex.input,
     definitions: definitionsOf(ex.defs),
+    identities: Object.fromEntries(Object.entries(ex.ids ?? {}).map(([k, v]) => [k, parseAscii(v)])),
   };
   const r = rule.all ? rule.all(ctx)[ex.form ?? 0] : rule.run(ctx);
   return { before: tree, result: r };
@@ -231,7 +232,7 @@ export const MANUAL = [
     'Ellipses in sums and products (`a + ... + c`, LaTeX `\\cdots`) are accepted too. Term-by-term operations pass through the `…` (a(b + … + c) = ab + … + ac, ln(a·…·c) = ln a + … + ln c, derivative, integral and limit of f + … + g), and no move separates the `…` from the term next to it. With `m`, the app deduces the general term (1 + 2 + … + n, a₁ + a₂ + … + aₙ, 1 + r + … + rⁿ, 1 + 1/2 + 1/3 + …) and goes to Σ and back, writes one more term or the second-to-last, shows the general term, reverses the order and adds two sequences term by term — Gauss’s sum: 2S = (n + 1) + … + (n + 1) = n(n + 1).',
   )],
 
-  ['h2', L('10. Nomes, definições e derivadas parciais', '10. Names, definitions and partial derivatives')],
+  ['h2', L('10. Nomes, definições, identidades e derivadas parciais', '10. Names, definitions, identities and partial derivatives')],
   ['p', L(
     'Um nome (K, A_1, b_n, X′, X″…) representa uma expressão. Ele aparece na fórmula como um chip colorido e tem a sua própria aba (área de trabalho), onde fica a equação “nome = definição”. A definição atual de um nome é sempre o outro lado dessa equação: se você manipular a equação na aba do nome, a definição muda junto.',
     'A name (K, A_1, b_n, X′, X″…) stands for an expression. It shows up in the formula as a colored chip and has its own tab (workspace) holding the equation “name = definition”. The current definition of a name is always the other side of that equation: if you manipulate the equation in the name’s tab, the definition changes with it.',
@@ -277,7 +278,44 @@ export const MANUAL = [
     [L('Antes de := vem um nome…', 'A name must come before :=…'), L('o lado esquerdo não é uma letra (com subscrito e apóstrofos opcionais), ex.: `2x := 3`, `alpha := 1`', 'the left side is not one letter (optional subscript and primes), e.g. `2x := 3`, `alpha := 1`')],
     [L('K já está definido', 'K is already defined'), L('o nome já tem uma aba', 'the name already has a tab')],
     [L('A definição de M não pode usar M', 'The definition of M cannot use M'), L('definição circular', 'circular definition')],
+    [L('Depois de K := vem uma expressão ou uma igualdade…', 'After K := comes an expression or an equality…'), L('a definição é uma inequação ou um sistema', 'the definition is an inequality or a system')],
   ]],
+
+  ['h3', L('Identidades com nome: Q := A = B', 'Named identities: Q := A = B')],
+  ['p', L(
+    'Uma igualdade também pode ter nome, para ser aplicada depois sempre que aparecer. Há dois jeitos de criar uma identidade:',
+    'An equality can have a name too, so it can be applied later wherever it shows up. There are two ways to create an identity:',
+  )],
+  ['ul', [
+    L('digitar `Q := (a + b)^2 = a^2 + 2a b + b^2` no campo de entrada (o lado direito do `:=` é uma igualdade);', 'type `Q := (a + b)^2 = a^2 + 2a b + b^2` in the input field (the right side of `:=` is an equality);'),
+    L('com o foco numa **equação inteira**, apertar `n` e digitar o nome. A equação continua como está; ela só passa a ser também a identidade Q. Assim dá para deduzir uma identidade na aba Principal e guardá-la.', 'with the focus on a **whole equation**, press `n` and type the name. The equation stays as it is; it just also becomes the identity Q. This way you can derive an identity in the Main tab and keep it.'),
+  ]],
+  ['p', L(
+    'A identidade ganha uma aba (com a equação, que pode ser manipulada: a identidade atual é a equação da aba) e aparece no painel Nomes como “Q: A = B”. Ela não vira chip: Q não representa uma expressão. Um problema novo na aba Principal mantém todas as identidades.',
+    'The identity gets a tab (holding the equation, which can be manipulated: the current identity is the equation in the tab) and shows in the Names panel as “Q: A = B”. It does not become a chip: Q does not stand for an expression. A new problem in the Main tab keeps every identity.',
+  )],
+  ['p', L(
+    'Para aplicar, ponha o foco na expressão e aperte `k`: o app procura, entre as identidades, as que casam com o foco, nos dois sentidos (A → B e B → A). As letras da identidade valem por qualquer subexpressão, e o passo diz o que cada uma valeu:',
+    'To apply one, put the focus on the expression and press `k`: the app looks for identities that match the focus, in both directions (A → B and B → A). The letters of the identity stand for any subexpression, and the step says what each one stood for:',
+  )],
+  ['ex', { rule: 'identity', src: 'y = 2(x + 3)^2', focus: [1, 1], ids: { Q: '(a + b)^2 = a^2 + 2a b + b^2' },
+    note: L('com Q: (a + b)² = a² + 2ab + b², foco em (x + 3)²', 'with Q: (a + b)² = a² + 2ab + b², focus on (x + 3)²') }],
+  ['ex', { rule: 'identity', src: 'y = x^2 + 2x*3 + 3^2', focus: [1], ids: { Q: '(a + b)^2 = a^2 + 2a b + b^2' },
+    note: L('o mesmo Q, da direita para a esquerda', 'the same Q, right to left') }],
+  ['ul', [
+    L('Somas e produtos casam em qualquer ordem, e o molde pode ser só parte dos termos de uma soma maior (os outros termos ficam):', 'Sums and products match in any order, and the pattern may be just some of the terms of a larger sum (the other terms stay):'),
+  ]],
+  ['ex', { rule: 'identity', src: 'y = cos(2t)^2 + 1 + sin(2t)^2', focus: [1], ids: { S: 'sin(x)^2 + cos(x)^2 = 1' },
+    note: L('com S: sen²x + cos²x = 1', 'with S: sin²x + cos²x = 1') }],
+  ['ul', [
+    L('Se mais de uma identidade (ou os dois sentidos) se aplica, `k` aplica a primeira e, repetida logo em seguida, troca pela próxima. No menu (Enter), cada uma aparece com o seu nome, e a busca (`/`) acha pelo nome: `/Q`.', 'If more than one identity (or both directions) applies, `k` applies the first and, pressed again right away, switches to the next. In the menu (Enter), each one shows with its name, and search (`/`) finds it by name: `/Q`.'),
+    L('As letras casam pela forma escrita, não pelo valor: (a + b)² casa com (x + 3)² mas não com x² + 6x + 9 lido como a² + 2ab + b² (o 9 não está escrito como 3²). Escreva antes a forma que a identidade espera.', 'Letters match the written form, not the value: (a + b)² matches (x + 3)², but x² + 6x + 9 does not match a² + 2ab + b² (the 9 is not written as 3²). Write the form the identity expects first.'),
+    L('Uma letra que só aparece do outro lado fica como está: aplicar S da direita para a esquerda num 1 dá sen²x + cos²x.', 'A letter that appears only on the other side stays as it is: applying S right to left to a 1 gives sin²x + cos²x.'),
+    L('Uma igualdade que **não** é identidade (por exemplo `H := x + y = 3`, um dado do problema) também pode ter nome. O app confere numericamente: se os dois lados não são iguais para todo valor, as letras ficam fixas, e aplicar H só troca x + y por 3 (e vice-versa) onde x + y aparece.', 'An equality that is **not** an identity (for instance `H := x + y = 3`, a given of the problem) can have a name too. The app checks numerically: if the two sides are not equal for every value, the letters stay fixed, and applying H only replaces x + y with 3 (and back) where x + y shows up.'),
+    L('Fechar a aba da identidade (Shift+X ou ×) a apaga.', 'Closing the identity’s tab (Shift+X or ×) deletes it.'),
+  ]],
+  ['ex', { rule: 'identity', src: 'z = 2(y + x)', focus: [1, 1], ids: { H: 'x + y = 3' },
+    note: L('com H: x + y = 3 (não é identidade)', 'with H: x + y = 3 (not an identity)') }],
 
   ['h3', L('Derivada parcial', 'Partial derivative')],
   ['h4', L('Notação', 'Notation')],

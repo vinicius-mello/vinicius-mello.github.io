@@ -25,6 +25,7 @@ import { toAscii } from '../serialize.js';
 import { matches as same, withNotes, attempt, noted, show } from './normal.js';
 import { msg } from '../i18n.js';
 import { rewrite, rewriteSuggestion } from './rewrite.js';
+import { applyIdentities } from './identity.js';
 import { DERIVATIVE_RULES, differentiateBy, variableSuggestion, fullDerivative, LIMIT_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
@@ -1703,8 +1704,10 @@ function nameIt(ctx) {
   const { tree, targets } = ctx;
   if (targets.length !== 1) return null;
   const name = (ctx.input ?? '').trim().replace(/[′’]/g, "'");
-  if (!NAME_RE.test(name) || ctx.definitions?.[name]) return null;
+  if (!NAME_RE.test(name) || ctx.definitions?.[name] || ctx.identities?.[name]) return null;
   const n = getAt(tree, targets[0]);
+  // uma equação inteira vira uma identidade com nome (a equação fica)
+  if (n.op === 'Equal') return { label: msg('step.nameIdentity', { name }), action: { type: 'identity', name, eq: n } };
   if (isRelation(n.op) || n.op === 'System' || isNamed(n)) return null;
   const chip = { ...sym(name), named: true };
   return {
@@ -1950,9 +1953,14 @@ export const RULES = [
   {
     id: 'name', key: 'n', group: 'names', run: nameIt,
     input: true,
-    available: (ctx) => ctx.targets.length === 1 && !isRelation(getAt(ctx.tree, ctx.targets[0]).op)
-      && getAt(ctx.tree, ctx.targets[0]).op !== 'System',
+    available: (ctx) => {
+      if (ctx.targets.length !== 1) return false;
+      const { op } = getAt(ctx.tree, ctx.targets[0]);
+      return op === 'Equal' || (!isRelation(op) && op !== 'System');
+    },
   },
+  // k: aplica uma identidade com nome (Q := A = B), nos dois sentidos
+  { id: 'identity', key: 'k', group: 'names', labelled: true, ...either(applyIdentities) },
   { id: 'open', key: 'w', group: 'names', run: openName },
 ];
 

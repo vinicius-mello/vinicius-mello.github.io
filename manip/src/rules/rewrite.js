@@ -73,7 +73,7 @@ const fmtNum = (v) => {
 const fmtPoint = (env) => Object.entries(env).map(([k, v]) => `${k === IMAGINARY ? 'i' : k} = ${fmtNum(v)}`).join(', ') || '—';
 
 // 'ok', 'unchecked' ou { error, params }.
-function sameValue(a, b) {
+export function sameValue(a, b) {
   [a, b] = [forCheck(a), forCheck(b)];
   if (!a || !b) return 'unchecked';
   const pts = pointsFor(variables(a, b), integerNames(a, b));

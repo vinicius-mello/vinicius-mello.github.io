@@ -75,7 +75,28 @@ function newWorkspace(id, title, tree, label, extra = {}) {
   return { id, title, history: h, ...extra };
 }
 
-const nameSpaces = () => workspaces.slice(1);
+// Abas além da Principal: nomes (K = definição) e identidades (Q: A = B).
+const tabSpaces = () => workspaces.slice(1);
+const nameSpaces = () => tabSpaces().filter((w) => !w.identity);
+const identitySpaces = () => tabSpaces().filter((w) => w.identity);
+
+// Identidade atual: a equação da aba (se ainda for uma igualdade).
+function identities() {
+  const out = {};
+  for (const w of identitySpaces()) {
+    const t = w.history.current.tree;
+    out[w.id] = t.op === 'Equal' ? t : w.def;
+  }
+  return out;
+}
+
+// Nova identidade com nome (Q := A = B, ou n numa equação inteira).
+function defineIdentity(name, eq) {
+  if (definitions()[name] || identities()[name]) return { error: 'err.nameTaken', params: { name } };
+  const color = tabSpaces().length % COLORS;
+  workspaces.push(newWorkspace(name, name, cloneFresh(eq), msg('step.definition'), { def: cloneFresh(eq), color, identity: true }));
+  return { index: workspaces.length - 1 };
+}
 const isSymbolNamed = (n, name) => n.op === 'Symbol' && n.name === name;
 
 // Definição atual de cada nome: o lado da equação que não é o próprio nome.
@@ -93,7 +114,7 @@ function definitions() {
 const chip = (name, color) => ({ ...sym(name), named: true, color });
 
 function define({ name, def, chipId }, tree) {
-  const color = nameSpaces().length % COLORS;
+  const color = tabSpaces().length % COLORS;
   const path = findPath(tree, chipId);
   const tree2 = replaceAt(tree, path, { ...getAt(tree, path), color });
   const eq = fn('Equal', chip(name, color), cloneFresh(def));
@@ -104,10 +125,12 @@ function define({ name, def, chipId }, tree) {
 // Definição auxiliar digitada (K := ...): nova aba "K = definição".
 function defineTyped(name, def) {
   def = withChips(def);
+  if (def.op === 'Equal') return defineIdentity(name, def);
+  if (isRelation(def.op) || def.op === 'System') return { error: 'err.defRelation', params: { name } };
   const defs = definitions();
-  if (defs[name]) return { error: 'err.nameTaken', params: { name } };
+  if (defs[name] || identities()[name]) return { error: 'err.nameTaken', params: { name } };
   if (reaches(def, name, defs)) return { error: 'err.nameCycle', params: { name } };
-  const color = nameSpaces().length % COLORS;
+  const color = tabSpaces().length % COLORS;
   workspaces.push(newWorkspace(name, name, fn('Equal', chip(name, color), def), msg('step.definition'), { def: cloneFresh(def), color }));
   return { index: workspaces.length - 1 };
 }
@@ -159,7 +182,7 @@ function closeTab(i) {
     walk(tree, (n) => { if (n.op === 'Symbol' && n.name === w.id) hit = true; });
     return hit;
   };
-  const users = workspaces.filter((o, j) => j !== i && uses(o.history.current.tree));
+  const users = w.identity ? [] : workspaces.filter((o, j) => j !== i && uses(o.history.current.tree));
   if (users.length) {
     toast(t('toast.nameInUse', { name: w.id, where: users.map((o) => (o.id === 'main' ? t('tab.main') : o.title)).join(', ') }));
     return bump();
@@ -423,10 +446,15 @@ function drawTabs() {
 
 function drawNames() {
   const defs = definitions();
-  namesPanel.hidden = !nameSpaces().length;
-  namesList.replaceChildren(...nameSpaces().map((w) => {
+  const ids = identities();
+  namesPanel.hidden = !tabSpaces().length;
+  namesList.replaceChildren(...tabSpaces().map((w) => {
     const li = document.createElement('li');
-    li.append(staticFormula(fn('Equal', chip(w.id, w.color), defs[w.id])));
+    if (w.identity) {
+      // Q: A = B (o nome como rótulo, na cor da aba)
+      li.className = 'identity';
+      li.append(Object.assign(document.createElement('span'), { className: 'identity-name c' + w.color, textContent: w.id + ':' }), staticFormula(ids[w.id]));
+    } else li.append(staticFormula(fn('Equal', chip(w.id, w.color), defs[w.id])));
     li.title = t('names.open', { name: w.id });
     li.addEventListener('click', () => { switchTo(workspaces.indexOf(w)); stage.focus(); });
     return li;
@@ -602,7 +630,7 @@ function load(text) {
     input.value = toAscii(state().tree);
   } else if (active === 0) {
     const used = namesUsed(tree);
-    workspaces = [newWorkspace('main', 'Principal', tree, msg('step.input')), ...nameSpaces().filter((w) => used.has(w.id))];
+    workspaces = [newWorkspace('main', 'Principal', tree, msg('step.input')), ...tabSpaces().filter((w) => w.identity || used.has(w.id))];
   } else {
     history().push({ tree, focusId: (tree.args?.[0] ?? tree).id, label: msg('step.input') });
   }
@@ -620,7 +648,9 @@ const plain = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCa
 function filterMenu() {
   const q = plain(menu.query ?? '');
   menu.items = q
-    ? menu.all.filter(({ rule }) => plain(t(`rule.${rule.id}`)).includes(q) || plain(t(`group.${rule.group}`)).includes(q))
+    ? menu.all.filter(({ rule, result }) => plain(t(`rule.${rule.id}`)).includes(q) || plain(t(`group.${rule.group}`)).includes(q)
+      // o rótulo da forma também conta: "/Q" acha "aplicou Q"
+      || (result?.label && plain(fmt(result.label)).includes(q)))
     : menu.all;
   menu.index = Math.min(menu.index, Math.max(0, menu.items.length - 1));
 }
@@ -632,7 +662,7 @@ function ruleContext(text) {
     .map((id) => findPath(tree, id))
     .filter(Boolean)
     .sort((a, b) => (a.join() < b.join() ? -1 : 1));
-  return { tree, focus, targets: targets.length ? targets : [focus], input: text, definitions: definitions() };
+  return { tree, focus, targets: targets.length ? targets : [focus], input: text, definitions: definitions(), identities: identities() };
 }
 
 // Nota do passo atual (tecla O): Enter salva, Shift+Enter quebra a linha,
@@ -708,7 +738,7 @@ function drawMenu() {
     const k = document.createElement('kbd');
     k.textContent = rule.key ?? '·';
     // Equivalência com mais de uma forma aqui: cada uma diz o que faz.
-    li.append(k, alt ? capitalize(fmt(result.label)) : t(`rule.${rule.id}`));
+    li.append(k, alt || rule.labelled ? capitalize(fmt(result.label)) : t(`rule.${rule.id}`));
     li.addEventListener('mousemove', () => {
       if (menu.index !== i && !menu.input) { menu.index = i; drawMenu(); }
     });
@@ -802,6 +832,7 @@ function updateInputPreview(box, text) {
   const r = text.trim() ? rule.run(ruleContext(text)) : null;
   if (r?.tree) box.append(staticFormula(r.tree));
   else if (r?.error) box.append(Object.assign(hintEl(t(r.error, r.params)), { className: 'hint warn' }));
+  else if (r?.label) box.append(hintEl(capitalize(fmt(r.label))));
   else box.append(hintEl(t(`rule.${rule.id}.hint`)));
   box.querySelectorAll('.formula.mini').forEach((f) => fit(f, 320));
 }
@@ -837,6 +868,12 @@ function choose(i) {
 function applyResult(r) {
   if (r.action?.type === 'open') {
     switchTo(workspaces.findIndex((w) => w.id === r.action.name));
+    return;
+  }
+  if (r.action?.type === 'identity') {
+    const d = defineIdentity(r.action.name, r.action.eq);
+    if (d.error) toast(t(d.error, d.params));
+    else { refresh(false); toast(t('toast.identity', { name: r.action.name })); }
     return;
   }
   let tree = r.tree;
@@ -890,6 +927,7 @@ function serialize() {
       title: w.title,
       color: w.color,
       def: w.def,
+      identity: w.identity || undefined,
       index: w.history.index,
       steps: w.history.steps.map((s) => ({ tree: s.tree, label: s.label, note: s.note, arc: s.arc, hints: s.hints })),
     })),
@@ -909,7 +947,7 @@ function deserialize(data) {
     h.goto(w.index);
     const def = w.def && (w.def.id ? w.def : cloneFresh(w.def));
     if (def) reserveIds(def);
-    return { id: w.id, title: w.title, color: w.color, def, history: h };
+    return { id: w.id, title: w.title, color: w.color, def, identity: !!w.identity, history: h };
   });
   active = Math.min(data.active ?? 0, workspaces.length - 1);
   selected.clear();

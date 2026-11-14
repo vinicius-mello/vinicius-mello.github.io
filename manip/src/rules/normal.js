@@ -130,7 +130,7 @@ export const equivalent = (a, b) => keyOf(a) === keyOf(b);
 
 // Achata somas dentro de somas e produtos dentro de produtos, sem parênteses:
 // ((n + 1) − (k + 1)) − 1 e (n + 1) − (k + 1) − 1 são a mesma expressão.
-function flatten(n) {
+export function flatten(n) {
   while (n.op === 'Delimiter') n = n.args[0];
   if (!n.args) return n;
   const args = n.args.map(flatten);

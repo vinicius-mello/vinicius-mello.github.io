@@ -46,7 +46,7 @@ export const EXAMPLES = {
   subeq: { src: 'x + y = 3; x - y = 1', focus: [1], sel: [[0], [1]] },
   substsys: { src: 'y = 2x + 1; x + y = 7', focus: [0] },
   name: { src: '2(x + 1) = y', focus: [0, 1], input: 'K' },
-  // expand, fold e open dependem de um nome já definido: sem exemplo.
+  // expand, fold, open e identity dependem de um nome já definido: sem exemplo.
 };
 
 // Monta o contexto de uma regra a partir do exemplo.
