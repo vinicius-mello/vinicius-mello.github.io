@@ -2,7 +2,7 @@
 // \cdot, \times, \div, \left( \right), letras gregas e funções (\sin, \ln…).
 // Só divide em tokens; a gramática é a mesma do ASCII (parser.js).
 
-import { FUNCTIONS, GREEK, IMAGINARY, INFINITY, DOTS } from './ast.js';
+import { FUNCTIONS, GREEK, IMAGINARY, INFINITY, DOTS, PARTIAL } from './ast.js';
 import { parseTokens, ParseError } from './parser.js';
 import { RELATION_INPUT } from './relations.js';
 
@@ -39,6 +39,13 @@ function tokenize(src) {
     const rest = src.slice(i);
     if ((m = /^\\left\s*\./.exec(rest))) { evals++; push('evopen', i); i += m[0].length; continue; }
     if (evals && (m = /^\\(right|[bB]igg?)\s*\|/.exec(rest))) { evals--; push('evclose', i); i += m[0].length; continue; }
+    // \partial_x f, \partial_{x_1} f: derivada parcial; \partial solto, dentro de \frac
+    if ((m = /^\\partial(?![A-Za-z])\s*(?:_\s*(?:\{\s*([A-Za-z](?:_\{?[A-Za-z0-9]+\}?)?)\s*\}|([A-Za-z])))?/.exec(rest))) {
+      const v = (m[1] ?? m[2])?.replace(/[{}]/g, '');
+      toks.push(v ? { t: 'deriv', v, order: 1, partial: true, pos: i } : { t: 'id', v: PARTIAL, pos: i, end: i + m[0].length });
+      i += m[0].length;
+      continue;
+    }
     if ((m = /^\\(mathrm|operatorname)\s*\{\s*d\s*\}/.exec(rest))) { toks.push({ t: 'id', v: 'd', pos: i, end: i + m[0].length }); i += m[0].length; continue; }
     if ((m = /^(\^\s*\{\s*((\\prime\s*)+)\}|')/.exec(rest)) && toks[toks.length - 1]?.t === 'id') {
       const last = toks[toks.length - 1];

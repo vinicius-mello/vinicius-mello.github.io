@@ -24,6 +24,7 @@ export function toMathJson(n) {
     }
     case 'D': {
       const [x, f] = n.args.map(toMathJson);
+      if (n.partial) return ['PartialDerivative', f, x];
       return ['D', f, ...Array(n.order ?? 1).fill(x)];
     }
     case 'Integrate': {
@@ -58,6 +59,10 @@ export function fromMathJson(j) {
       const [body, x] = Array.isArray(f) && f[0] === 'Function' ? [f[1], f[2]] : [f, 'x'];
       const node = fn('Limit', fromMathJson(x), fromMathJson(a), fromMathJson(body));
       return dir === 'Right' || dir === 'Left' ? { ...node, dir: dir === 'Right' ? '+' : '-' } : node;
+    }
+    if (op === 'PartialDerivative') {
+      const [f, x] = args;
+      return { ...fn('D', fromMathJson(x), fromMathJson(f)), partial: true };
     }
     if (op === 'D') {
       const [f, x, ...more] = args;

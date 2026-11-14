@@ -67,8 +67,9 @@ export function reserveIds(n) {
 
 // Atributos que fazem parte do significado de um nó (além dos argumentos):
 // nome e linhas de f'(x), lado de um limite, ordem de uma derivada.
-export const sameTag = (a, b) => a.name === b.name && a.primes === b.primes && a.dir === b.dir && a.order === b.order;
-export const tagOf = (n) => [n.name, n.primes, n.dir, n.order].map((x) => x ?? '').join('|');
+export const sameTag = (a, b) => a.name === b.name && a.primes === b.primes && a.dir === b.dir && a.order === b.order
+  && !a.partial === !b.partial;
+export const tagOf = (n) => [n.name, n.primes, n.dir, n.order, n.partial ? '∂' : ''].map((x) => x ?? '').join('|');
 
 // Igualdade estrutural (ignora ids e propriedades visuais).
 export function same(a, b) {
@@ -110,6 +111,8 @@ export const isInfinity = (n) => n.op === 'Symbol' && n.name === INFINITY;
 // Reticências dentro de uma soma ou produto: a + … + c, a·…·c. É um átomo
 // opaco: as operações termo a termo passam pelos termos explícitos e o … fica.
 export const DOTS = 'ContinuationPlaceholder';
+// ∂ solto (só aparece durante a leitura de \frac{\partial}{\partial x}).
+export const PARTIAL = 'PartialSymbol';
 export const isDots = (n) => n.op === 'Symbol' && n.name === DOTS;
 export const hasDots = (n) => (n.args ?? []).some((c) => isDots(c) || (c.op === 'Negate' && isDots(c.args[0])));
 export const isCalculus = (n) => n.op === 'Limit' || n.op === 'D' || n.op === 'Integrate' || n.op === 'EvalAt';

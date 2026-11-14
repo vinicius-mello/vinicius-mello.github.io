@@ -19,6 +19,9 @@ function tokenize(src) {
     if ((m = /^d(?:\^(\d+))?\/d([A-Za-z])(?:\^(\d+))?(?![A-Za-z])/.exec(rest)) && m[1] === m[3]) {
       // d/dx, d^2/dx^2
       toks.push({ t: 'deriv', v: m[2], order: Number(m[1] ?? 1), pos: i });
+    } else if ((m = /^(?:partial|∂)(?:_(?:([A-Za-z])(?![A-Za-z0-9_(])|\(([A-Za-z](?:_[A-Za-z0-9]+)?)\))|\s*\/\s*(?:partial|∂)\s*([A-Za-z])(?![A-Za-z0-9_]))/.exec(rest))) {
+      // derivada parcial: partial_x, ∂_x, partial_(x_1), ∂/∂x
+      toks.push({ t: 'deriv', v: m[1] ?? m[2] ?? m[3], order: 1, partial: true, pos: i });
     } else if ((m = /^(\.\.\.|…|⋯)/.exec(rest))) {
       toks.push({ t: 'id', v: DOTS, pos: i, end: i + m[0].length });
     } else if ((m = /^(->|→)/.exec(rest))) {

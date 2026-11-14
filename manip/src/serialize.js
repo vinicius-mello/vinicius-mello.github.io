@@ -1,7 +1,7 @@
 // Serialização da árvore para ASCII (reeditar no campo de entrada) e LaTeX.
 
 import { FUNCTION_NAMES, GREEK, IMAGINARY, INFINITY, DOTS, sameTag } from './ast.js';
-import { needsParens, needsDot, isFunctionPower, simpleBase } from './notation.js';
+import { needsParens, needsDot, isFunctionPower, simpleBase, compactPartial } from './notation.js';
 import { ASCII_RELATIONS, LATEX_RELATIONS, isRelation } from './relations.js';
 import { parseAscii } from './parse-ascii.js';
 
@@ -65,6 +65,7 @@ export function toAscii(n) {
     }
     case 'D': {
       const [x, f] = n.args;
+      if (n.partial) return `partial_${x.name.includes('_') ? `(${x.name})` : x.name} ${sub(f, 1)}`;
       const o = orderOf(n) > 1 ? '^' + orderOf(n) : '';
       return `d${o}/d${toAscii(x)}${o} ${sub(f, 1)}`;
     }
@@ -135,6 +136,9 @@ export function toLatex(n) {
     }
     case 'D': {
       const [x, f] = n.args;
+      if (n.partial) {
+        return compactPartial(n) ? `\\partial_{${toLatex(x)}} ${toLatex(f)}` : `\\frac{\\partial}{\\partial ${toLatex(x)}} ${sub(f, 1)}`;
+      }
       const o = orderOf(n) > 1 ? `^{${orderOf(n)}}` : '';
       return `\\frac{\\mathrm{d}${o}}{\\mathrm{d}${toLatex(x)}${o}} ${sub(f, 1)}`;
     }

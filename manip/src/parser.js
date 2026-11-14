@@ -15,7 +15,7 @@
 // Parênteses digitados viram Delimiter, exceto onde a notação já mostra o
 // agrupamento (numerador/denominador, expoente, argumento de função).
 
-import { num, sym, fn, call, walk, FUNCTION_LETTERS, INFINITY, IMAGINARY, DOTS } from './ast.js';
+import { num, sym, fn, call, walk, FUNCTION_LETTERS, INFINITY, IMAGINARY, DOTS, PARTIAL } from './ast.js';
 
 // A mensagem é uma chave de i18n.js (com parâmetros), traduzida na hora de
 // mostrar.
@@ -32,9 +32,12 @@ const unwrap = (n) => (n.op === 'Delimiter' ? n.args[0] : n);
 const ARITY = { Root: 2, Binomial: 2 };
 const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|', 'big', 'binom', 'lim', 'deriv', 'int', 'evopen']);
 
-// d/dx escrito como fração: \frac{d}{dx}, \frac{d^2}{dx^2}. Devolve a variável e a ordem.
+// d/dx escrito como fração: \frac{d}{dx}, \frac{d^2}{dx^2}, \frac{\partial}{\partial x}.
+// Devolve a variável, a ordem e se é parcial.
 function derivFrac(a, b) {
-  const isD = (x) => x.op === 'Symbol' && x.name === 'd';
+  const head = a.op === 'Multiply' ? a.args[0] : a;
+  const partial = [head, head.args?.[0]].some((x) => x?.op === 'Symbol' && x.name === PARTIAL);
+  const isD = (x) => x.op === 'Symbol' && x.name === (partial ? PARTIAL : 'd');
   // dy/dx, d²y/dx²: a função vem no numerador.
   let body = null;
   if (a.op === 'Multiply' && a.args.length >= 2 && (isD(a.args[0]) || (a.args[0].op === 'Power' && isD(a.args[0].args[0])))) {
@@ -47,7 +50,7 @@ function derivFrac(a, b) {
   if (!top || b.op !== 'Multiply' || b.args.length !== 2 || !isD(b.args[0])) return null;
   const v = b.args[1].op === 'Power' ? b.args[1].args[0] : b.args[1];
   if (v.op !== 'Symbol' || order(b.args[1]) !== top) return null;
-  return { v: v.name, order: top, body };
+  return { v: v.name, order: top, body, partial };
 }
 
 // Variável de [F]_a^b quando não foi escrita: a única letra de F (ou x).
@@ -193,6 +196,7 @@ export function parseTokens(toks) {
       }
       case 'deriv': {
         const node = fn('D', sym(tok.v), unwrap(term()));
+        if (tok.partial) node.partial = true;
         return tok.order > 1 ? { ...node, order: tok.order } : node;
       }
       case 'int': {
@@ -268,6 +272,7 @@ export function parseTokens(toks) {
         const d = derivFrac(a, b);
         if (d) {
           const node = fn('D', sym(d.v), d.body ?? unwrap(term()));
+          if (d.partial) node.partial = true;
           return d.order > 1 ? { ...node, order: d.order } : node;
         }
         return fn('Divide', a, b);

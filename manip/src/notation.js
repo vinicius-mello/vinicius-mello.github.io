@@ -6,6 +6,9 @@ import { isLeaf, FUNCTION_NAMES, isBigOp, isDots } from './ast.js';
 // lim, d/dx e Σ engolem os fatores à direita: no meio de um produto vão entre parênteses.
 const greedy = (n) => isBigOp(n) || n.op === 'Limit' || n.op === 'D';
 
+// ∂ₓN: a derivada parcial de um nome (ou de um símbolo) leva a variável no índice.
+export const compactPartial = (n) => n.op === 'D' && n.partial && n.args[1].op === 'Symbol';
+
 const OWN_NOTATION = new Set(['Sqrt', 'Root', 'Abs', 'Conjugate', 'Binomial']);
 // Funções escritas sempre com parênteses: Re(z), Im(z), arg(z).
 const ALWAYS_PARENS = new Set(['Real', 'Imaginary', 'Argument']);

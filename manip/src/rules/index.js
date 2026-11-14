@@ -25,7 +25,7 @@ import { toAscii } from '../serialize.js';
 import { matches as same, withNotes } from './normal.js';
 import { msg } from '../i18n.js';
 import { rewrite, rewriteSuggestion } from './rewrite.js';
-import { DERIVATIVE_RULES, LIMIT_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
+import { DERIVATIVE_RULES, differentiateBy, variableSuggestion, fullDerivative, LIMIT_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
 import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } from '../relations.js';
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
@@ -1715,7 +1715,52 @@ function nameIt(ctx) {
   };
 }
 
+// ∂ₓN → a derivada da definição de N, já calculada (com 0 e 1 neutros
+// retirados); com o foco no próprio N, só a definição: ∂/∂x(definição).
+function expandDerivative(ctx) {
+  const { tree, focus } = ctx;
+  const D = getAt(tree, focus);
+  if (D.op !== 'D' || !D.partial || !isNamed(D.args[1])) return null;
+  const { name } = D.args[1];
+  const def = ctx.definitions?.[name];
+  if (!def) return null;
+  const x = D.args[0].name;
+  const node = tidy(fullDerivative(def, x, ctx.definitions));
+  return { tree: replaceAt(tree, focus, node), label: msg('step.expandD', { name, x }), focus: node.id };
+}
+
+// Arruma o que o cálculo deixa: retira os 0 e 1 neutros (0·u, u + 0, 1·u,
+// u¹...), desfaz produtos dentro de produtos e põe os números na frente e
+// as letras em ordem alfabética (y·(2x) → 2xy).
+function tidy(tree) {
+  for (let guard = 0; guard < 500; guard++) {
+    const paths = [];
+    walk(tree, (n, p) => paths.push(p));
+    let r = null;
+    for (const p of paths.reverse()) {
+      r = neutral({ tree, focus: p, targets: [p] });
+      if (r?.tree) break;
+    }
+    if (!r?.tree) break;
+    tree = r.tree;
+  }
+  return products(tree);
+}
+
+function products(n) {
+  if (!n.args) return n;
+  const args = n.args.map(products);
+  if (n.op !== 'Multiply') return withArgs(n, args);
+  const flat = args.flatMap((a) => (a.op === 'Multiply' ? a.args : [a]));
+  // letra ou potência de letra: ordenada pelo nome; o resto fica no fim, na ordem
+  const letter = (a) => (a.op === 'Symbol' && !a.named ? a.name : a.op === 'Power' && a.args[0].op === 'Symbol' && !a.args[0].named ? a.args[0].name : null);
+  const letters = flat.filter((a) => a.op !== 'Number' && letter(a) !== null).sort((a, b) => (letter(a) < letter(b) ? -1 : letter(a) > letter(b) ? 1 : 0));
+  return withArgs(n, [...flat.filter((a) => a.op === 'Number'), ...letters, ...flat.filter((a) => a.op !== 'Number' && letter(a) === null)]);
+}
+
 function expandName(ctx) {
+  const d = expandDerivative(ctx);
+  if (d) return d;
   const { tree, focus } = ctx;
   const n = getAt(tree, focus);
   const def = isNamed(n) && ctx.definitions?.[n.name];
@@ -1796,6 +1841,13 @@ export const RULES = [
   { id: 'factorial', key: '!', group: 'sums', ...either(...COMBINATORICS_RULES) },
   { id: 'sums', key: 'm', group: 'sums', ...either(sumForms, dotsForms, dotsZip) },
   { id: 'derivs', key: "'", group: 'calculus', ...either(...DERIVATIVE_RULES) },
+  // ': fora de uma derivada, pede a variável e deriva (os dois membros).
+  {
+    id: 'diff', key: "'", group: 'calculus', run: differentiateBy,
+    input: true,
+    suggest: variableSuggestion,
+    available: (ctx) => ctx.tree.op !== 'System' || !!relationAt(ctx.tree, ctx.focus),
+  },
   { id: 'limits', key: 'a', group: 'calculus', ...either(...LIMIT_RULES) },
   // u: as formas da integral; sem nenhuma, pede a substituição (por partes
   // e as formas da integral definida ficam depois, no menu ou repetindo u).

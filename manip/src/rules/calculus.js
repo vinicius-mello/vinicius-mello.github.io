@@ -2,12 +2,12 @@
 // Como as demais, cada regra tira uma camada por vez: a regra da cadeia
 // deixa d/dx(u) por fazer, e nada é calculado sozinho.
 //
-// Nós (ast.js): D(x, f) com order · Integrate(x, f) e Integrate(x, a, b, f)
+// Nós (ast.js): D(x, f) com order e partial (∂/∂x) · Integrate(x, f) e Integrate(x, a, b, f)
 // · Limit(x, a, f) com dir · EvalAt(x, a, b, F) · Call (f(x), f'(x)).
 
-import { getAt, replaceAt, fn, num, sym, call, walk, INFINITY, DOTS } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym, call, walk, INFINITY, DOTS, IMAGINARY } from '../ast.js';
 import { msg } from '../i18n.js';
-import { isRelation } from '../relations.js';
+import { isRelation, relationAt } from '../relations.js';
 import { parseInput } from '../input.js';
 import { parseAscii } from '../parse-ascii.js';
 import { toAscii } from '../serialize.js';
@@ -64,6 +64,26 @@ const DERIVATIVES = {
 // d/dx de uma subexpressão, por fazer (ou null se ela é o próprio x).
 const inner = (x, u) => (isVar(u, x) ? null : deriv(x, copy(u)));
 
+// Não depende de x, nem diretamente nem por meio dos nomes que usa.
+export function freeOfDefs(n, x, defs = {}, seen = new Set()) {
+  if (!freeOf(n, x)) return false;
+  let free = true;
+  walk(n, (s) => {
+    if (!free || s.op !== 'Symbol' || !defs[s.name] || seen.has(s.name)) return;
+    seen.add(s.name);
+    if (!freeOfDefs(defs[s.name], x, defs, seen)) free = false;
+  });
+  return free;
+}
+
+// As derivadas que uma regra cria dentro de uma ∂/∂x também são parciais.
+function markPartial(node, x, old) {
+  walk(node, (n) => {
+    if (n.op === 'D' && !old.has(n.id) && n.args[0].name === x) n.partial = true;
+  });
+  return node;
+}
+
 // Formas de d/dx f, conforme a forma de f (a primeira é a mais natural).
 function derivForms(ctx) {
   const p = calcAt(ctx, 'D');
@@ -74,7 +94,15 @@ function derivForms(ctx) {
   const x = xs.name;
   const f = unparen(body);
   const out = [];
-  const add = (node, key, params) => out.push(done(tree, p, node, key, params));
+  const old = new Set();
+  walk(D, (n) => old.add(n.id));
+  const add = (node, key, params) => out.push({
+    ...done(tree, p, D.partial ? markPartial(node, x, old) : node, key, params), form: key,
+  });
+  // Os nomes dependem de x pela definição; ∂ₓK de um nome que depende de x
+  // fica como está (calcula-se ao expandir).
+  const freeOf = (n) => freeOfDefs(n, x, ctx.definitions);
+  if (f.op === 'Symbol' && f.name !== x && !freeOf(f)) return out;
 
   // dⁿ/dxⁿ f = d/dx(dⁿ⁻¹/dxⁿ⁻¹ f) · f″(x)
   if ((D.order ?? 1) > 1) {
@@ -196,6 +224,63 @@ function derivJoin(ctx) {
 }
 
 export const DERIVATIVE_RULES = [derivForms, leibniz, derivJoin];
+
+const NOT_VARIABLES = [IMAGINARY, INFINITY, DOTS, 'e', 'pi'];
+
+// Derivar parcialmente em relação a uma variável (digitada): numa equação,
+// os dois membros (A = B → ∂ₓA = ∂ₓB); fora de uma relação, a expressão toda.
+export function differentiateBy(ctx) {
+  const x = parseVariable(ctx.input);
+  if (!x) return null;
+  const { tree, focus } = ctx;
+  const d = (f) => ({ ...deriv(x, f), partial: true });
+  const r = relationAt(tree, focus);
+  if (r) {
+    if (r.rel.op !== 'Equal') return { error: 'err.diffRelation' };
+    const node = withArgs(r.rel, r.rel.args.map(d));
+    return { tree: replaceAt(tree, r.rp, node), label: label('step.diffBoth', { x }), focus: node.args[0].id };
+  }
+  if (tree.op === 'System') return null;
+  const node = d(tree);
+  return { tree: node, label: label('step.diff', { x }), focus: node.id };
+}
+
+function parseVariable(text) {
+  try {
+    const v = parseInput((text ?? '').trim());
+    return v.op === 'Symbol' && !NOT_VARIABLES.includes(v.name) ? v.name : null;
+  } catch {
+    return null;
+  }
+}
+
+// Sugestão: x, se aparece; senão, a primeira variável da expressão.
+export function variableSuggestion(ctx) {
+  const names = [];
+  walk(ctx.tree, (n) => {
+    if (n.op === 'Symbol' && !n.named && !ctx.definitions?.[n.name] && !NOT_VARIABLES.includes(n.name)) names.push(n.name);
+  });
+  return names.includes('x') ? 'x' : names[0] ?? 'x';
+}
+
+// ∂ₓf calculada até o fim: em cada derivada que sobrou, da mais interna
+// para fora, a forma mais natural (nunca a definição por limite), até não
+// sobrar nenhuma que se resolva; as dos nomes (∂ₓN) ficam. Usada ao expandir ∂ₓN.
+export function fullDerivative(f, x, definitions) {
+  let tree = { ...deriv(x, copy(f)), partial: true };
+  for (let guard = 0; guard < 500; guard++) {
+    const ds = [];
+    walk(tree, (n, p) => { if (n.op === 'D') ds.push(p); });
+    let next = null;
+    for (const p of ds.reverse()) {
+      next = derivForms({ tree, focus: p, targets: [p], definitions }).find((r) => r.form !== 'step.dDef');
+      if (next) break;
+    }
+    if (!next) break;
+    tree = next.tree;
+  }
+  return tree;
+}
 
 // ------------------------------------------------- avaliação aproximada
 //

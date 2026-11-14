@@ -5,7 +5,7 @@
 // acompanhar cada pedaço entre dois estados.
 
 import { GREEK, FUNCTION_NAMES, IMAGINARY, INFINITY, DOTS } from './ast.js';
-import { needsParens, needsDot, isFunctionPower, simpleBase } from './notation.js';
+import { needsParens, needsDot, isFunctionPower, simpleBase, compactPartial } from './notation.js';
 import { functionLabel } from './i18n.js';
 import { RELATIONS } from './relations.js';
 
@@ -211,12 +211,18 @@ export function render(n, parent = null, index = 0) {
     case 'D': {
       // d/dx como uma fração de "d"s em pé; dⁿ/dxⁿ com o expoente nos dois.
       const [x, f] = n.args;
+      // parcial: ∂/∂x f, ou ∂ₓN quando é a derivada de um nome
+      const dee = n.partial ? '∂' : 'd';
+      if (compactPartial(n)) {
+        e.append(el('span', 'dee partial', n.id + 'd', '∂'), el('span', 'dsub', null, kid(x, 0)), kid(f, 1));
+        break;
+      }
       const sup = () => (n.order > 1 ? [el('span', 'dorder', null, String(n.order))] : []);
       e.append(
         el('span', 'fracbox dfrac', null,
-          el('span', 'num', null, el('span', 'dee', n.id + 'd', 'd'), ...sup()),
+          el('span', 'num', null, el('span', 'dee', n.id + 'd', dee), ...sup()),
           el('span', 'bar', n.id + '/'),
-          el('span', 'den', null, el('span', 'dee', n.id + 'dx', 'd'), kid(x, 0), ...sup())),
+          el('span', 'den', null, el('span', 'dee', n.id + 'dx', dee), kid(x, 0), ...sup())),
         el('span', 'summand', null, kid(f, 1)));
       break;
     }
