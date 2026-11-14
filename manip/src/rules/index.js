@@ -16,13 +16,13 @@
 //   strike: [ids]                    pedaços removidos são riscados
 //   clones: { idNovo: idOrigem }     cópias saem da posição do original
 
-import { getAt, replaceAt, withArgs, fn, num, sym, same as identical, isLeaf, IMAGINARY, isImaginaryUnit, walk, findPath, hasDots } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym, same as identical, isLeaf, IMAGINARY, INFINITY, DOTS, isImaginaryUnit, walk, findPath, hasDots } from '../ast.js';
 import { wrapDots } from './dots.js';
 import { dotsForms, dotsZip } from './dotsterm.js';
 import { needsParens } from '../notation.js';
 import { parseInput, NAME_RE } from '../input.js';
 import { toAscii } from '../serialize.js';
-import { matches as same, withNotes } from './normal.js';
+import { matches as same, withNotes, attempt, noted } from './normal.js';
 import { msg } from '../i18n.js';
 import { rewrite, rewriteSuggestion } from './rewrite.js';
 import { DERIVATIVE_RULES, differentiateBy, variableSuggestion, fullDerivative, LIMIT_RULES, INTEGRAL_RULES, definiteForms, integralAt, substitution, byParts } from './calculus.js';
@@ -1769,6 +1769,60 @@ function expandName(ctx) {
   return { tree: replaceAt(tree, focus, node), label: msg('step.expand', { name: n.name }), focus: node.id };
 }
 
+// Busca reversa: a seleção (ou o foco) é a definição de algum nome? Então
+// vira o nome: x² + 1 → K, com K = x² + 1. Vale a comparação de sempre
+// (com "usando A = B" quando só a forma normal confere), o sinal trocado
+// (1 − x² → −K) e as derivadas dos nomes já calculadas (2xy → ∂ₓK). Vários
+// termos selecionados de uma soma (ou fatores de um produto) viram um nome
+// só, no lugar do primeiro.
+function foldName(ctx) {
+  const defs = ctx.definitions ?? {};
+  if (!Object.keys(defs).length) return null;
+  const { tree, targets } = ctx;
+  let expr, place2;
+  if (targets.length === 1) {
+    const p = targets[0];
+    expr = getAt(tree, p);
+    if (isRelation(expr.op) || expr.op === 'System' || isNamed(expr)) return null;
+    place2 = (node) => replaceAt(tree, p, node);
+  } else {
+    const idx = siblingsOf(targets);
+    const sp = idx && parentPath(targets[0]);
+    const S = idx && getAt(tree, sp);
+    if (!S || (S.op !== 'Add' && S.op !== 'Multiply')) return null;
+    expr = rebuild(S.op, idx.map((i) => S.args[i]));
+    place2 = (node) => {
+      const args = S.args.filter((_, i) => !idx.includes(i) || i === idx[0]).map((a) => (a === S.args[idx[0]] ? node : a));
+      return replaceAt(tree, sp, rebuild(S.op, args, S));
+    };
+  }
+  const chip = (name) => ({ ...sym(name), named: true });
+  // candidatos: cada nome e as suas derivadas ∂ᵥN (v, as variáveis da definição)
+  const candidates = [];
+  for (const [name, def] of Object.entries(defs)) {
+    candidates.push({ def, label: name, node: () => chip(name) });
+    const vars = new Set();
+    walk(def, (n) => { if (n.op === 'Symbol' && !defs[n.name] && !NOT_VARIABLES.includes(n.name)) vars.add(n.name); });
+    for (const v of vars) {
+      const dv = tidy(fullDerivative(def, v, defs));
+      if (dv.op === 'Number' || (dv.op === 'Negate' && dv.args[0].op === 'Number')) continue;
+      candidates.push({ def: dv, label: `∂${v}${name}`, node: () => ({ ...fn('D', sym(v), chip(name)), partial: true }) });
+    }
+  }
+  // (calcular as derivadas consome anotações: as comparações vêm depois)
+  attempt();
+  const out = [];
+  for (const c of candidates) {
+    let node = null;
+    if (same(expr, c.def)) node = c.node();
+    else if (same(fn('Negate', expr), c.def)) node = fn('Negate', c.node());
+    if (node) out.push({ tree: place2(node), label: noted(msg('step.fold', { name: c.label })), focus: node.id });
+  }
+  return out;
+}
+
+const NOT_VARIABLES = [IMAGINARY, INFINITY, DOTS, 'e', 'pi'];
+
 function openName(ctx) {
   const n = getAt(ctx.tree, ctx.focus);
   if (!isNamed(n) || !ctx.definitions?.[n.name]) return null;
@@ -1874,6 +1928,8 @@ export const RULES = [
   // nomes
   // n: num nome, expande; fora dele, dá nome (nome ↔ expressão)
   { id: 'expand', key: 'n', group: 'names', run: expandName },
+  // n: a seleção é a definição de um nome? vira o nome (busca reversa)
+  { id: 'fold', key: 'n', group: 'names', ...either(foldName) },
   {
     id: 'name', key: 'n', group: 'names', run: nameIt,
     input: true,

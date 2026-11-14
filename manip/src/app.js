@@ -134,7 +134,7 @@ function reaches(tree, name, defs) {
 // Símbolos com o nome de uma definição aparecem (e operam) como o nome.
 function withChips(tree, colors = nameColors()) {
   if (tree.op === 'Symbol') {
-    if (tree.named || colors[tree.name] === undefined) return tree;
+    if (colors[tree.name] === undefined || (tree.named && tree.color !== undefined)) return tree;
     return { ...tree, named: true, color: tree.color ?? colors[tree.name] };
   }
   if (!tree.args) return tree;
