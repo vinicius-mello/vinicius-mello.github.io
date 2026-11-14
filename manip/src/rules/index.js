@@ -20,7 +20,7 @@ import { getAt, replaceAt, withArgs, fn, num, sym, same as identical, isLeaf, IM
 import { wrapDots } from './dots.js';
 import { dotsForms, dotsZip } from './dotsterm.js';
 import { needsParens } from '../notation.js';
-import { parseInput } from '../input.js';
+import { parseInput, NAME_RE } from '../input.js';
 import { toAscii } from '../serialize.js';
 import { matches as same, withNotes } from './normal.js';
 import { msg } from '../i18n.js';
@@ -1697,7 +1697,6 @@ function addSubtract(ctx) {
 
 // ------------------------------------------------------------------ nomes
 
-const NAME_RE = /^[A-Za-z](_[A-Za-z0-9]+)?$/;
 const isNamed = (n) => n.op === 'Symbol' && n.named;
 
 function nameIt(ctx) {

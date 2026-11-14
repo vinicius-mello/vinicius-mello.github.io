@@ -1,7 +1,8 @@
 // Sintaxe da entrada, para a aba "Sintaxe" da ajuda. Cada linha:
 // [chave do texto em i18n.js, exemplo em ASCII, o mesmo em LaTeX]. O painel
 // mostra também o exemplo desenhado, lido com o parser de verdade (um teste
-// confere que todos os exemplos são aceitos).
+// confere que todos os exemplos são aceitos). Uma definição (K := ...)
+// aparece como a equação da aba que ela abre.
 
 export const SYNTAX = [
   ['syntax.basic', [
@@ -14,6 +15,7 @@ export const SYNTAX = [
     ['syntax.greek', 'alpha + pi', '\\alpha + \\pi'],
     ['syntax.relations', 'x <= 3', 'x \\le 3'],
     ['syntax.system', 'x + y = 3; x - y = 1', '\\begin{cases} x + y = 3 \\\\ x - y = 1 \\end{cases}'],
+    ['syntax.define', 'K := x^2 + 1', 'K \\coloneqq x^2 + 1'],
   ]],
   ['syntax.functions', [
     ['syntax.sqrt', 'sqrt(x) + root(x, 3)', '\\sqrt{x} + \\sqrt[3]{x}'],

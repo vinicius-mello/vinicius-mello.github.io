@@ -1,12 +1,13 @@
 // Estado da aplicação, mapa de teclas e ligação entre os módulos.
 //
 // O documento é uma lista de áreas de trabalho. A primeira é a equação
-// principal; cada nome dado a uma subexpressão (K := ...) ganha a sua, com a
-// equação "K = definição" para ser manipulada à parte. A definição atual de
-// um nome é o outro lado dessa equação.
+// principal; cada nome dado a uma subexpressão (tecla n) ou definido no
+// campo de entrada (K := ...) ganha a sua, com a equação "K = definição" para
+// ser manipulada à parte. A definição atual de um nome é o outro lado dessa
+// equação. Um nome digitado em qualquer equação vale como o nome (chip).
 
-import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn } from './ast.js';
-import { parseInput, ParseError } from './input.js';
+import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn, withArgs, walk } from './ast.js';
+import { parseInput, parseDefinition, ParseError } from './input.js';
 import { toAscii, toLatex } from './serialize.js';
 import { toMathJson } from './mathjson.js';
 import { render, layoutPowers } from './render.js';
@@ -99,6 +100,49 @@ function define({ name, def, chipId }, tree) {
   workspaces.push(newWorkspace(name, name, eq, msg('step.definition'), { def: cloneFresh(def), color }));
   return tree2;
 }
+
+// Definição auxiliar digitada (K := ...): nova aba "K = definição".
+function defineTyped(name, def) {
+  const defs = definitions();
+  if (defs[name]) return { error: 'err.nameTaken', params: { name } };
+  if (reaches(def, name, defs)) return { error: 'err.nameCycle', params: { name } };
+  const color = nameSpaces().length % COLORS;
+  workspaces.push(newWorkspace(name, name, fn('Equal', chip(name, color), def), msg('step.definition'), { def: cloneFresh(def), color }));
+  return { index: workspaces.length - 1 };
+}
+
+// Nomes que a árvore usa, direta ou indiretamente (pelas definições).
+function namesUsed(tree, defs = definitions(), seen = new Set()) {
+  walk(tree, (n) => {
+    if (n.op !== 'Symbol' || !defs[n.name] || seen.has(n.name)) return;
+    seen.add(n.name);
+    namesUsed(defs[n.name], defs, seen);
+  });
+  return seen;
+}
+
+// A definição de um nome novo usaria o próprio nome (K := K + 1, ou por
+// meio de outras definições)?
+function reaches(tree, name, defs) {
+  let hit = false;
+  for (const t of [tree, ...[...namesUsed(tree, defs)].map((k) => defs[k])]) {
+    walk(t, (n) => { if (n.op === 'Symbol' && n.name === name) hit = true; });
+  }
+  return hit;
+}
+
+// Símbolos com o nome de uma definição aparecem (e operam) como o nome.
+function withChips(tree, colors = nameColors()) {
+  if (tree.op === 'Symbol') {
+    if (tree.named || colors[tree.name] === undefined) return tree;
+    return { ...tree, named: true, color: tree.color ?? colors[tree.name] };
+  }
+  if (!tree.args) return tree;
+  const args = tree.args.map((a) => withChips(a, colors));
+  return args.some((a, i) => a !== tree.args[i]) ? withArgs(tree, args) : tree;
+}
+
+const nameColors = () => Object.fromEntries(nameSpaces().map((w) => [w.id, w.color]));
 
 function switchTo(i) {
   if (i === active || !workspaces[i]) return;
@@ -214,7 +258,7 @@ const stageHeight = () => {
 function staticFormula(tree, cls = 'formula mini') {
   const f = document.createElement('div');
   f.className = cls;
-  f.append(render(tree));
+  f.append(render(withChips(tree)));
   f.querySelectorAll('[data-key]').forEach((e) => e.removeAttribute('data-key'));
   return f;
 }
@@ -275,7 +319,7 @@ function drawFormula({ animate = false, arcKey = null, hints } = {}) {
 
   const root = document.createElement('div');
   root.className = 'formula main';
-  root.append(render(state().tree));
+  root.append(render(withChips(state().tree)));
   if (oldRoot) oldRoot.classList.add('leaving');
   drawBoard();
   stage.append(root);
@@ -490,11 +534,15 @@ function saveBlob(blob, name) {
 }
 
 // Texto digitado no campo principal: na área principal começa um problema
-// novo; numa área de nome, vira um novo passo daquela equação.
+// novo (as definições que ele usa continuam); numa área de nome, vira um
+// novo passo daquela equação. "K := expressão" cria a aba de K, em qualquer
+// área.
 function load(text) {
   let tree;
+  let definition;
   try {
-    tree = parseInput(text);
+    definition = parseDefinition(text);
+    if (!definition) tree = parseInput(text);
   } catch (err) {
     if (!(err instanceof ParseError)) throw err;
     inputError.textContent = t(err.key, err.params);
@@ -503,8 +551,18 @@ function load(text) {
   }
   inputError.textContent = '';
   selected.clear();
-  if (active === 0) {
-    workspaces = [newWorkspace('main', 'Principal', tree, msg('step.input'))];
+  if (definition) {
+    const r = defineTyped(definition.name, definition.def);
+    if (r.error) {
+      inputError.textContent = t(r.error, r.params);
+      return false;
+    }
+    closeMenu();
+    active = r.index;
+    input.value = toAscii(state().tree);
+  } else if (active === 0) {
+    const used = namesUsed(tree);
+    workspaces = [newWorkspace('main', 'Principal', tree, msg('step.input')), ...nameSpaces().filter((w) => used.has(w.id))];
   } else {
     history().push({ tree, focusId: (tree.args?.[0] ?? tree).id, label: msg('step.input') });
   }
@@ -528,7 +586,7 @@ function filterMenu() {
 }
 
 function ruleContext(text) {
-  const { tree } = state();
+  const tree = withChips(state().tree);
   const focus = focusPath();
   const targets = [...selected]
     .map((id) => findPath(tree, id))
@@ -1080,6 +1138,12 @@ function shortcutsPane() {
   return pane;
 }
 
+// Exemplo da sintaxe; uma definição aparece como a equação da sua aba.
+function exampleTree(text) {
+  const d = parseDefinition(text);
+  return d ? fn('Equal', chip(d.name, 0), d.def) : parseInput(text);
+}
+
 // Tabela: o quê · ASCII · LaTeX · como aparece (desenhado com o parser).
 function syntaxPane() {
   const pane = document.createElement('div');
@@ -1099,7 +1163,7 @@ function syntaxPane() {
     body.append(cell('tr', 'group', Object.assign(cell('th', null, t(group)), { colSpan: 4 })));
     for (const [key, ascii, latex] of rows) {
       let shown = '';
-      try { shown = staticFormula(parseInput(ascii), 'formula syntax-ex'); } catch { /* exemplo inválido: o teste avisa */ }
+      try { shown = staticFormula(exampleTree(ascii), 'formula syntax-ex'); } catch { /* exemplo inválido: o teste avisa */ }
       body.append(cell('tr', null, cell('td', null, t(key)), cell('td', null, cell('code', null, ascii)),
         cell('td', null, cell('code', null, latex)), cell('td', null, shown)));
     }

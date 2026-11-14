@@ -9,7 +9,7 @@ const STRINGS = {
   pt: {
     // interface fixa (index.html)
     'ui.input': 'Equação',
-    'ui.input.ph': 'Equação em ASCII ou LaTeX, ex.: 2x + 3 = 7 (sistemas: x + y = 3; x − y = 1)',
+    'ui.input.ph': 'Equação em ASCII ou LaTeX, ex.: 2x + 3 = 7 (sistemas: x + y = 3; x − y = 1; definições: K := x^2 + 1)',
     'ui.settings': 'Ajustes',
     'ui.speed': 'Animação',
     'ui.speed.normal': 'normal',
@@ -64,6 +64,7 @@ const STRINGS = {
     "syntax.greek": "letras gregas pelo nome (alpha, beta, theta, pi, Delta…)",
     "syntax.relations": "relações: = < <= > >= != (ou ≤ ≥ ≠)",
     "syntax.system": "sistema: equações separadas por ;",
+    "syntax.define": "definição auxiliar: abre uma aba para o nome, que passa a valer em todas as equações",
     "syntax.sqrt": "raiz quadrada e raiz de índice n",
     "syntax.abs": "módulo: |x| ou abs(x)",
     "syntax.trig": "trigonométricas: sin/sen, cos, tan/tg, sec, csc/cossec, cot/cotg",
@@ -321,6 +322,9 @@ const STRINGS = {
     'err.unknownCmd': 'Comando “\\{name}” desconhecido',
     'err.unknownFn': 'Função desconhecida',
     'err.missing': 'Faltou “{t}”',
+    'err.defName': 'Antes de := vem um nome: uma letra, com subscrito opcional (K, A_1)',
+    'err.nameTaken': '{name} já está definido (a aba dele pode ser editada)',
+    'err.nameCycle': 'A definição de {name} não pode usar {name}',
     'err.expected': 'Esperava “{t}”',
     'err.arity': 'Esperava {n} argumento(s)',
     'err.bounds': 'Somatório e produtório pedem limites: sum_(k=1)^n …',
@@ -469,7 +473,7 @@ const STRINGS = {
 
   en: {
     'ui.input': 'Equation',
-    'ui.input.ph': 'Equation in ASCII or LaTeX, e.g. 2x + 3 = 7 (systems: x + y = 3; x − y = 1)',
+    'ui.input.ph': 'Equation in ASCII or LaTeX, e.g. 2x + 3 = 7 (systems: x + y = 3; x − y = 1; definitions: K := x^2 + 1)',
     'ui.settings': 'Settings',
     'ui.speed': 'Animation',
     'ui.speed.normal': 'normal',
@@ -524,6 +528,7 @@ const STRINGS = {
     "syntax.greek": "Greek letters by name (alpha, beta, theta, pi, Delta…)",
     "syntax.relations": "relations: = < <= > >= != (or ≤ ≥ ≠)",
     "syntax.system": "system: equations separated by ;",
+    "syntax.define": "auxiliary definition: opens a tab for the name, which then holds in every equation",
     "syntax.sqrt": "square root and n-th root",
     "syntax.abs": "absolute value: |x| or abs(x)",
     "syntax.trig": "trigonometric: sin, cos, tan, sec, csc, cot",
@@ -779,6 +784,9 @@ const STRINGS = {
     'err.unknownCmd': 'Unknown command “\\{name}”',
     'err.unknownFn': 'Unknown function',
     'err.missing': 'Missing “{t}”',
+    'err.defName': 'A name must come before :=: one letter, optional subscript (K, A_1)',
+    'err.nameTaken': '{name} is already defined (its tab can be edited)',
+    'err.nameCycle': 'The definition of {name} cannot use {name}',
     'err.expected': 'Expected “{t}”',
     'err.arity': 'Expected {n} argument(s)',
     'err.bounds': 'Sums and products need limits: sum_(k=1)^n …',
