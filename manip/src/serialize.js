@@ -18,6 +18,10 @@ const orderOf = (n) => n.order ?? 1;
 export function looseSame(a, b) {
   while (a.op === 'Delimiter') a = a.args[0];
   while (b.op === 'Delimiter') b = b.args[0];
+  // X' relido é Call sem argumentos; como nome, é o símbolo "X'".
+  const primed = (n) => (n.op === 'Call' && !n.args.length && n.primes ? { op: 'Symbol', name: n.name + "'".repeat(n.primes) } : n);
+  a = primed(a);
+  b = primed(b);
   if (a.op !== b.op) return false;
   if (a.op === 'Number') return a.value === b.value;
   if (a.op === 'Symbol') return a.name === b.name;
@@ -45,8 +49,9 @@ function asciiProduct(n, sub) {
 
 // a_1, a_n; subscrito composto entre parênteses: a_(n-1).
 const asciiName = (name) => {
-  const [base, s] = name.split('_');
-  return s === undefined || /^(\d+|[A-Za-z])$/.test(s) ? name : `${base}_(${s})`;
+  const ticks = /'*$/.exec(name)[0];
+  const [base, s] = name.slice(0, name.length - ticks.length).split('_');
+  return (s === undefined || /^(\d+|[A-Za-z])$/.test(s) ? base + (s === undefined ? '' : '_' + s) : `${base}_(${s})`) + ticks;
 };
 
 export function toAscii(n) {
@@ -111,9 +116,10 @@ function latexSymbol(name) {
   if (name === IMAGINARY) return '\\mathrm{i}';
   if (name === INFINITY) return '\\infty';
   if (name === DOTS) return '\\cdots';
-  const [base, sub] = name.split('_');
+  const ticks = /'*$/.exec(name)[0];
+  const [base, sub] = name.slice(0, name.length - ticks.length).split('_');
   const b = GREEK.includes(base) ? `\\${base}` : base;
-  return sub === undefined ? b : `${b}_{${sub}}`;
+  return (sub === undefined ? b : `${b}_{${sub}}`) + ticks;
 }
 
 export function toLatex(n) {

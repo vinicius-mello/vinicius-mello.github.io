@@ -7,7 +7,7 @@
 // equação. Um nome digitado em qualquer equação vale como o nome (chip).
 
 import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn, withArgs, walk } from './ast.js';
-import { parseInput, parseDefinition, ParseError } from './input.js';
+import { parseInput, parseDefinition, primedName, ParseError } from './input.js';
 import { toAscii, toLatex } from './serialize.js';
 import { toMathJson } from './mathjson.js';
 import { render, layoutPowers } from './render.js';
@@ -103,6 +103,7 @@ function define({ name, def, chipId }, tree) {
 
 // Definição auxiliar digitada (K := ...): nova aba "K = definição".
 function defineTyped(name, def) {
+  def = withChips(def);
   const defs = definitions();
   if (defs[name]) return { error: 'err.nameTaken', params: { name } };
   if (reaches(def, name, defs)) return { error: 'err.nameCycle', params: { name } };
@@ -131,8 +132,11 @@ function reaches(tree, name, defs) {
   return hit;
 }
 
-// Símbolos com o nome de uma definição aparecem (e operam) como o nome.
+// Símbolos com o nome de uma definição aparecem (e operam) como o nome;
+// X' (lido como derivada) também, quando X' é um nome definido.
 function withChips(tree, colors = nameColors()) {
+  const primed = primedName(tree);
+  if (primed && colors[primed] !== undefined) return chip(primed, colors[primed]);
   if (tree.op === 'Symbol') {
     if (colors[tree.name] === undefined || (tree.named && tree.color !== undefined)) return tree;
     return { ...tree, named: true, color: tree.color ?? colors[tree.name] };
@@ -586,6 +590,7 @@ function load(text) {
   }
   inputError.textContent = '';
   selected.clear();
+  if (tree) tree = withChips(tree);
   if (definition) {
     const r = defineTyped(definition.name, definition.def);
     if (r.error) {

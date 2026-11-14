@@ -65,11 +65,15 @@ function symbolContent(name) {
   if (name === IMAGINARY) return [el('span', 'imag', null, 'i')];
   if (name === INFINITY) return [el('span', 'infty', null, '∞')];
   if (name === DOTS) return [el('span', 'dots', null, '⋯')];
-  const [base, sub] = name.split('_');
+  // X', X_1'': os apóstrofos de um nome viram linhas depois do subscrito.
+  const ticks = /'*$/.exec(name)[0].length;
+  const [base, sub] = name.slice(0, name.length - ticks).split('_');
   const greek = GREEK.includes(base);
   const b = el('span', greek ? 'greek' : 'var', null, greek ? GREEK_CHARS[base] : base);
-  if (sub === undefined) return [b];
-  return [b, el('span', 'subscript', null, sub.replace(/-/g, '−'))];
+  const out = [b];
+  if (sub !== undefined) out.push(el('span', 'subscript', null, sub.replace(/-/g, '−')));
+  if (ticks) out.push(el('span', 'primes', null, '′'.repeat(ticks)));
+  return out;
 }
 
 export function render(n, parent = null, index = 0) {

@@ -1702,7 +1702,7 @@ const isNamed = (n) => n.op === 'Symbol' && n.named;
 function nameIt(ctx) {
   const { tree, targets } = ctx;
   if (targets.length !== 1) return null;
-  const name = (ctx.input ?? '').trim();
+  const name = (ctx.input ?? '').trim().replace(/[′’]/g, "'");
   if (!NAME_RE.test(name) || ctx.definitions?.[name]) return null;
   const n = getAt(tree, targets[0]);
   if (isRelation(n.op) || n.op === 'System' || isNamed(n)) return null;

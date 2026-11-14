@@ -233,13 +233,13 @@ export const MANUAL = [
 
   ['h2', L('10. Nomes, definições e derivadas parciais', '10. Names, definitions and partial derivatives')],
   ['p', L(
-    'Um nome (K, A_1, b_n…) representa uma expressão. Ele aparece na fórmula como um chip colorido e tem a sua própria aba (área de trabalho), onde fica a equação “nome = definição”. A definição atual de um nome é sempre o outro lado dessa equação: se você manipular a equação na aba do nome, a definição muda junto.',
-    'A name (K, A_1, b_n…) stands for an expression. It shows up in the formula as a colored chip and has its own tab (workspace) holding the equation “name = definition”. The current definition of a name is always the other side of that equation: if you manipulate the equation in the name’s tab, the definition changes with it.',
+    'Um nome (K, A_1, b_n, X′, X″…) representa uma expressão. Ele aparece na fórmula como um chip colorido e tem a sua própria aba (área de trabalho), onde fica a equação “nome = definição”. A definição atual de um nome é sempre o outro lado dessa equação: se você manipular a equação na aba do nome, a definição muda junto.',
+    'A name (K, A_1, b_n, X′, X″…) stands for an expression. It shows up in the formula as a colored chip and has its own tab (workspace) holding the equation “name = definition”. The current definition of a name is always the other side of that equation: if you manipulate the equation in the name’s tab, the definition changes with it.',
   )],
   ['h3', L('Nomes e abas', 'Names and tabs')],
   ['p', L(
-    'Com o foco numa subexpressão, a tecla `n` pede um nome: uma letra, com subscrito opcional (K, A_1, b_n), que ainda não esteja definido. A subexpressão vira o chip e o nome ganha a sua aba.',
-    'With the focus on a subexpression, the `n` key asks for a name: one letter with an optional subscript (K, A_1, b_n) that is not defined yet. The subexpression becomes the chip and the name gets its own tab.',
+    'Com o foco numa subexpressão, a tecla `n` pede um nome: uma letra, com subscrito opcional (K, A_1, b_n), que ainda não esteja definido. O subscrito pode ter letras: `K_n`, e com mais de uma entre parênteses, `K_(max)` (`K_max` seria K_m·a·x). O nome pode terminar em apóstrofos, `X\'`, `X\'\'`, `A_1\'`: X′ é um nome à parte de X. A subexpressão vira o chip e o nome ganha a sua aba.',
+    'With the focus on a subexpression, the `n` key asks for a name: one letter with an optional subscript (K, A_1, b_n) that is not defined yet. The subscript may have letters: `K_n`, and with more than one, in parentheses, `K_(max)` (`K_max` would be K_m·a·x). The name may end in primes, `X\'`, `X\'\'`, `A_1\'`: X′ is a name apart from X. The subexpression becomes the chip and the name gets its own tab.',
   )],
   ['ex', { rule: 'name', src: '2(x + 1) = y', focus: [0, 1], input: 'K',
     note: L('foco em x + 1, digitado “K”; a aba K recebe a equação K = x + 1', 'focus on x + 1, typed “K”; tab K gets the equation K = x + 1') }],
@@ -264,16 +264,17 @@ export const MANUAL = [
   ['define', { input: 'K := x^2 + 1', latex: 'K \\coloneqq x^2 + 1', name: 'K', def: 'x^2 + 1' }],
   ['ul', [
     L('Uma aba nova é aberta com a equação K = x² + 1, pronta para ser manipulada, e o nome entra no painel Nomes.', 'A new tab opens with the equation K = x² + 1, ready to be manipulated, and the name joins the Names panel.'),
-    L('Em LaTeX, use `\\coloneqq` (ou `:=`). O lado esquerdo tem de ser um nome: uma letra, com subscrito opcional.', 'In LaTeX, use `\\coloneqq` (or `:=`). The left side must be a name: one letter with an optional subscript.'),
+    L('Em LaTeX, use `\\coloneqq` (ou `:=`). O lado esquerdo tem de ser um nome: uma letra, com subscrito e apóstrofos opcionais (`K_(max) := …`, `X\' := …`).', 'In LaTeX, use `\\coloneqq` (or `:=`). The left side must be a name: one letter with an optional subscript and primes (`K_(max) := …`, `X\' := …`).'),
     L('A partir daí, **um K digitado em qualquer equação vale como o nome**: aparece como chip, a tecla `n` o expande e as regras o tratam como uma expressão que depende das variáveis da definição.', 'From then on, **a K typed in any equation counts as the name**: it shows as a chip, `n` expands it, and the rules treat it as an expression depending on the variables of its definition.'),
     L('Definições podem usar outros nomes: `M := K x` é válido. Uma definição que use o próprio nome (direta ou indiretamente, como `M := M + 1`) é recusada.', 'Definitions may use other names: `M := K x` is valid. A definition that uses the name itself (directly or indirectly, such as `M := M + 1`) is refused.'),
     L('Um nome já definido não pode ser redefinido com `:=`; para mudar a definição, edite a equação na aba dele.', 'A name that is already defined cannot be redefined with `:=`; to change the definition, edit the equation in its tab.'),
     L('**Fechar a aba** (Shift+X, ou o × ao lado dela) apaga o nome e a sua definição. Só é possível quando o nome não é mais usado em nenhuma outra aba, na equação ou na definição de outro nome; senão, um aviso diz onde ele aparece, para que seja expandido (`n`) antes. Os passos antigos que mostravam o nome continuam no histórico, com a letra comum. A aba Principal não fecha.', '**Closing the tab** (Shift+X, or the × next to it) deletes the name and its definition. It is only possible once the name is no longer used in any other tab, in the equation or in another name’s definition; otherwise a message says where it appears, so you can expand it (`n`) first. Old steps that showed the name stay in the history, with a plain letter. The Main tab cannot be closed.'),
     L('Um problema novo digitado na aba Principal apaga as outras abas, mas **mantém as definições que ele usa** (direta ou indiretamente). Assim, dá para definir primeiro e escrever a equação depois.', 'A new problem typed in the Main tab discards the other tabs but **keeps the definitions it uses** (directly or indirectly). So you can define first and write the equation afterwards.'),
+    L("Sem definição, `y'` continua sendo a derivada de y; depois de `X\' := …`, um `X'` digitado (sem argumentos) passa a ser o nome.", "Without a definition, `y'` is still the derivative of y; after `X\' := …`, a typed `X'` (with no arguments) becomes the name."),
     L('Definir uma letra que já aparece como variável (por exemplo `x := 2`) também vale: todo x passa a ser o nome, e expandi-lo substitui x por 2.', 'Defining a letter that already appears as a variable (for instance `x := 2`) also works: every x becomes the name, and expanding it substitutes 2 for x.'),
   ]],
   ['table', [L('Mensagem', 'Message'), L('Quando aparece', 'When it appears')], [
-    [L('Antes de := vem um nome…', 'A name must come before :=…'), L('o lado esquerdo não é uma letra (com subscrito opcional), ex.: `2x := 3`, `alpha := 1`', 'the left side is not one letter (optional subscript), e.g. `2x := 3`, `alpha := 1`')],
+    [L('Antes de := vem um nome…', 'A name must come before :=…'), L('o lado esquerdo não é uma letra (com subscrito e apóstrofos opcionais), ex.: `2x := 3`, `alpha := 1`', 'the left side is not one letter (optional subscript and primes), e.g. `2x := 3`, `alpha := 1`')],
     [L('K já está definido', 'K is already defined'), L('o nome já tem uma aba', 'the name already has a tab')],
     [L('A definição de M não pode usar M', 'The definition of M cannot use M'), L('definição circular', 'circular definition')],
   ]],

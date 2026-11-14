@@ -15,8 +15,12 @@ export function parseInput(text) {
   return isLatex(text) ? parseLatex(text) : parseAscii(text);
 }
 
-// Nomes: uma letra, com subscrito opcional (K, A_1, b_n).
-export const NAME_RE = /^[A-Za-z](_[A-Za-z0-9]+)?$/;
+// Nomes: uma letra, com subscrito opcional e apóstrofos (K, A_1, b_n, X', X'').
+export const NAME_RE = /^[A-Za-z](_[A-Za-z0-9]+)?'*$/;
+
+// X' digitado é lido como derivada (Call sem argumentos, com linhas); como
+// nome, é o símbolo "X'".
+export const primedName = (n) => (n.op === 'Call' && !n.args.length && n.primes ? n.name + "'".repeat(n.primes) : null);
 
 // Definição auxiliar "K := expressão" (LaTeX: K \coloneqq ..., ou :=).
 // Devolve { name, def } ou null se o texto não é uma definição. O lado
@@ -30,7 +34,7 @@ export function parseDefinition(text) {
   let name;
   try {
     const n = parseInput(lhs);
-    if (n.op === 'Symbol') name = n.name;
+    name = n.op === 'Symbol' ? n.name : primedName(n);
   } catch { /* tratado abaixo */ }
   if (!name || !NAME_RE.test(name)) throw new ParseError('err.defName', 0, { t: lhs });
   if (!m[2].trim()) throw new ParseError('err.incomplete', text.length);
