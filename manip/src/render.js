@@ -61,7 +61,7 @@ function wrapParens(content, key) {
 
 const op = (text, key, cls = 'bin') => el('span', 'op ' + cls, key, text);
 
-function symbolContent(name) {
+export function symbolContent(name) {
   if (name === IMAGINARY) return [el('span', 'imag', null, 'i')];
   if (name === INFINITY) return [el('span', 'infty', null, '∞')];
   if (name === DOTS) return [el('span', 'dots', null, '⋯')];

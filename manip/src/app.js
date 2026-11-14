@@ -10,7 +10,7 @@ import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn, withArgs, 
 import { parseInput, parseDefinition, primedName, ParseError } from './input.js';
 import { toAscii, toLatex } from './serialize.js';
 import { toMathJson } from './mathjson.js';
-import { render, layoutPowers } from './render.js';
+import { render, layoutPowers, symbolContent } from './render.js';
 import { capture, play, finishAll } from './animate.js';
 import { left, right, up, down } from './cursor.js';
 import { shiftSideways, shiftOut, shiftIn } from './moves.js';
@@ -429,7 +429,13 @@ function drawTabs() {
     b.type = 'button';
     b.className = 'tab' + (i === active ? ' active' : '');
     if (w.color !== undefined) b.classList.add('c' + w.color);
-    b.textContent = w.id === 'main' ? t('tab.main') : w.title;
+    if (w.id === 'main') b.textContent = t('tab.main');
+    else {
+      // A_1, X': subscrito e linhas como nas fórmulas (não o texto cru)
+      const name = document.createElement('span');
+      name.append(...symbolContent(w.title));
+      b.append(name);
+    }
     b.addEventListener('click', () => { switchTo(i); stage.focus(); });
     if (w.id === 'main') return [b];
     // × para fechar a aba do nome (também Shift+X)
@@ -453,7 +459,9 @@ function drawNames() {
     if (w.identity) {
       // Q: A = B (o nome como rótulo, na cor da aba)
       li.className = 'identity';
-      li.append(Object.assign(document.createElement('span'), { className: 'identity-name c' + w.color, textContent: w.id + ':' }), staticFormula(ids[w.id]));
+      const label = Object.assign(document.createElement('span'), { className: 'identity-name c' + w.color });
+      label.append(...symbolContent(w.id), ':');
+      li.append(label, staticFormula(ids[w.id]));
     } else li.append(staticFormula(fn('Equal', chip(w.id, w.color), defs[w.id])));
     li.title = t('names.open', { name: w.id });
     li.addEventListener('click', () => { switchTo(workspaces.indexOf(w)); stage.focus(); });
