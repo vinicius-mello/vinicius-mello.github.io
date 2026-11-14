@@ -637,8 +637,9 @@ function load(text) {
     active = r.index;
     input.value = toAscii(state().tree);
   } else if (active === 0) {
-    const used = namesUsed(tree);
-    workspaces = [newWorkspace('main', 'Principal', tree, msg('step.input')), ...tabSpaces().filter((w) => w.identity || used.has(w.id))];
+    // Um problema novo troca só a Principal: nomes e identidades ficam até
+    // serem fechados explicitamente (Shift+X, ×) ou até Reiniciar.
+    workspaces = [newWorkspace('main', 'Principal', tree, msg('step.input')), ...tabSpaces()];
   } else {
     history().push({ tree, focusId: (tree.args?.[0] ?? tree).id, label: msg('step.input') });
   }
@@ -1391,6 +1392,34 @@ try {
   setLongMode(localStorage.getItem(LONG_KEY) || 'wrap');
   if (localStorage.getItem(KB_KEY)) toggleKeyboard(true);
 } catch { /* sem armazenamento */ }
+
+// Reiniciar: volta ao estado inicial (só o exemplo, sem nomes nem passos).
+// Ajustes (tema, idioma, zoom...) ficam. Pede um segundo clique para confirmar.
+const resetBtn = document.getElementById('reset');
+let resetTimer = null;
+function disarmReset() {
+  clearTimeout(resetTimer);
+  resetTimer = null;
+  resetBtn.classList.remove('armed');
+  resetBtn.textContent = t('ui.reset');
+}
+resetBtn.addEventListener('click', () => {
+  if (!resetTimer) {
+    resetBtn.classList.add('armed');
+    resetBtn.textContent = t('ui.reset.confirm');
+    resetTimer = setTimeout(disarmReset, 3000);
+    return;
+  }
+  disarmReset();
+  closeMenu();
+  workspaces = [];
+  active = 0;
+  input.value = EXAMPLE;
+  load(EXAMPLE);
+  toast(t('toast.reset'));
+  stage.focus();
+});
+resetBtn.addEventListener('blur', () => { if (resetTimer) disarmReset(); });
 
 if (restore()) {
   input.value = toAscii(state().tree);

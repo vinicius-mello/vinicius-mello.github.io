@@ -300,6 +300,7 @@ body {
 .dropdown summary:hover { color: var(--ink); border-color: color-mix(in srgb, var(--ink) 25%, var(--line)); }
 
 .tool[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+#reset.armed { color: var(--error); border-color: currentColor; }
 
 /* Exportar */
 .dropdown { position: relative; font-size: 14px; }
