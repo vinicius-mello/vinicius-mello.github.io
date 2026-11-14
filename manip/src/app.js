@@ -144,6 +144,32 @@ function withChips(tree, colors = nameColors()) {
 
 const nameColors = () => Object.fromEntries(nameSpaces().map((w) => [w.id, w.color]));
 
+// Fecha a aba de um nome (nunca a Principal). Um nome ainda usado em outra
+// aba (na equação ou na definição de outro nome) não fecha: os chips
+// ficariam sem definição. O aviso diz onde ele é usado, para expandi-lo antes.
+function closeTab(i) {
+  const w = workspaces[i];
+  if (!w || i === 0) return bump();
+  const uses = (tree) => {
+    let hit = false;
+    walk(tree, (n) => { if (n.op === 'Symbol' && n.name === w.id) hit = true; });
+    return hit;
+  };
+  const users = workspaces.filter((o, j) => j !== i && uses(o.history.current.tree));
+  if (users.length) {
+    toast(t('toast.nameInUse', { name: w.id, where: users.map((o) => (o.id === 'main' ? t('tab.main') : o.title)).join(', ') }));
+    return bump();
+  }
+  closeMenu();
+  workspaces.splice(i, 1);
+  if (active === i) active = 0;
+  else if (active > i) active--;
+  selected.clear();
+  input.value = toAscii(state().tree);
+  refresh(false);
+  toast(t('toast.tabClosed', { name: w.id }));
+}
+
 function switchTo(i) {
   if (i === active || !workspaces[i]) return;
   closeMenu();
@@ -371,14 +397,23 @@ function drawHistory() {
 
 function drawTabs() {
   tabsEl.hidden = workspaces.length < 2;
-  tabsEl.replaceChildren(...workspaces.map((w, i) => {
+  tabsEl.replaceChildren(...workspaces.flatMap((w, i) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'tab' + (i === active ? ' active' : '');
     if (w.color !== undefined) b.classList.add('c' + w.color);
     b.textContent = w.id === 'main' ? t('tab.main') : w.title;
     b.addEventListener('click', () => { switchTo(i); stage.focus(); });
-    return b;
+    if (w.id === 'main') return [b];
+    // × para fechar a aba do nome (também Shift+X)
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'tab-close';
+    x.textContent = '×';
+    x.title = t('tab.close', { name: w.id });
+    x.setAttribute('aria-label', x.title);
+    x.addEventListener('click', () => { closeTab(i); stage.focus(); });
+    return [b, x];
   }));
 }
 
@@ -1042,6 +1077,7 @@ const ACTIONS = {
   zoomOut: () => setZoom(zoom / 1.15),
   zoomReset: () => setZoom(1),
   help: () => toggleHelp(),
+  closeTab: () => closeTab(active),
 };
 const COMMANDS = KEY_COMMANDS.map((c) => ({ ...c, run: ACTIONS[c.id] }));
 

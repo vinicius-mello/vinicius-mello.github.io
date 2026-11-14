@@ -40,6 +40,7 @@ const STRINGS = {
     'keys.zoomOut': 'diminuir a fórmula',
     'keys.zoomReset': 'tamanho normal',
     'keys.help': 'ajuda: atalhos e sintaxe da entrada',
+    'keys.closeTab': 'fechar a aba do nome',
     'keys.esc': 'limpar a seleção / sair',
     'help.title': 'Ajuda',
     'help.keysTab': 'Atalhos',
@@ -160,6 +161,9 @@ const STRINGS = {
 
     // mensagens
     'tab.main': 'Principal',
+    'tab.close': 'Fechar {name} (Shift+X)',
+    'toast.tabClosed': 'Aba {name} fechada',
+    'toast.nameInUse': '{name} ainda é usado em: {where}. Expanda (n) antes de fechar',
     'names.open': 'Abrir {name}',
     'toast.copied': '{what} copiado',
     'what.text': 'Texto',
@@ -513,6 +517,7 @@ const STRINGS = {
     'keys.zoomOut': 'smaller formula',
     'keys.zoomReset': 'normal size',
     'keys.help': 'help: shortcuts and input syntax',
+    'keys.closeTab': 'close the name’s tab',
     'keys.esc': 'clear selection / leave',
     'help.title': 'Help',
     'help.keysTab': 'Shortcuts',
@@ -632,6 +637,9 @@ const STRINGS = {
     'keys.undo': 'undo',
 
     'tab.main': 'Main',
+    'tab.close': 'Close {name} (Shift+X)',
+    'toast.tabClosed': 'Tab {name} closed',
+    'toast.nameInUse': '{name} is still used in: {where}. Expand it (n) before closing',
     'names.open': 'Open {name}',
     'toast.copied': '{what} copied',
     'what.text': 'Text',

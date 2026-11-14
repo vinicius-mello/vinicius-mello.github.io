@@ -265,6 +265,20 @@ body {
 .tab[class*=" c"] { color: var(--chip, currentColor); }
 .tab.c0 { --chip: var(--c0); } .tab.c1 { --chip: var(--c1); } .tab.c2 { --chip: var(--c2); }
 .tab.c3 { --chip: var(--c3); } .tab.c4 { --chip: var(--c4); } .tab.c5 { --chip: var(--c5); }
+/* × logo depois da aba do nome: discreto, aparece mais forte ao passar o mouse */
+.tab-close {
+  align-self: center;
+  margin-left: -10px;
+  width: 22px; height: 22px;
+  font: 16px/1 var(--ui);
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: .55;
+}
+.tab-close:hover, .tab-close:focus-visible { opacity: 1; color: var(--ink); background: var(--focus-bg); }
 
 /* Botões da barra superior */
 .tool,

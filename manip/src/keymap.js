@@ -12,6 +12,7 @@ export const COMMANDS = [
   { id: 'keyboard', key: 'K', label: 'keys.keyboard' },
   { id: 'note', key: 'O', label: 'keys.note' },
   { id: 'record', key: 'R', label: 'keys.record' },
+  { id: 'closeTab', key: 'X', label: 'keys.closeTab' },
   { id: 'zoomIn', key: ']', label: 'keys.zoomIn' },
   { id: 'zoomOut', key: '[', label: 'keys.zoomOut' },
   { id: 'zoomReset', key: '\\', label: 'keys.zoomReset' },
