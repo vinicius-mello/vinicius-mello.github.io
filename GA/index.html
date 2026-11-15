@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
   <title>Geometria Analítica — Prof. Vinícius</title>
-  <meta name="description" content="Ferramentas interativas do curso de Geometria Analítica: mesas de isometrias, curvas, tweening e funções de distância com sinal (SDF).">
+  <meta name="description" content="Geometria Analítica com Aplicações: o livro, listas de exercícios e slides em PDF, e as mesas interativas que exemplificam o conteúdo do texto.">
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -107,6 +107,90 @@
       line-height: 1.4;
     }
 
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      letter-spacing: 0.06em;
+      font-weight: normal;
+      color: rgba(224, 164, 88, 0.95);
+    }
+
+    .intro {
+      max-width: 62ch;
+      margin: 0 0 22px;
+      font-family: system-ui, sans-serif;
+      font-size: 0.92rem;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .livro {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 26px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .livro-capa {
+      flex: 0 0 auto;
+      display: block;
+      width: 150px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+      transition: transform 0.18s ease;
+    }
+
+    .livro-capa:hover { transform: translateY(-4px); }
+
+    .livro-capa img { display: block; width: 100%; height: auto; }
+
+    .livro-info { flex: 1 1 280px; min-width: 0; }
+
+    .pdf-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .pdf-list a,
+    .pdf-list a:link,
+    .pdf-list a:visited {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: white;
+      font-style: normal;
+      font-weight: normal;
+      text-decoration: none;
+      font-size: 0.82rem;
+      letter-spacing: 0.02em;
+      transition: border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .pdf-list a:hover {
+      border-color: rgba(224, 164, 88, 0.7);
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-style: normal;
+    }
+
+    .pdf-list small {
+      margin-left: auto;
+      font-family: system-ui, sans-serif;
+      font-size: 0.74rem;
+      color: rgba(255, 255, 255, 0.55);
+      white-space: nowrap;
+    }
+
   </style>
 </head>
 <body>
@@ -114,8 +198,25 @@
   <h1>Geometria Analítica</h1>
   <a href="../index.html">Prof. Vinícius</a>
 </div>
-<p class="tagline">Artefatos e ferramentas interativas do curso.</p>
+<p class="tagline">Livro, materiais e ferramentas interativas do curso.</p>
 <hr/>
+<section class="livro">
+  <a class="livro-capa" href="pdf/geometria-analitica-com-aplicacoes.pdf"><img src="capa-livro.png" width="249" height="351" alt="Capa do livro Geometria Analítica com Aplicações"></a>
+  <div class="livro-info">
+    <h2>O livro e os materiais</h2>
+    <p class="intro"><em>Geometria Analítica com Aplicações</em> constrói a geometria a partir da álgebra e a acompanha, capítulo a capítulo, de uma aplicação computacional: transformações, curvas de Bézier, funções de distância, a óptica das cônicas, a câmera virtual e o <em>ray tracing</em>.</p>
+    <ul class="pdf-list">
+      <li><a href="pdf/geometria-analitica-com-aplicacoes.pdf">Livro completo <small>PDF · 146 p.</small></a></li>
+      <li><a href="pdf/lista-exercicios-1.pdf">Lista de exercícios 1 · Caps. 1–3 <small>PDF · com respostas</small></a></li>
+      <li><a href="pdf/lista-exercicios-2.pdf">Lista de exercícios 2 · Caps. 4–6 <small>PDF · com respostas</small></a></li>
+      <li><a href="pdf/slides-cap3.pdf">Slides · Cap. 3, Lugares geométricos e SDF <small>PDF</small></a></li>
+      <li><a href="pdf/slides-cap4.pdf">Slides · Cap. 4, Cônicas e óptica <small>PDF</small></a></li>
+    </ul>
+  </div>
+</section>
+<hr/>
+<h2>Mesas interativas</h2>
+<p class="intro">As mesas exemplificam o conteúdo do texto: cada uma põe na tela, para manipular com o mouse, as construções, exemplos e exercícios de uma seção do livro, que as cita no lugar em que aparecem. Elas não substituem a leitura; são o laboratório que a acompanha.</p>
 <div class="app-grid">
   <a class="app-card" href="mesa-isometrias.html"><span>Mesa de Isometrias</span></a>
   <a class="app-card" href="mesa-curvas.html"><span>Mesa de Curvas</span></a>
