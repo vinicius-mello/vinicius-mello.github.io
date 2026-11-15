@@ -82,6 +82,8 @@ export function kindOf(n) {
       if (n.name === 'IdentityMatrix') return { t: 'matrix', r: 'n', c: 'n', id: true };
       const h = hypsOf(n.name).find((x) => x.kind === 'matrix' || x.kind === 'vector');
       if (h) return h.kind === 'matrix' ? { t: 'matrix', r: h.rows, c: h.cols } : { t: 'vector', n: h.dim };
+      // v⃗ sem hipótese: vetor (i⃗, j⃗, k⃗ são do ℝ³)
+      if (n.vec) return { t: 'vector', n: ['i', 'j', 'k'].includes(n.name) ? '3' : 'n' };
       const d = env.defs[n.name];
       if (d && !visiting.has(n.name)) {
         visiting.add(n.name);
@@ -101,18 +103,36 @@ export function kindOf(n) {
         if (k.t === 'matrix' && !sameDim(k.r, k.c)) return err('err.detSquare');
         return k.t === 'vector' ? err('err.detSquare') : SCALAR;
       }
-      for (const r of n.args) {
+      // O determinante formal |i⃗, j⃗, k⃗; u; v| tem vetores na primeira linha.
+      let formal = false;
+      for (const [ri, r] of n.args.entries()) {
         for (const e of r.args) {
           const k = kindOf(e);
           if (isError(k)) return k;
-          if (k.t !== 'scalar') return err('err.entryScalar');
+          if (k.t === 'vector' && ri === 0 && n.op === 'Determinant') formal = true;
+          else if (k.t !== 'scalar') return err('err.entryScalar');
         }
       }
       const [rows, cols] = gridSize(n);
-      if (n.op === 'Determinant') return rows === cols ? SCALAR : err('err.detSquare');
+      if (n.op === 'Determinant') return rows !== cols ? err('err.detSquare') : formal ? { t: 'vector', n: '3' } : SCALAR;
       return { t: 'matrix', r: String(rows), c: String(cols) };
     }
     case 'Delimiter': case 'Negate': return kindOf(n.args[0]);
+    case 'Tuple': {
+      for (const e of n.args) {
+        const k = kindOf(e);
+        if (isError(k)) return k;
+        if (k.t !== 'scalar') return err('err.entryScalar');
+      }
+      return { t: 'vector', n: String(n.args.length) };
+    }
+    case 'Cross': {
+      const [a, b] = n.args.map(kindOf);
+      if (isError(a)) return a;
+      if (isError(b)) return b;
+      const ok = (k) => k.t === 'vector' && sameDim(k.n, '3');
+      return ok(a) && ok(b) ? { t: 'vector', n: '3' } : err('err.cross');
+    }
     case 'Add': {
       const ks = n.args.map(kindOf);
       const bad = ks.find(isError);
@@ -285,20 +305,28 @@ function rng(seed) {
   };
 }
 
+// v⃗ e v são letras diferentes.
+const symKey = (n) => (n.vec ? '→' : '') + n.name;
 const dimValue = (d) => (isNumeric(d) ? Number(d) : 3);
 
 function sample(tree, seed) {
   const rand = rng(seed);
   const vals = {};
   walk(tree, (n) => {
-    if (n.op !== 'Symbol' || n.name in vals || n.name === 'IdentityMatrix') return;
+    if (n.op !== 'Symbol' || symKey(n) in vals || n.name === 'IdentityMatrix') return;
+    // i⃗, j⃗, k⃗: a base canônica
+    const basis = n.vec && !hypsOf(n.name).length ? ['i', 'j', 'k'].indexOf(n.name) : -1;
+    if (basis >= 0) {
+      vals[symKey(n)] = { m: [0, 1, 2].map((r) => [r === basis ? 1 : 0]), vec: true };
+      return;
+    }
     const k = kindOf(n);
     const r = () => Math.round((rand() * 4 - 2) * 100) / 100 + 0.37;
-    if (k.t === 'matrix') vals[n.name] = { m: Array.from({ length: dimValue(k.r) }, () => Array.from({ length: dimValue(k.c) }, r)) };
-    else if (k.t === 'vector') vals[n.name] = { m: Array.from({ length: dimValue(k.n) }, () => [r()]), vec: true };
+    if (k.t === 'matrix') vals[symKey(n)] = { m: Array.from({ length: dimValue(k.r) }, () => Array.from({ length: dimValue(k.c) }, r)) };
+    else if (k.t === 'vector') vals[symKey(n)] = { m: Array.from({ length: dimValue(k.n) }, () => [r()]), vec: true };
     else {
       const s = signOf(n);
-      vals[n.name] = s === -1 ? -(0.5 + rand()) : 0.5 + rand();
+      vals[symKey(n)] = s === -1 ? -(0.5 + rand()) : 0.5 + rand();
     }
   });
   return vals;
@@ -375,7 +403,7 @@ export function numericValue(n, vals) {
   switch (n.op) {
     case 'Number': return Number(n.value);
     case 'Symbol':
-      if (n.name in vals) return vals[n.name];
+      if (symKey(n) in vals) return vals[symKey(n)];
       if (n.name === 'pi') return Math.PI;
       if (n.name === 'e') return Math.E;
       return null;
@@ -383,6 +411,22 @@ export function numericValue(n, vals) {
     case 'Negate': {
       const a = ev(n.args[0]);
       return a === null ? null : mulV(-1, a);
+    }
+    case 'Tuple': {
+      const xs = n.args.map(ev);
+      return xs.some((x) => x === null || isM(x)) ? null : { m: xs.map((x) => [x]), vec: true };
+    }
+    case 'Cross': {
+      const [a, b] = n.args.map(ev);
+      if (!isM(a) || !isM(b) || a.m.length !== 3 || b.m.length !== 3) return null;
+      const [[u1], [u2], [u3]] = a.m;
+      const [[v1], [v2], [v3]] = b.m;
+      return { m: [[u2 * v3 - u3 * v2], [u3 * v1 - u1 * v3], [u1 * v2 - u2 * v1]], vec: true };
+    }
+    case 'Abs': {
+      const a = ev(n.args[0]);
+      if (a === null) return null;
+      return isM(a) ? Math.sqrt(a.m.flat().reduce((s, x) => s + x * x, 0)) : Math.abs(a);
     }
     case 'Add': case 'Multiply': {
       let acc = ev(n.args[0]);

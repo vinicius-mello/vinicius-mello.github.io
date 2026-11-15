@@ -31,8 +31,8 @@ export class ParseError extends Error {
 }
 
 const unwrap = (n) => (n.op === 'Delimiter' ? n.args[0] : n);
-const ARITY = { Root: 2, Binomial: 2 };
-const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|', 'big', 'binom', 'lim', 'deriv', 'int', 'evopen', 'mopen']);
+const ARITY = { Root: 2, Binomial: 2, Cross: 2 };
+const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|', 'big', 'binom', 'lim', 'deriv', 'int', 'evopen', 'mopen', 'vec']);
 
 // d/dx escrito como fração: \frac{d}{dx}, \frac{d^2}{dx^2}, \frac{\partial}{\partial x}.
 // Devolve a variável, a ordem e se é parcial.
@@ -100,7 +100,14 @@ export function parseTokens(toks) {
     const product = () => (factors.length === 1 ? factors[0] : fn('Multiply', ...factors));
     for (;;) {
       const tok = peek();
-      if (tok.t === '*') { next(); factors.push(signedFactor()); }
+      if (tok.t === '*' && tok.cross) {
+        // u × v entre vetores é o produto vetorial; entre números, vezes.
+        next();
+        const rhs = signedFactor();
+        const vectorish = (x) => x.op === 'Tuple' || (x.op === 'Symbol' && x.vec) || x.op === 'Cross';
+        if (vectorish(factors[factors.length - 1]) && vectorish(rhs)) factors.push(fn('Cross', factors.pop(), rhs));
+        else factors.push(rhs);
+      } else if (tok.t === '*') { next(); factors.push(signedFactor()); }
       else if (tok.t === '/') {
         next();
         factors = [fn('Divide', unwrap(product()), unwrap(signedFactor()))];
@@ -278,8 +285,22 @@ export function parseTokens(toks) {
       }
       case '(': {
         const e = expr();
+        // (a, b, c): vetor
+        if (peek().t === ',') {
+          const items = [e];
+          while (peek().t === ',') { next(); items.push(expr()); }
+          expect(')');
+          return fn('Tuple', ...items.map(unwrap));
+        }
         expect(')');
         return fn('Delimiter', e);
+      }
+      case 'vec': {
+        // vec v, vec(v), \vec{v}: letra com seta
+        let a = unwrap(atom());
+        if (a.op === 'Symbol' && a.name === IMAGINARY) a = sym('i');
+        if (a.op !== 'Symbol') throw new ParseError('err.vec', tok.pos);
+        return { ...a, vec: true };
       }
       case '{': {
         k--;

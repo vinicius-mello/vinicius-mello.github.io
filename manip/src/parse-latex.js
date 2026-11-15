@@ -76,7 +76,9 @@ function tokenize(src) {
         i += 2;
         continue;
       }
-      if (COMMANDS[name]) push(COMMANDS[name], i);
+      if (name === 'times') toks.push({ t: '*', pos: i, cross: true });
+      else if (name === 'vec' || name === 'overrightarrow') push('vec', i);
+      else if (COMMANDS[name]) push(COMMANDS[name], i);
       else if (name === 'sum' || name === 'prod') push('big', i, name === 'sum' ? 'Sum' : 'Product');
       else if (RELATION_COMMANDS[name]) push('rel', i, RELATION_COMMANDS[name]);
       else if (FUNCTION_COMMANDS[name]) push('fn', i, FUNCTION_COMMANDS[name]);

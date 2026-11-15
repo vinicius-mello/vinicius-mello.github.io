@@ -783,3 +783,156 @@ function identityNeutral(ctx) {
 
 export const INVERSE_CANCEL = [cancelInverse];
 export const IDENTITY_NEUTRAL = [identityNeutral];
+
+// ------------------------------------------------------------- vetores
+
+const BASIS = ['i', 'j', 'k'];
+const isBasis = (x) => x.op === 'Symbol' && x.vec && BASIS.includes(x.name);
+const isTuple = (x) => x?.op === 'Tuple';
+
+// (a, b)·(c, d) → ac + bd
+function dotProduct(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus), parentPath(parentPath(focus))]) {
+    if (!p) continue;
+    const P = getAt(tree, p);
+    if (P.op !== 'Multiply') continue;
+    const i = P.args.findIndex((x, k) => isTuple(x) && isTuple(P.args[k + 1]));
+    if (i < 0) continue;
+    const [u, v] = [P.args[i], P.args[i + 1]];
+    if (u.args.length !== v.args.length) return { error: 'err.dims' };
+    const clones = {};
+    const ts = u.args.map((a, k) => product([...asFactors(a, clones), ...asFactors(v.args[k], clones)]));
+    const node = ts.length === 1 ? ts[0] : fn('Add', ...ts);
+    const args = P.args.slice();
+    args.splice(i, 2, node);
+    return { tree: replaceAt(tree, p, rebuild('Multiply', args, P)), label: msg('step.dot'), focus: node.id, hints: { clones } };
+  }
+  return null;
+}
+
+// (a, b, c) × (d, e, f) → |i⃗, j⃗, k⃗; a, b, c; d, e, f|
+function crossDeterminant(ctx) {
+  for (const p of [ctx.focus, parentPath(ctx.focus)]) {
+    if (!p) continue;
+    const n = getAt(ctx.tree, p);
+    if (n.op !== 'Cross' || !n.args.every((x) => isTuple(x) && x.args.length === 3)) continue;
+    const node = fn('Determinant', row(...BASIS.map((b) => ({ ...sym(b), vec: true }))), row(...n.args[0].args), row(...n.args[1].args));
+    return { tree: replaceAt(ctx.tree, p, node), label: msg('step.crossDet'), focus: node.id };
+  }
+  return null;
+}
+
+// |(a, b)| → √(a² + b²)
+function norm(ctx) {
+  for (const p of [ctx.focus, parentPath(ctx.focus)]) {
+    if (!p) continue;
+    const n = getAt(ctx.tree, p);
+    if (n.op !== 'Abs' || !isTuple(n.args[0])) continue;
+    const ts = n.args[0].args.map((e) => fn('Power', e.op === 'Negate' ? fn('Delimiter', e) : e, num(2)));
+    const node = fn('Sqrt', ts.length === 1 ? ts[0] : fn('Add', ...ts));
+    return { tree: replaceAt(ctx.tree, p, node), label: msg('step.norm'), focus: node.id };
+  }
+  return null;
+}
+
+// a·i⃗ + b·j⃗ + c·k⃗ → (a, b, c)
+function basisToTuple(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus), parentPath(parentPath(focus))]) {
+    if (!p) continue;
+    const S = getAt(tree, p);
+    const ts = S.op === 'Add' ? S.args : [S];
+    if (S.op !== 'Add' && S.op !== 'Multiply' && !isBasis(S)) continue;
+    const cols = BASIS.map(() => []);
+    let ok = true;
+    for (let t of ts) {
+      let neg = false;
+      while (t.op === 'Negate') { neg = !neg; t = t.args[0]; }
+      const fs = factors(t);
+      const bs = fs.filter((x) => isBasis(x));
+      const rest = fs.filter((x) => !isBasis(x));
+      let basisInside = false;
+      rest.forEach((x) => walk(x, (y) => { if (y.op === 'Symbol' && y.vec) basisInside = true; }));
+      if (bs.length !== 1 || basisInside) { ok = false; break; }
+      const c = rebuild('Multiply', rest);
+      cols[BASIS.indexOf(bs[0].name)].push(neg ? negated(c) : c);
+    }
+    if (!ok) continue;
+    const used = cols.filter((c) => c.length).length;
+    const dim = cols[2].length ? 3 : 2;
+    if (!used) continue;
+    const node = fn('Tuple', ...cols.slice(0, dim).map(sumOrZero));
+    return { tree: replaceAt(tree, p, node), label: msg('step.toTuple'), focus: node.id };
+  }
+  return null;
+}
+
+// (a, b, c) → a·i⃗ + b·j⃗ + c·k⃗
+function tupleToBasis(ctx) {
+  for (const p of [ctx.focus, parentPath(ctx.focus)]) {
+    if (!p) continue;
+    const n = getAt(ctx.tree, p);
+    if (!isTuple(n) || n.args.length < 2 || n.args.length > 3) continue;
+    const ts = [];
+    n.args.forEach((c, j) => {
+      const b = { ...sym(BASIS[j]), vec: true };
+      if (c.op === 'Number' && Number(c.value) === 0) return;
+      if (c.op === 'Number' && c.value === '1') ts.push(b);
+      else if (c.op === 'Negate' && c.args[0].op === 'Number' && c.args[0].value === '1') ts.push(fn('Negate', b));
+      else if (c.op === 'Negate') ts.push(fn('Negate', product([...factors(c.args[0]), b])));
+      else if (c.op === 'Add') ts.push(product([fn('Delimiter', c), b]));
+      else ts.push(product([...factors(c), b]));
+    });
+    if (!ts.length) continue;
+    const node = ts.length === 1 ? ts[0] : fn('Add', ...ts);
+    return { tree: place(ctx.tree, p, node), label: msg('step.toBasis'), focus: node.id };
+  }
+  return null;
+}
+
+export const VECTOR_FORMS = [dotProduct, crossDeterminant, norm, basisToTuple, tupleToBasis];
+
+// d: k·(a, b) → (ka, kb)
+function scalarIntoTuple(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus)]) {
+    if (!p) continue;
+    const P = getAt(tree, p);
+    if (P.op !== 'Multiply') continue;
+    const ti = P.args.findIndex(isTuple);
+    const others = P.args.filter((_, i) => i !== ti);
+    if (ti < 0 || !others.every((x) => scalarish(x, ctx.definitions))) continue;
+    const clones = {};
+    const k = others.flatMap((x) => (x.op === 'Negate' ? [fn('Delimiter', x)] : factors(x)));
+    const T = P.args[ti];
+    const node = withArgs(T, T.args.map((e) => product([...k.map((x) => cloneFrom(x, clones)), ...(e.op === 'Negate' ? [fn('Delimiter', e)] : factors(e))])));
+    return { tree: replaceAt(tree, p, node), label: msg('step.mscalar', { k: toAscii(product(others)) }), focus: node.id, hints: { clones } };
+  }
+  return null;
+}
+
+// j: (a, b) + (c, d) → (a + c, b + d)
+function sumTuples(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus), parentPath(parentPath(focus))]) {
+    if (!p) continue;
+    const S = getAt(tree, p);
+    if (S.op !== 'Add') continue;
+    const items = S.args.map((t, i) => ({ i, t: isTuple(t) ? t : t.op === 'Negate' && isTuple(t.args[0]) ? t.args[0] : null, neg: t.op === 'Negate' })).filter((x) => x.t);
+    if (items.length < 2) continue;
+    const len = items[0].t.args.length;
+    if (items.some((x) => x.t.args.length !== len)) return { error: 'err.dims' };
+    const node = withArgs(items[0].t, items[0].t.args.map((_, k) => fn('Add', ...items.flatMap(({ t, neg }) => (neg ? [fn('Negate', t.args[k])] : terms(t.args[k]))))));
+    const args = [];
+    S.args.forEach((t, i) => {
+      if (i === items[0].i) args.push(node);
+      else if (!items.some((x) => x.i === i)) args.push(t);
+    });
+    return { tree: replaceAt(tree, p, rebuild('Add', args, S)), label: msg('step.vsum'), focus: node.id };
+  }
+  return null;
+}
+
+MATRIX_DIST.push(scalarIntoTuple);
+MATRIX_SUM.push(sumTuples);

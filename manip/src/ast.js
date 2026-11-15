@@ -68,14 +68,14 @@ export function reserveIds(n) {
 // Atributos que fazem parte do significado de um nó (além dos argumentos):
 // nome e linhas de f'(x), lado de um limite, ordem de uma derivada.
 export const sameTag = (a, b) => a.name === b.name && a.primes === b.primes && a.dir === b.dir && a.order === b.order
-  && !a.partial === !b.partial;
-export const tagOf = (n) => [n.name, n.primes, n.dir, n.order, n.partial ? '∂' : ''].map((x) => x ?? '').join('|');
+  && !a.partial === !b.partial && !a.vec === !b.vec;
+export const tagOf = (n) => [n.name, n.primes, n.dir, n.order, n.partial ? '∂' : '', n.vec ? '→' : ''].map((x) => x ?? '').join('|');
 
 // Igualdade estrutural (ignora ids e propriedades visuais).
 export function same(a, b) {
   if (a.op !== b.op) return false;
   if (a.op === 'Number') return a.value === b.value;
-  if (a.op === 'Symbol') return a.name === b.name;
+  if (a.op === 'Symbol') return a.name === b.name && !a.vec === !b.vec;
   if (!sameTag(a, b)) return false;
   const x = children(a), y = children(b);
   return x.length === y.length && x.every((c, i) => same(c, y[i]));
@@ -149,3 +149,11 @@ export const row = (...entries) => fn('Row', ...entries);
 export const grid = (op, rows) => fn(op, ...rows.map((r) => row(...r)));
 Object.assign(FUNCTIONS, { det: 'Determinant' });
 FUNCTION_NAMES.Determinant = 'det';
+
+// Vetores: Tuple(a, b, c) é (a, b, c); uma letra com seta (v⃗) é um Symbol
+// com vec: true. i⃗, j⃗, k⃗ são os vetores da base.
+export const vecSym = (name) => ({ ...sym(name), vec: true });
+export const isVecSym = (n) => n.op === 'Symbol' && !!n.vec;
+export const isTuple = (n) => n.op === 'Tuple';
+Object.assign(FUNCTIONS, { cross: 'Cross' });
+FUNCTION_NAMES.Cross = 'cross';

@@ -1241,3 +1241,18 @@ body.presenting #stage:focus-visible::after { display: none; }
   border-left: max(1px, .05em) solid currentColor;
   pointer-events: none;
 }
+
+/* Vetor: seta sobre a letra (máscara na cor do texto) */
+.formula .n.Symbol.vec { position: relative; display: inline-block; padding-top: .12em; }
+.formula .n.Symbol.vec::after {
+  --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 6'%3E%3Cpath d='M0 3H18M14 .5L19 3L14 5.5' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E");
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: -2%;
+  top: 0;
+  height: .3em;
+  background-color: currentColor;
+  -webkit-mask: var(--arrow) no-repeat center / 100% 100%;
+  mask: var(--arrow) no-repeat center / 100% 100%;
+}

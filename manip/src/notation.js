@@ -9,7 +9,9 @@ const greedy = (n) => isBigOp(n) || n.op === 'Limit' || n.op === 'D';
 // ∂ₓN: a derivada parcial de um nome (ou de um símbolo) leva a variável no índice.
 export const compactPartial = (n) => n.op === 'D' && n.partial && n.args[1].op === 'Symbol';
 
-const OWN_NOTATION = new Set(['Sqrt', 'Root', 'Abs', 'Conjugate', 'Binomial']);
+const OWN_NOTATION = new Set(['Sqrt', 'Root', 'Abs', 'Conjugate', 'Binomial', 'Cross']);
+// Vetores: (a, b) ou v⃗; entre dois deles, o produto se escreve com ponto.
+const vectorish = (n) => n.op === 'Tuple' || (n.op === 'Symbol' && !!n.vec);
 // Funções escritas sempre com parênteses: Re(z), Im(z), arg(z).
 const ALWAYS_PARENS = new Set(['Real', 'Imaginary', 'Argument']);
 export const isFunctionOp = (op) => op in FUNCTION_NAMES && !OWN_NOTATION.has(op);
@@ -40,6 +42,8 @@ export function needsParens(child, parent, index) {
       // Σ no meio de um produto engoliria os fatores seguintes: (Σ k)·x.
       if (greedy(child) && index < parent.args.length - 1) return true;
       return c === 'Add' || c === 'Multiply' || (c === 'Negate' && index > 0);
+    case 'Cross':
+      return c === 'Add' || c === 'Multiply' || c === 'Negate' || c === 'Divide' || (c === 'Cross' && index === 1);
     case 'Factorial':
       return !isLeaf(child) && c !== 'Delimiter' && c !== 'Binomial';
     case 'Sum': case 'Product':
@@ -73,6 +77,7 @@ export function needsDot(prev, next, nextIndex, parent) {
   if (needsParens(next, parent, nextIndex)) return false;
   if (startsWithDigit(next)) return true;
   if (isDots(prev) || isDots(next)) return true;
+  if (vectorish(prev) && vectorish(next)) return true;
   if (next.op === 'Negate') return true;
   return false;
 }

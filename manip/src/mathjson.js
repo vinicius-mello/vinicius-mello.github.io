@@ -10,7 +10,7 @@ export function toMathJson(n) {
       const v = Number(n.value);
       return String(v) === n.value ? v : { num: n.value };
     }
-    case 'Symbol': return n.name;
+    case 'Symbol': return n.vec ? ['OverVector', n.name] : n.name;
     // Matriz: ["Matrix", ["List", ["List", a, b], ["List", c, d]]]; o
     // determinante escrito é o de uma matriz.
     case 'Matrix': case 'Determinant': {
@@ -74,6 +74,7 @@ export function fromMathJson(j) {
       const m = fromMathJson(args[0]);
       return isGrid(m) ? fn('Determinant', ...m.args) : fn('Determinant', m);
     }
+    if (op === 'OverVector' && typeof args[0] === 'string') return { ...sym(args[0]), vec: true };
     if (op === 'PartialDerivative') {
       const [f, x] = args;
       return { ...fn('D', fromMathJson(x), fromMathJson(f)), partial: true };

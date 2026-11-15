@@ -89,7 +89,8 @@ export function render(n, parent = null, index = 0) {
       e.append(n.value);
       break;
     case 'Symbol':
-      e.append(...symbolContent(n.name));
+      e.append(...symbolContent(n.name === IMAGINARY && n.vec ? 'i' : n.name));
+      if (n.vec) e.classList.add('vec');
       if (n.named) e.classList.add('chip');
       break;
     case 'Equal': case 'NotEqual': case 'Less': case 'LessEqual': case 'Greater': case 'GreaterEqual':
@@ -258,6 +259,19 @@ export function render(n, parent = null, index = 0) {
         el('span', 'limit lower', null, kid(x, 0), op('=', n.id + '=', 'lim'), kid(a, 1))));
       break;
     }
+    case 'Tuple': {
+      // (a, b, c)
+      const list = el('span', 'args');
+      n.args.forEach((c, i) => {
+        if (i > 0) list.append(op(',', `${n.id},${i}`, 'comma'));
+        list.append(kid(c, i));
+      });
+      e.append(wrapParens(list, n.id));
+      break;
+    }
+    case 'Cross':
+      e.append(kid(n.args[0], 0), op('×', n.id + '×'), kid(n.args[1], 1));
+      break;
     case 'RowEquivalent':
       // A ∼ A′ (operações de linha)
       n.args.forEach((c, i) => {

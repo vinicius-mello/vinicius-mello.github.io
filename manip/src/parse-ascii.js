@@ -53,7 +53,7 @@ function tokenize(src) {
       toks.push({ t: 'rel', v: RELATION_INPUT[m[0]], pos: i });
     } else if ('+-*/^(),|;·×÷−!_'.includes(c)) {
       const v = { '·': '*', '×': '*', '÷': '/', '−': '-' }[c] ?? c;
-      toks.push({ t: v, pos: i });
+      toks.push(c === '×' ? { t: v, pos: i, cross: true } : { t: v, pos: i });
       m = [c];
     } else {
       throw new ParseError('err.unexpectedChar', i, { c });
@@ -71,6 +71,12 @@ const CALCULUS = ['lim', 'int', 'infinity', 'inf', 'oo'];
 // um subscrito final (x_1) fica preso à última letra.
 function splitWord(word, pos, toks) {
   let [base, sub] = word.split('_');
+  // vec v: letra com seta (vetor)
+  if (base.startsWith('vec') && sub === undefined) {
+    toks.push({ t: 'vec', pos });
+    if (base.length > 3) splitWord(base.slice(3), pos + 3, toks);
+    return;
+  }
   // Id: a matriz identidade (aparece como I)
   if (base === 'Id' && sub === undefined) {
     toks.push({ t: 'id', v: 'IdentityMatrix', pos, end: pos + 2 });

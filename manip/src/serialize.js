@@ -9,7 +9,7 @@ import { parseAscii } from './parse-ascii.js';
 const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate', 'Sum', 'Product', 'Limit', 'D', 'Integrate']);
 const asciiAtomic = (n) => !COMPOUND.has(n.op) && !isRelation(n.op);
 // Escrito como nome(…): sqrt(x), conj(z), sin(x)...
-const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial', 'EvalAt'].includes(n.op) && !isGrid(n);
+const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial', 'EvalAt', 'Tuple'].includes(n.op) && !isGrid(n);
 // Linhas de uma matriz: "a, b; c, d".
 const asciiRows = (n) => n.args.map((r) => r.args.map(toAscii).join(', ')).join('; ');
 const primes = (n) => "'".repeat(n.primes ?? 0);
@@ -26,7 +26,7 @@ export function looseSame(a, b) {
   b = primed(b);
   if (a.op !== b.op) return false;
   if (a.op === 'Number') return a.value === b.value;
-  if (a.op === 'Symbol') return a.name === b.name;
+  if (a.op === 'Symbol') return a.name === b.name && !a.vec === !b.vec;
   if (!sameTag(a, b)) return false;
   return a.args.length === b.args.length && a.args.every((c, i) => looseSame(c, b.args[i]));
 }
@@ -64,7 +64,9 @@ export function toAscii(n) {
   const group = (c) => (asciiAtomic(c) ? toAscii(c) : `(${toAscii(c)})`);
   switch (n.op) {
     case 'Number': return n.value;
-    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name === DOTS ? '...' : n.name === 'IdentityMatrix' ? 'Id' : asciiName(n.name);
+    case 'Symbol':
+      if (n.vec) return `vec(${n.name === IMAGINARY ? 'i' : asciiName(n.name)})`;
+      return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name === DOTS ? '...' : n.name === 'IdentityMatrix' ? 'Id' : asciiName(n.name);
     case 'Call': return n.name + primes(n) + (n.args.length ? `(${n.args.map(toAscii).join(', ')})` : '');
     case 'Limit': {
       const [x, a, f] = n.args;
@@ -111,6 +113,7 @@ export function toAscii(n) {
     case 'System': return n.args.map(toAscii).join('; ');
     case 'Matrix': if (isGrid(n)) return `[${asciiRows(n)}]`; break;
     case 'RowEquivalent': return n.args.map(toAscii).join(' ~ ');
+    case 'Tuple': return `(${n.args.map(toAscii).join(', ')})`;
     case 'Determinant': if (isGrid(n)) return `|${asciiRows(n)}|`; break;
     case 'Root': return `root(${toAscii(n.args[0])}, ${toAscii(n.args[1])})`;
     default: break;
@@ -141,7 +144,7 @@ export function toLatex(n) {
   };
   switch (n.op) {
     case 'Number': return n.value;
-    case 'Symbol': return latexSymbol(n.name);
+    case 'Symbol': return n.vec ? `\\vec{${latexSymbol(n.name)}}` : latexSymbol(n.name);
     case 'Call': return latexSymbol(n.name) + primes(n) + (n.args.length ? `\\left(${n.args.map(toLatex).join(', ')}\\right)` : '');
     case 'Limit': {
       const [x, a, f] = n.args;
@@ -201,6 +204,8 @@ export function toLatex(n) {
       return `\\begin{${env}} ${n.args.map((r) => r.args.map(toLatex).join(' & ')).join(' \\\\ ')} \\end{${env}}`;
     }
     case 'RowEquivalent': return n.args.map(toLatex).join(' \\sim ');
+    case 'Tuple': return `\\left(${n.args.map(toLatex).join(', ')}\\right)`;
+    case 'Cross': return `${sub(n.args[0], 0)} \\times ${sub(n.args[1], 1)}`;
     case 'System': return `\\begin{cases} ${n.args.map(toLatex).join(' \\\\ ')} \\end{cases}`;
     case 'Real': return `\\operatorname{Re}\\left(${toLatex(n.args[0])}\\right)`;
     case 'Imaginary': return `\\operatorname{Im}\\left(${toLatex(n.args[0])}\\right)`;

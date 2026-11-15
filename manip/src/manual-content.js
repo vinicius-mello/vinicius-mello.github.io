@@ -262,6 +262,16 @@ export const MANUAL = [
     '**Inverse:** `A^(-1)`. With `#`, a written 2×2 becomes (1/det)·[d, −b; −c, a] (refused when the determinant is 0). An inverse on its own in the problem, pressing `#` again, becomes [A | I] for Gauss-Jordan row reduction; once the left block reaches [I | B], `#` gives B, the inverse. To solve AX = B (with `A, B, X in M(n)`): `=` with `A^(-1) *` multiplies on the left, `x` cancels A⁻¹A = I and `0` does IX = X. The identity is typed `Id` (shown as I; in LaTeX, `\\mathrm{I}`).',
   )],
   ['ex', { rule: 'inverse', src: 'M = [1, 2; 3, 4]^(-1)', focus: [1] }],
+  ['h3', L('Vetores', 'Vectors')],
+  ['p', L(
+    'Um vetor se digita com as coordenadas entre parênteses, `(1, 2, 3)`, ou como uma letra com seta, `vec v` (LaTeX `\\vec{v}`); `vec i`, `vec j` e `vec k` são os vetores da base. O produto escalar é o produto comum, `(1, 2)*(3, 4)` ou `u·v`, e o vetorial é `×` entre vetores (ou `cross(u, v)`); entre números, `×` continua sendo vezes. A norma é `|v|`.',
+    'A vector is typed with its coordinates in parentheses, `(1, 2, 3)`, or as a letter with an arrow, `vec v` (LaTeX `\\vec{v}`); `vec i`, `vec j` and `vec k` are the basis vectors. The dot product is the ordinary product, `(1, 2)*(3, 4)` or `u·v`, and the cross product is `×` between vectors (or `cross(u, v)`); between numbers, `×` still means times. The norm is `|v|`.',
+  )],
+  ['p', L(
+    'Com `#`: o produto escalar de coordenadas vira a soma dos produtos; o produto vetorial vira o determinante formal |i⃗, j⃗, k⃗; u; v|, que `d` desenvolve pela primeira linha; a·i⃗ + b·j⃗ + c·k⃗ vira (a, b, c) e de volta; |(a, b)| vira √(a² + b²). `j` soma vetores coordenada a coordenada e `d` leva um número para dentro do vetor.',
+    'With `#`: the dot product of coordinates becomes the sum of products; the cross product becomes the formal determinant |i⃗, j⃗, k⃗; u; v|, which `d` expands along the first row; a·i⃗ + b·j⃗ + c·k⃗ becomes (a, b, c) and back; |(a, b)| becomes √(a² + b²). `j` adds vectors coordinate by coordinate and `d` moves a number into the vector.',
+  )],
+  ['ex', { rule: 'vectors', src: 'w = (1, 2, 3) × (4, 5, 6)', focus: [1] }],
 
   ['h2', L('8. Cálculo', '8. Calculus')],
   ['p', L(
