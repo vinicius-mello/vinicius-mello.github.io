@@ -1,0 +1,891 @@
+<title>Mesa de Câmera</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mesas de GA: painel lateral + mesa (quadro) com leituras ao vivo. */
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-success:#1F9254;
+    --c-warning:#B4590E;
+    --c-danger:#C23B78;
+    --shadow:rgba(22,35,58,0.14);
+    --font-display:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    --font-body:'Public Sans','Segoe UI',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-success:#4ADE80;
+      --c-warning:#FBBF74;
+      --c-danger:#E86FA6;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-success:#4ADE80;
+    --c-warning:#FBBF74;
+    --c-danger:#E86FA6;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:var(--font-display);
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1360px;
+    margin:0 auto;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));
+    padding-right:max(16px, env(safe-area-inset-right, 0px));
+    padding-block:0.85rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+  }
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; min-width:0; }
+  .brand-mark{
+    font-family:var(--font-mono); font-weight:600;
+    font-size:1.05rem; color:var(--brand); line-height:1;
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem;
+    white-space:nowrap;
+  }
+  .brand-text{ min-width:0; }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:64ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(270px,320px) minmax(0,1fr);
+    gap:0.75rem;
+    align-items:start;
+  }
+  @media (max-width:880px){ .workspace{ grid-template-columns:minmax(0,1fr); } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+    min-width:0;
+  }
+  .panel h2{
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:0.45rem;
+  }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.45rem 0 0; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; border:none; background:var(--paper); font-size:0.74rem; font-weight:600;
+    padding:0.38rem 0.45rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .seg button + button{ border-left:1px solid var(--border); }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  .slider{ display:grid; grid-template-columns:4.6rem minmax(0,1fr) 3.6rem; align-items:center; gap:0.4rem; margin-top:0.35rem; }
+  .slider > span:first-child{ font-size:0.74rem; color:var(--ink-muted); font-weight:600; }
+  .slider input[type=range]{ width:100%; accent-color:var(--brand); min-width:0; }
+  .slider output{ font-family:var(--font-mono); font-size:0.76rem; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); max-width:100%; }
+  .btn-row{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.45rem; }
+
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:var(--font-mono);
+    font-size:0.74rem; line-height:1.6;
+    background:var(--paper-sunken);
+    border-radius:6px; padding:0.45rem 0.6rem;
+    overflow-x:auto; overflow-wrap:anywhere;
+  }
+  .formula-box > div{ padding-left:1.2em; text-indent:-1.2em; }
+  .formula-box .main{ color:var(--brand); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .board{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    height:min(70svh,700px);
+    min-height:340px;
+  }
+  .board canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .board canvas.grab{ cursor:grab; }
+  .board canvas.grabbing{ cursor:grabbing; }
+  .board-tag{
+    position:absolute; left:0.5rem; top:0.45rem; pointer-events:none;
+    font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--ink-muted); background:var(--paper-raised); border:1px solid var(--border);
+    border-radius:4px; padding:0.1rem 0.35rem;
+  }
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:0.4rem;
+  }
+  .ro{
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:7px;
+    padding:0.35rem 0.55rem; min-width:0;
+  }
+  .ro .k{ font-size:0.72rem; letter-spacing:0.01em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .pill{ display:inline-block; font-size:0.74rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; border:1.5px solid currentColor; font-family:var(--font-body); }
+  .note{
+    font-size:0.78rem; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--border); border-left:4px solid var(--c-warning);
+    border-radius:0 7px 7px 0; padding:0.4rem 0.6rem;
+  }
+  .note.ok{ border-left-color:var(--c-success); }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; max-width:110ch; }
+  .footer-note a{ color:var(--brand); }
+  .tbl-wrap{ overflow-x:auto; }
+  table.tbl{ border-collapse:collapse; font-family:var(--font-mono); font-size:0.74rem; font-variant-numeric:tabular-nums; width:100%; }
+  table.tbl th, table.tbl td{ padding:0.18rem 0.4rem; text-align:right; border-bottom:1px solid var(--line-minor); white-space:nowrap; }
+  table.tbl th{ color:var(--ink-muted); font-weight:600; font-family:var(--font-body); font-size:0.7rem; }
+  table.tbl tfoot td{ font-weight:700; border-bottom:none; border-top:1.5px solid var(--line-major); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+  :root{
+    --c-r:#C23B78;
+    --c-u:#157F6E;
+    --c-f:#2955C8;
+    --c-cam:#B8791A;
+    --c-caixa:#2B3A55;
+    --c-caixa2:#6E4FC2;
+    --c-fuga:#D9822B;
+    --c-chao:#B9C8DE;
+    --c-tela:rgba(41,85,200,0.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --c-r:#E86FA6; --c-u:#4FD8BE; --c-f:#6C93FF; --c-cam:#F0A94E; --c-caixa:#E7EEFA; --c-caixa2:#A78BFA; --c-fuga:#FFB45C; --c-chao:#2E4572; --c-tela:rgba(108,147,255,0.10);
+    }
+  }
+  :root[data-theme="dark"]{
+    --c-r:#E86FA6; --c-u:#4FD8BE; --c-f:#6C93FF; --c-cam:#F0A94E; --c-caixa:#E7EEFA; --c-caixa2:#A78BFA; --c-fuga:#FFB45C; --c-chao:#2E4572; --c-tela:rgba(108,147,255,0.10);
+  }
+  .views{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.5rem; }
+  @media (max-width:1100px){ .views{ grid-template-columns:minmax(0,1fr); } }
+  .views .board{ height:min(56svh,560px); min-height:300px; }
+  .tasks{ margin:0; padding-left:1.15rem; font-size:0.78rem; display:flex; flex-direction:column; gap:0.3rem; }
+  .tasks li::marker{ color:var(--brand); font-weight:700; }
+  .lbl{ font-size:0.72rem; color:var(--ink-muted); font-weight:600; margin:0.5rem 0 0.1rem; }
+  .vm{ display:inline-grid; grid-template-columns:repeat(4,auto); gap:0.05rem 0.7rem; justify-content:start; font-family:var(--font-mono); font-size:0.76rem; font-variant-numeric:tabular-nums; padding:0.2rem 0.5rem; border-left:2px solid var(--ink); border-right:2px solid var(--ink); border-radius:4px; text-align:right; }
+  .vm .r{ color:var(--c-r); } .vm .u{ color:var(--c-u); } .vm .f{ color:var(--c-f); } .vm .z{ color:var(--ink-muted); }
+  .pill.ok{ color:var(--c-success); } .pill.neutra{ color:var(--ink-muted); }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">lookAt</span>
+      <div class="brand-text">
+        <h1>Mesa de Câmera</h1>
+        <p>A câmera virtual: a base lookAt, a matriz de visualização, a projeção perspectiva e os pontos de fuga, como no Capítulo 5 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label for="presetSel">Exemplo</label>
+      <select id="presetSel" class="ghost-btn"></select>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Câmera</h2>
+        <div class="lbl">Olho E</div>
+        <label class="slider"><span>x</span><input type="range" id="exSl" min="-12" max="12" step="0.1" value="6"><output id="exSlOut"></output></label>
+        <label class="slider"><span>y</span><input type="range" id="eySl" min="-2" max="12" step="0.1" value="3"><output id="eySlOut"></output></label>
+        <label class="slider"><span>z</span><input type="range" id="ezSl" min="-12" max="12" step="0.1" value="8"><output id="ezSlOut"></output></label>
+        <div class="lbl">Alvo T</div>
+        <label class="slider"><span>x</span><input type="range" id="txSl" min="-5" max="5" step="0.1" value="0"><output id="txSlOut"></output></label>
+        <label class="slider"><span>y</span><input type="range" id="tySl" min="-2" max="5" step="0.1" value="1"><output id="tySlOut"></output></label>
+        <label class="slider"><span>z</span><input type="range" id="tzSl" min="-5" max="5" step="0.1" value="0"><output id="tzSlOut"></output></label>
+        <div class="lbl">Vetor up</div>
+        <div class="seg" id="upSeg" role="group" aria-label="Vetor up">
+          <button type="button" data-v="y" aria-pressed="true">(0, 1, 0)</button>
+          <button type="button" data-v="incl" aria-pressed="false">(1, 1, 0)</button>
+          <button type="button" data-v="z" aria-pressed="false">(0, 0, 1)</button>
+        </div>
+        <label class="slider"><span>distância d</span><input type="range" id="dSl" min="0.5" max="4" step="0.05" value="1.6"><output id="dSlOut"></output></label>
+      </div>
+
+      <div class="panel">
+        <h2>Projeção</h2>
+        <div class="seg" id="projSeg" role="group" aria-label="Projeção">
+          <button type="button" data-v="persp" aria-pressed="true">Perspectiva</button>
+          <button type="button" data-v="orto" aria-pressed="false">Ortográfica</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="chkFuga" checked> Pontos de fuga e horizonte</label>
+          <label><input type="checkbox" id="chkRaios"> Raios visuais até os vértices</label>
+          <label><input type="checkbox" id="chkBase" checked> Base r, u, f no olho</label>
+        </div>
+        <p class="hint">Clique na imagem para lançar um raio pelo pixel: o ponto em que ele toca o chão y = 0 aparece nas duas vistas (Exemplo “Clicando no chão”).</p>
+      </div>
+
+      <div class="panel">
+        <h2>Para investigar</h2>
+        <ol class="tasks">
+          <li>Com up = (0,1,0), suba o olho bem alto. Por que os prédios (as arestas verticais) continuam em pé na imagem? Ligue a perspectiva com três pontos de fuga.</li>
+          <li>Ponha o olho na altura do alvo, y(E) = y(T). Onde fica o horizonte? Quantos pontos de fuga sobram?</li>
+          <li>Coloque E exatamente acima de T com up = (0,1,0). O que dá errado na construção de r?</li>
+          <li>Troque para a projeção ortográfica: o que acontece com os pontos de fuga, e por quê?</li>
+          <li>Clique acima do horizonte. Por que o raio não encontra o chão?</li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="views">
+        <div class="board">
+          <canvas id="world" role="img" aria-label="Vista do mundo: a cena, a câmera, sua base e o plano de imagem; arraste para girar a vista."></canvas>
+          <span class="board-tag">Vista do mundo · arraste para girar</span>
+        </div>
+        <div class="board">
+          <canvas id="img" role="img" aria-label="Imagem vista pela câmera; clique para lançar um raio pelo pixel."></canvas>
+          <span class="board-tag">Imagem da câmera · clique no chão</span>
+        </div>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="panel">
+        <h2>Matriz de visualização V</h2>
+        <div id="vmBox"></div>
+        <div class="formula-box" id="fbCam"></div>
+      </div>
+      <div class="note" id="note" hidden></div>
+      <p class="footer-note">f = (T − E)/‖T − E‖, r = f × up/‖f × up‖, u = r × f. Um ponto P tem coordenadas de câmera (⟨P − E, r⟩, ⟨P − E, u⟩, ⟨P − E, f⟩) = (x, y, z) e aparece na tela em (d·x/z, d·y/z). Companheira do Capítulo 5 (“Retas, Planos e Projeções”), Seções 3 a 5, de <em>Geometria Analítica com Aplicações</em>, de Vinícius Mello e Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- utilitários comuns ----------
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v, n = 2) => {
+  if (!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '−∞' : '—');
+  let s = (Math.abs(v) < 0.5 * Math.pow(10, -n) ? 0 : v).toFixed(n);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', '−');
+};
+const sgn = (v, n = 2) => (v < 0 ? ' − ' : ' + ') + fmt(Math.abs(v), n);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function onThemeChange(cb){
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', cb); } catch (_) {}
+  new MutationObserver(cb).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+}
+function bindSlider(id, cb, digits = 2){
+  const inp = document.getElementById(id), out = document.getElementById(id + 'Out');
+  const show = () => { if (out) out.textContent = fmt(+inp.value, digits); };
+  inp.addEventListener('input', () => { show(); cb(+inp.value); });
+  show();
+  return { get: () => +inp.value, set: v => { inp.value = v; show(); } };
+}
+function bindSeg(groupEl, cb){
+  const btns = [...groupEl.querySelectorAll('button')];
+  const set = v => btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+  btns.forEach(b => b.addEventListener('click', () => { set(b.dataset.v); cb(b.dataset.v); }));
+  return { set };
+}
+function setReadout(el, items){
+  el.innerHTML = items.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+// ---------- Plano: quadro cartesiano com alças arrastáveis ----------
+function Plano(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const P = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    cx: opts.cx ?? 0, cy: opts.cy ?? 0, scale: opts.scale ?? 60, unitsAcross: opts.unitsAcross ?? null,
+    handles: [], drag: null, onDraw: () => {}, onBackground: null, onDragEnd: null, pan: opts.pan ?? true,
+  };
+  P.X = x => P.w / 2 + (x - P.cx) * P.scale;
+  P.Y = y => P.h / 2 - (y - P.cy) * P.scale;
+  P.wx = px => (px - P.w / 2) / P.scale + P.cx;
+  P.wy = py => -(py - P.h / 2) / P.scale + P.cy;
+  P.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    P.dpr = window.devicePixelRatio || 1;
+    P.w = r.width; P.h = r.height;
+    canvas.width = Math.round(r.width * P.dpr); canvas.height = Math.round(r.height * P.dpr);
+    if (P.unitsAcross) P.scale = Math.min(P.w, P.h * 1.5) / P.unitsAcross;
+    P.draw();
+  };
+  P.view = () => ({ x0: P.wx(0), x1: P.wx(P.w), y0: P.wy(P.h), y1: P.wy(0) });
+  P.grid = () => {
+    const { x0, x1, y0, y1 } = P.view();
+    let step = 1; const target = 48 / P.scale;
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+    for (const s of steps){ if (s >= target){ step = s; break; } }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar('--line-minor');
+    ctx.beginPath();
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ const X = Math.round(P.X(x)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, P.h); }
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ const Y = Math.round(P.Y(y)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(P.w, Y); }
+    ctx.stroke();
+    ctx.strokeStyle = cssVar('--line-major'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(P.X(0), 0); ctx.lineTo(P.X(0), P.h); ctx.moveTo(0, P.Y(0)); ctx.lineTo(P.w, P.Y(0)); ctx.stroke();
+    ctx.fillStyle = cssVar('--ink-muted'); ctx.font = `500 10px ${cssVar('--font-mono')}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const lab = v => fmt(v, step < 1 ? 1 : 0);
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ if (Math.abs(x) < 1e-9) continue; ctx.fillText(lab(x), P.X(x), clamp(P.Y(0) + 3, 2, P.h - 13)); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ if (Math.abs(y) < 1e-9) continue; ctx.fillText(lab(y), clamp(P.X(0) - 4, 26, P.w - 2), P.Y(y)); }
+  };
+  P.line = (a, b, color, width = 1.5, dash = null) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(P.X(a.x), P.Y(a.y)); ctx.lineTo(P.X(b.x), P.Y(b.y)); ctx.stroke(); ctx.restore();
+  };
+  P.infLine = (p, d, color, width = 1.5, dash = null) => {
+    const L = 4 * (P.w + P.h) / P.scale, n = Math.hypot(d.x, d.y) || 1;
+    P.line({ x: p.x - L * d.x / n, y: p.y - L * d.y / n }, { x: p.x + L * d.x / n, y: p.y + L * d.y / n }, color, width, dash);
+  };
+  P.path = (pts, color, width = 2, dash = null, close = false) => {
+    if (pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    let pen = false;
+    for (const p of pts){
+      if (!p || !isFinite(p.x) || !isFinite(p.y)){ pen = false; continue; }
+      const X = P.X(p.x), Y = P.Y(p.y);
+      if (Math.abs(X) > 1e5 || Math.abs(Y) > 1e5){ pen = false; continue; }
+      if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  P.arrow = (a, b, color, width = 2) => {
+    const X1 = P.X(a.x), Y1 = P.Y(a.y), X2 = P.X(b.x), Y2 = P.Y(b.y);
+    const ang = Math.atan2(Y2 - Y1, X2 - X1), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2 - 0.6 * hl * Math.cos(ang), Y2 - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X2, Y2);
+    ctx.lineTo(X2 - hl * Math.cos(ang - 0.4), Y2 - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(X2 - hl * Math.cos(ang + 0.4), Y2 - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  };
+  P.dot = (p, color, r = 4, label = null, where = 'ne') => {
+    ctx.save(); ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(P.X(p.x), P.Y(p.y), r, 0, 2 * Math.PI); ctx.fill();
+    if (label) P.label(p, label, color, where, r + 3);
+    ctx.restore();
+  };
+  P.label = (p, text, color, where = 'ne', off = 6) => {
+    ctx.save();
+    ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.fillStyle = color;
+    const dx = where.includes('e') ? off : where.includes('w') ? -off : 0;
+    const dy = where.includes('n') ? -off : where.includes('s') ? off : 0;
+    ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+    ctx.textBaseline = dy < 0 ? 'bottom' : dy > 0 ? 'top' : 'middle';
+    const X = P.X(p.x) + dx, Y = P.Y(p.y) + dy;
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, X, Y);
+    ctx.fillText(text, X, Y);
+    ctx.restore();
+  };
+  P.draw = () => {
+    ctx.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+    ctx.clearRect(0, 0, P.w, P.h);
+    P.grid();
+    P.onDraw(ctx);
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), X = P.X(p.x), Y = P.Y(p.y);
+      ctx.save();
+      ctx.fillStyle = cssVar('--paper-raised'); ctx.strokeStyle = h.color(); ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      if (h.shape === 'square') ctx.rect(X - 5.5, Y - 5.5, 11, 11); else ctx.arc(X, Y, 6.5, 0, 2 * Math.PI);
+      ctx.fill(); ctx.stroke();
+      if (h.label) P.label(p, typeof h.label === 'function' ? h.label() : h.label, h.color(), h.where || 'ne', 9);
+      ctx.restore();
+    }
+  };
+  P.addHandle = h => { P.handles.push(h); return h; };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  const pick = (px, py) => {
+    let best = null, bd = 16;
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), d = Math.hypot(P.X(p.x) - px, P.Y(p.y) - py);
+      if (d < bd){ bd = d; best = h; }
+    }
+    return best;
+  };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    const h = pick(px, py);
+    canvas.setPointerCapture(e.pointerId);
+    if (h){ P.drag = { h }; canvas.classList.add('grabbing'); return; }
+    if (P.onBackground && P.onBackground(P.wx(px), P.wy(py), e) === true){ P.drag = { bg: true }; return; }
+    if (P.pan){ P.drag = { pan: true, px, py, cx: P.cx, cy: P.cy }; canvas.classList.add('grabbing'); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const { px, py } = pos(e);
+    if (!P.drag){ canvas.classList.toggle('grab', !!pick(px, py)); return; }
+    if (P.drag.h){ P.drag.h.set(P.wx(px), P.wy(py), e); P.changed && P.changed(); P.draw(); }
+    else if (P.drag.bg){ P.onBackground(P.wx(px), P.wy(py), e, true); }
+    else if (P.drag.pan){ P.cx = P.drag.cx - (px - P.drag.px) / P.scale; P.cy = P.drag.cy + (py - P.drag.py) / P.scale; P.draw(); }
+  });
+  const end = () => { if (P.drag && P.onDragEnd) P.onDragEnd(P.drag); P.drag = null; canvas.classList.remove('grabbing'); };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const { px, py } = pos(e), wx = P.wx(px), wy = P.wy(py);
+    P.scale = clamp(P.scale * Math.exp(-e.deltaY * 0.0015), 8, 600);
+    P.cx = wx - (px - P.w / 2) / P.scale; P.cy = wy + (py - P.h / 2) / P.scale;
+    P.unitsAcross = null; P.draw();
+  }, { passive: false });
+  new ResizeObserver(() => P.resize()).observe(canvas);
+  onThemeChange(() => P.draw());
+  return P;
+}
+
+// ---------- vetores em R^3 ----------
+const V3 = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  norm: a => Math.hypot(a[0], a[1], a[2]),
+  unit: a => { const n = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / n, a[1] / n, a[2] / n]; },
+  lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+};
+const fv = (v, n = 2) => '(' + v.map(c => fmt(c, n)).join(', ') + ')';
+
+// ---------- Espaco: vista orbital de uma cena 3D, desenhada em canvas 2D ----------
+// up = 'z' (quádricas, como na tabela do Cap. 6) ou 'y' (câmera e ray tracer).
+function Espaco(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const S = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    az: opts.az ?? 0.7, el: opts.el ?? 0.45, dist: opts.dist ?? 12, target: opts.target ?? [0, 0, 0],
+    up: opts.up ?? 'z', fov: opts.fov ?? 0.9, onDraw: () => {}, onClick: null, drag: null,
+  };
+  // vetores da câmera orbital
+  S.basis = () => {
+    const ca = Math.cos(S.az), sa = Math.sin(S.az), ce = Math.cos(S.el), se = Math.sin(S.el);
+    let back, upW;
+    if (S.up === 'z'){ back = [ce * ca, ce * sa, se]; upW = [0, 0, 1]; }
+    else { back = [ce * sa, se, ce * ca]; upW = [0, 1, 0]; }
+    const eye = V3.add(S.target, V3.mul(back, S.dist));
+    const f = V3.mul(back, -1);
+    const r = V3.unit(V3.cross(f, upW));
+    const u = V3.cross(r, f);
+    return { eye, f, r, u };
+  };
+  let B = null;
+  S.project = p => {
+    const q = V3.sub(p, B.eye), z = V3.dot(q, B.f);
+    const k = (Math.min(S.w, S.h) / 2) / Math.tan(S.fov / 2);
+    if (z < 0.05) return { x: NaN, y: NaN, z };
+    return { x: S.w / 2 + k * V3.dot(q, B.r) / z, y: S.h / 2 - k * V3.dot(q, B.u) / z, z };
+  };
+  S.depth = p => V3.dot(V3.sub(p, B.eye), B.f);
+  S.viewDir = () => B.f;
+  S.eye = () => B.eye;
+  S.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    S.dpr = window.devicePixelRatio || 1; S.w = r.width; S.h = r.height;
+    canvas.width = Math.round(r.width * S.dpr); canvas.height = Math.round(r.height * S.dpr);
+    S.draw();
+  };
+  S.seg = (a, b, color, width = 1.5, dash = null) => {
+    const A = S.project(a), Bp = S.project(b);
+    if (!isFinite(A.x) || !isFinite(Bp.x)) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(Bp.x, Bp.y); ctx.stroke(); ctx.restore();
+  };
+  S.poly = (pts, color, width = 1.5, dash = null, close = false) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); let pen = false;
+    for (const p of pts){
+      if (!p){ pen = false; continue; }
+      const q = S.project(p);
+      if (!isFinite(q.x)){ pen = false; continue; }
+      if (pen) ctx.lineTo(q.x, q.y); else { ctx.moveTo(q.x, q.y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  S.fillPoly = (pts, fill, stroke = null, width = 1) => {
+    const qs = pts.map(S.project);
+    if (qs.some(q => !isFinite(q.x))) return;
+    ctx.beginPath(); qs.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(); }
+  };
+  S.arrow = (a, b, color, width = 2.2, label = null) => {
+    const A = S.project(a), Bp = S.project(b);
+    if (!isFinite(A.x) || !isFinite(Bp.x)) return;
+    const ang = Math.atan2(Bp.y - A.y, Bp.x - A.x), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(Bp.x - 0.6 * hl * Math.cos(ang), Bp.y - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(Bp.x, Bp.y);
+    ctx.lineTo(Bp.x - hl * Math.cos(ang - 0.4), Bp.y - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(Bp.x - hl * Math.cos(ang + 0.4), Bp.y - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+    if (label) S.text(Bp.x + 6 * Math.cos(ang), Bp.y + 6 * Math.sin(ang), label, color, Math.cos(ang) >= 0 ? 'left' : 'right');
+    ctx.restore();
+  };
+  S.dot = (p, color, r = 4, label = null) => {
+    const q = S.project(p); if (!isFinite(q.x)) return;
+    ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, 2 * Math.PI); ctx.fill(); ctx.restore();
+    if (label) S.text(q.x + r + 3, q.y - r - 2, label, color, 'left');
+  };
+  S.text = (x, y, text, color, align = 'left') => {
+    ctx.save(); ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.textAlign = align; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y); ctx.restore();
+  };
+  S.axes = (len = 3, labels = true) => {
+    const muted = cssVar('--ink-muted');
+    const O = [0, 0, 0];
+    S.arrow(O, [len, 0, 0], muted, 1.3, labels ? 'x' : null);
+    S.arrow(O, [0, len, 0], muted, 1.3, labels ? 'y' : null);
+    S.arrow(O, [0, 0, len], muted, 1.3, labels ? 'z' : null);
+  };
+  S.draw = () => {
+    B = S.basis();
+    ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+    ctx.clearRect(0, 0, S.w, S.h);
+    S.onDraw(ctx);
+  };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    canvas.setPointerCapture(e.pointerId);
+    S.drag = { px, py, az: S.az, el: S.el, moved: false };
+    canvas.classList.add('grabbing');
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!S.drag) return;
+    const { px, py } = pos(e);
+    if (Math.hypot(px - S.drag.px, py - S.drag.py) > 3) S.drag.moved = true;
+    const sgnAz = S.up === 'z' ? -1 : -1;
+    S.az = S.drag.az + sgnAz * (px - S.drag.px) * 0.008;
+    S.el = clamp(S.drag.el + (py - S.drag.py) * 0.008, -1.45, 1.45);
+    S.draw();
+  });
+  const end = e => {
+    if (S.drag && !S.drag.moved && S.onClick){ const { px, py } = pos(e); S.onClick(px, py); }
+    S.drag = null; canvas.classList.remove('grabbing');
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', () => { S.drag = null; canvas.classList.remove('grabbing'); });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault(); S.dist = clamp(S.dist * Math.exp(e.deltaY * 0.0012), 2, 80); S.draw();
+  }, { passive: false });
+  canvas.classList.add('grab');
+  new ResizeObserver(() => S.resize()).observe(canvas);
+  onThemeChange(() => S.draw());
+  return S;
+}
+
+// cor CSS (#rrggbb) → [r,g,b] em 0..1
+function hexRGB(h){
+  h = h.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+const rgbCSS = (c, a = 1) => `rgba(${Math.round(clamp(c[0], 0, 1) * 255)},${Math.round(clamp(c[1], 0, 1) * 255)},${Math.round(clamp(c[2], 0, 1) * 255)},${a})`;
+
+
+const C = n => cssVar(n);
+const st = {
+  E: [6, 3, 8], T: [0, 1, 0], up: 'y', d: 1.6, proj: 'persp', fuga: true, raios: false, base: true, click: null,
+};
+const UPS = { y: [0, 1, 0], incl: V3.unit([1, 1, 0]), z: [0, 0, 1] };
+const HW = 1, HH = 0.75; // meia largura e meia altura da tela no plano de imagem
+
+// cena: chão, duas caixas e um poste
+function boxEdges(x0, x1, y0, y1, z0, z1){
+  const v = [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]];
+  const e = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+  return { v, e };
+}
+const B1 = boxEdges(-1, 1, 0, 2, -1, 1);
+const B2 = boxEdges(2, 3.4, 0, 3.6, -3, -1.6);
+function rotY(p, a, c){ const x = p[0] - c[0], z = p[2] - c[2]; return [c[0] + x * Math.cos(a) + z * Math.sin(a), p[1], c[2] - x * Math.sin(a) + z * Math.cos(a)]; }
+const B3 = (() => { const b = boxEdges(-3.6, -2.4, 0, 1.2, 1.4, 2.6); b.v = b.v.map(p => rotY(p, 0.6, [-3, 0, 2])); return b; })();
+
+function camBasis(){
+  const f = V3.unit(V3.sub(st.T, st.E)), cr = V3.cross(f, UPS[st.up]), nr = V3.norm(cr);
+  if (nr < 1e-6) return { f, r: null, u: null, bad: true };
+  const r = V3.mul(cr, 1 / nr), u = V3.cross(r, f);
+  return { f, r, u };
+}
+const camCoords = (p, B) => { const q = V3.sub(p, st.E); return [V3.dot(q, B.r), V3.dot(q, B.u), V3.dot(q, B.f)]; };
+const zT = () => V3.norm(V3.sub(st.T, st.E));
+function toImage(c){ // c em coordenadas de câmera
+  if (st.proj === 'persp') return { x: st.d * c[0] / c[2], y: st.d * c[1] / c[2] };
+  const k = st.d / zT(); return { x: c[0] * k, y: c[1] * k };
+}
+
+// ===================== imagem =====================
+const imgCv = $('#img'), ictx = imgCv.getContext('2d');
+let IW = 0, IH = 0, idpr = 1;
+function imgScale(){ return Math.min(IW / (2 * HW), IH / (2 * HH)) * 0.9; }
+const IX = x => IW / 2 + x * imgScale(), IY = y => IH / 2 - y * imgScale();
+function imgSeg(a, b, B, color, width = 1.6, dash = null){
+  let ca = camCoords(a, B), cb = camCoords(b, B);
+  const near = 0.05;
+  if (st.proj === 'persp'){
+    if (ca[2] < near && cb[2] < near) return;
+    if (ca[2] < near){ const t = (near - ca[2]) / (cb[2] - ca[2]); ca = V3.lerp(ca, cb, t); }
+    if (cb[2] < near){ const t = (near - cb[2]) / (ca[2] - cb[2]); cb = V3.lerp(cb, ca, t); }
+  }
+  const pa = toImage(ca), pb = toImage(cb);
+  ictx.save(); ictx.strokeStyle = color; ictx.lineWidth = width; if (dash) ictx.setLineDash(dash);
+  ictx.beginPath(); ictx.moveTo(IX(pa.x), IY(pa.y)); ictx.lineTo(IX(pb.x), IY(pb.y)); ictx.stroke(); ictx.restore();
+}
+function drawImage(){
+  const r = imgCv.getBoundingClientRect(); idpr = window.devicePixelRatio || 1; IW = r.width; IH = r.height;
+  if (imgCv.width !== Math.round(IW * idpr)){ imgCv.width = Math.round(IW * idpr); imgCv.height = Math.round(IH * idpr); }
+  ictx.setTransform(idpr, 0, 0, idpr, 0, 0); ictx.clearRect(0, 0, IW, IH);
+  const B = camBasis();
+  // moldura da tela
+  const x0 = IX(-HW), y0 = IY(HH), w = 2 * HW * imgScale(), h = 2 * HH * imgScale();
+  ictx.fillStyle = C('--paper-raised'); ictx.fillRect(x0, y0, w, h);
+  if (B.bad){ ictx.fillStyle = C('--c-warning'); ictx.font = `600 13px ${C('--font-body')}`; ictx.textAlign = 'center'; ictx.fillText('f × up = 0: a direção “direita” não está definida', IW / 2, IH / 2); return; }
+  ictx.save(); ictx.beginPath(); ictx.rect(x0, y0, w, h); ictx.clip();
+  // chão
+  for (let k = -6; k <= 6; k++){ imgSeg([k, 0, -6], [k, 0, 6], B, C('--c-chao'), 1); imgSeg([-6, 0, k], [6, 0, k], B, C('--c-chao'), 1); }
+  // pontos de fuga e horizonte
+  const vps = [];
+  if (st.fuga && st.proj === 'persp'){
+    const dirs = [[[1, 0, 0], 'x'], [[0, 0, 1], 'z'], [[0, 1, 0], 'y']];
+    for (const [v, nm] of dirs){
+      const c = [V3.dot(v, B.r), V3.dot(v, B.u), V3.dot(v, B.f)];
+      if (Math.abs(c[2]) > 1e-3){ const p = { x: st.d * c[0] / c[2], y: st.d * c[1] / c[2] }; vps.push({ p, nm, v }); }
+    }
+    // horizonte: imagens das direções horizontais
+    const hz = [];
+    for (const v of [[1, 0, 0], [0, 0, 1], [1, 0, 1], [1, 0, -1]]){ const c = [V3.dot(v, B.r), V3.dot(v, B.u), V3.dot(v, B.f)]; if (Math.abs(c[2]) > 1e-3) hz.push({ x: st.d * c[0] / c[2], y: st.d * c[1] / c[2] }); }
+    if (hz.length >= 2){
+      const a = hz[0], b = hz[1], dx = b.x - a.x, dy = b.y - a.y, L = 50 / (Math.hypot(dx, dy) || 1);
+      ictx.save(); ictx.strokeStyle = C('--c-fuga'); ictx.lineWidth = 1.2; ictx.setLineDash([8, 5]);
+      ictx.beginPath(); ictx.moveTo(IX(a.x - dx * L), IY(a.y - dy * L)); ictx.lineTo(IX(a.x + dx * L), IY(a.y + dy * L)); ictx.stroke(); ictx.restore();
+    }
+    // arestas prolongadas até os pontos de fuga (caixa principal)
+    for (const vp of vps){
+      for (const [i, j] of B1.e){
+        const dv = V3.unit(V3.sub(B1.v[j], B1.v[i]));
+        if (Math.abs(Math.abs(V3.dot(dv, vp.v)) - 1) > 1e-6) continue;
+        const a = toImage(camCoords(B1.v[i], B)), cz = camCoords(B1.v[i], B)[2];
+        if (cz <= 0.05) continue;
+        ictx.save(); ictx.strokeStyle = C('--c-fuga'); ictx.globalAlpha = 0.6; ictx.lineWidth = 1; ictx.setLineDash([2, 3]);
+        ictx.beginPath(); ictx.moveTo(IX(a.x), IY(a.y)); ictx.lineTo(IX(vp.p.x), IY(vp.p.y)); ictx.stroke(); ictx.restore();
+      }
+    }
+  }
+  // caixas
+  for (const [bx, col] of [[B2, C('--c-caixa2')], [B3, C('--c-caixa2')], [B1, C('--c-caixa')]]) for (const [i, j] of bx.e) imgSeg(bx.v[i], bx.v[j], B, col, 2);
+  // clique
+  if (st.click && st.click.hit) {
+    const c = camCoords(st.click.hit, B); if (c[2] > 0.05){ const p = toImage(c); ictx.fillStyle = C('--c-cam'); ictx.beginPath(); ictx.arc(IX(p.x), IY(p.y), 5, 0, 2 * Math.PI); ictx.fill(); }
+  }
+  ictx.restore();
+  if (st.click){ ictx.strokeStyle = C('--c-cam'); ictx.lineWidth = 1.5; const X = IX(st.click.ix), Y = IY(st.click.iy); ictx.beginPath(); ictx.moveTo(X - 8, Y); ictx.lineTo(X + 8, Y); ictx.moveTo(X, Y - 8); ictx.lineTo(X, Y + 8); ictx.stroke(); }
+  // pontos de fuga (podem cair fora da tela)
+  for (const vp of vps){
+    const X = IX(vp.p.x), Y = IY(vp.p.y);
+    if (X < -20 || X > IW + 20 || Y < -20 || Y > IH + 20) continue;
+    ictx.fillStyle = C('--c-fuga'); ictx.beginPath(); ictx.arc(X, Y, 4.5, 0, 2 * Math.PI); ictx.fill();
+    ictx.font = `600 11px ${C('--font-body')}`; ictx.fillText('fuga de ' + vp.nm, X + 7, Y - 6);
+  }
+  ictx.strokeStyle = C('--border'); ictx.lineWidth = 1.5; ictx.strokeRect(x0, y0, w, h);
+  ictx.fillStyle = C('--ink-muted'); ictx.font = `500 10px ${C('--font-mono')}`; ictx.textAlign = 'right';
+  ictx.fillText(`tela [−${HW}, ${HW}] × [−${HH}, ${HH}] no plano z = d`, x0 + w - 4, y0 + h - 6);
+  st._vps = vps;
+}
+imgCv.addEventListener('click', e => {
+  const r = imgCv.getBoundingClientRect(), ix = (e.clientX - r.left - IW / 2) / imgScale(), iy = -(e.clientY - r.top - IH / 2) / imgScale();
+  if (Math.abs(ix) > HW || Math.abs(iy) > HH) return;
+  const B = camBasis(); if (B.bad) return;
+  let O, D;
+  if (st.proj === 'persp'){ O = st.E; D = V3.add(V3.add(V3.mul(B.r, ix), V3.mul(B.u, iy)), V3.mul(B.f, st.d)); }
+  else { const k = zT() / st.d; O = V3.add(st.E, V3.add(V3.mul(B.r, ix * k), V3.mul(B.u, iy * k))); D = B.f; }
+  let hit = null, t = null;
+  if (D[1] < -1e-9){ t = -O[1] / D[1]; hit = V3.add(O, V3.mul(D, t)); }
+  st.click = { ix, iy, O, D, t, hit };
+  redraw();
+});
+
+// ===================== mundo =====================
+const W = Espaco($('#world'), { up: 'y', az: 0.9, el: 0.45, dist: 15, target: [1, 1, 1] });
+W.onDraw = () => {
+  const B = camBasis();
+  for (let k = -6; k <= 6; k++){ W.seg([k, 0, -6], [k, 0, 6], C('--c-chao'), 1); W.seg([-6, 0, k], [6, 0, k], C('--c-chao'), 1); }
+  for (const [bx, col] of [[B2, C('--c-caixa2')], [B3, C('--c-caixa2')], [B1, C('--c-caixa')]]) for (const [i, j] of bx.e) W.seg(bx.v[i], bx.v[j], col, 2);
+  W.dot(st.T, C('--c-cam'), 4, 'T');
+  W.dot(st.E, C('--c-cam'), 5, 'E');
+  if (!B.bad){
+    const k = st.proj === 'persp' ? 1 : zT() / st.d;
+    const ctr = V3.add(st.E, V3.mul(B.f, st.d));
+    const corner = (sx, sy) => st.proj === 'persp'
+      ? V3.add(ctr, V3.add(V3.mul(B.r, sx * HW), V3.mul(B.u, sy * HH)))
+      : V3.add(ctr, V3.add(V3.mul(B.r, sx * HW * k), V3.mul(B.u, sy * HH * k)));
+    const cs = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
+    W.fillPoly(cs, C('--c-tela'), C('--c-f'), 1.4);
+    if (st.proj === 'persp') for (const c of cs) W.seg(st.E, V3.add(st.E, V3.mul(V3.sub(c, st.E), 3)), C('--c-f'), 0.8, [3, 4]);
+    else for (const c of cs) W.seg(c, V3.add(c, V3.mul(B.f, zT() * 1.6)), C('--c-f'), 0.8, [3, 4]);
+    W.seg(st.E, st.T, C('--c-cam'), 1, [2, 3]);
+    if (st.base){
+      W.arrow(st.E, V3.add(st.E, V3.mul(B.r, 1.6)), C('--c-r'), 2.4, 'r');
+      W.arrow(st.E, V3.add(st.E, V3.mul(B.u, 1.6)), C('--c-u'), 2.4, 'u');
+      W.arrow(st.E, V3.add(st.E, V3.mul(B.f, 1.6)), C('--c-f'), 2.4, 'f');
+    }
+    if (st.raios){
+      for (const p of B1.v){
+        const c = camCoords(p, B); if (c[2] <= 0.05) continue;
+        W.seg(st.E, p, C('--c-fuga'), 0.9);
+        const q = toImage(c);
+        const onPlane = st.proj === 'persp' ? V3.add(st.E, V3.mul(V3.sub(p, st.E), st.d / c[2])) : V3.add(ctr, V3.add(V3.mul(B.r, q.x * k), V3.mul(B.u, q.y * k)));
+        W.dot(onPlane, C('--c-fuga'), 2.5);
+      }
+    }
+    if (st.click){
+      const end = st.click.hit || V3.add(st.click.O, V3.mul(st.click.D, 30 / V3.norm(st.click.D)));
+      W.seg(st.click.O, end, C('--c-cam'), 1.8);
+      if (st.click.hit) W.dot(st.click.hit, C('--c-cam'), 5, 'chão');
+    }
+  }
+};
+
+// ===================== leituras =====================
+function readouts(){
+  const B = camBasis(), note = $('#note');
+  if (B.bad){
+    setReadout($('#readout'), [['f', fv(B.f, 3)], ['r', '<span class="pill neutra">indefinido</span>']]);
+    $('#vmBox').innerHTML = ''; $('#fbCam').innerHTML = '<div class="sub">f é paralelo a up: f × up = 0</div>';
+    note.hidden = false; note.className = 'note'; note.textContent = 'A câmera olha exatamente na direção de up: f × up = 0 e não há como decidir o que é “direita”. É o caso que todo programador de jogos precisa tratar (Seção 5.4).';
+    return;
+  }
+  const items = [['f (frente)', fv(B.f, 3)], ['r (direita)', fv(B.r, 3)], ['u (cima)', fv(B.u, 3)], ['T em coord. de câmera', fv(camCoords(st.T, B), 3)]];
+  if (st.proj === 'persp') items.push(['campo de visão horizontal', fmt(2 * Math.atan(HW / st.d) * 180 / Math.PI, 1) + '°']);
+  if (st.click){
+    items.push(['direção do raio', fv(st.click.D, 3)]);
+    items.push(['ponto no chão', st.click.hit ? fv(st.click.hit, 3) : '<span class="pill neutra">não atinge (acima do horizonte)</span>']);
+    if (st.click.hit) items.push(['t*', fmt(st.click.t, 3)]);
+  }
+  setReadout($('#readout'), items);
+  const tv = [-V3.dot(st.E, B.r), -V3.dot(st.E, B.u), -V3.dot(st.E, B.f)];
+  const row = (v, cl, t) => v.map(x => `<span class="${cl}">${fmt(x, 3)}</span>`).join('') + `<span class="${cl}">${fmt(t, 3)}</span>`;
+  $('#vmBox').innerHTML = `<div class="vm">${row(B.r, 'r', tv[0])}${row(B.u, 'u', tv[1])}${row(B.f, 'f', tv[2])}<span class="z">0</span><span class="z">0</span><span class="z">0</span><span class="z">1</span></div>`;
+  $('#fbCam').innerHTML = `<div class="sub">as linhas de V são r, u e f; a última coluna é −(⟨E,r⟩, ⟨E,u⟩, ⟨E,f⟩)</div>` +
+    (st.proj === 'persp' ? `<div class="main">π(P) = (d·x/z, d·y/z), d = ${fmt(st.d, 2)}</div>` : `<div class="main">π(P) = (x, y)·d/‖T − E‖ (ortográfica, escala ${fmt(st.d / zT(), 3)})</div>`);
+  if (st.click && !st.click.hit){ note.hidden = false; note.className = 'note'; note.textContent = 'O raio pelo pixel clicado sobe (⟨v, e₂⟩ ≥ 0): ele nunca atinge o chão à frente da câmera, e o clique é ignorado.'; }
+  else if (st.proj === 'orto' && st.fuga){ note.hidden = false; note.className = 'note'; note.textContent = 'Na projeção ortográfica, retas paralelas continuam paralelas na imagem: não há pontos de fuga.'; }
+  else note.hidden = true;
+}
+function redraw(){ drawImage(); W.draw(); readouts(); }
+
+// ===================== controles =====================
+const sl = {};
+[['exSl', 'E', 0], ['eySl', 'E', 1], ['ezSl', 'E', 2], ['txSl', 'T', 0], ['tySl', 'T', 1], ['tzSl', 'T', 2]].forEach(([id, k, i]) => { sl[id] = bindSlider(id, v => { st[k][i] = v; st.click = null; redraw(); }, 1); });
+sl.d = bindSlider('dSl', v => { st.d = v; st.click = null; redraw(); });
+const upSeg = bindSeg($('#upSeg'), v => { st.up = v; st.click = null; redraw(); });
+const projSeg = bindSeg($('#projSeg'), v => { st.proj = v; st.click = null; redraw(); });
+const chk = (id, key) => { const el = $('#' + id); el.addEventListener('change', () => { st[key] = el.checked; redraw(); }); return el; };
+const cF = chk('chkFuga', 'fuga'), cR = chk('chkRaios', 'raios'); chk('chkBase', 'base');
+const PRESETS = [
+  { nome: 'Três pontos de fuga (olhando de cima)', E: [6, 3, 8], T: [0, 1, 0], up: 'y', d: 1.6, proj: 'persp' },
+  { nome: 'Olho na altura do alvo (dois pontos de fuga)', E: [7, 1, 7], T: [0, 1, 0], up: 'y', d: 1.6, proj: 'persp' },
+  { nome: 'Um ponto de fuga (de frente para a caixa)', E: [0, 1.4, 9], T: [0, 1.4, 0], up: 'y', d: 1.6, proj: 'persp' },
+  { nome: 'Grande-angular (d pequeno)', E: [3, 2, 4], T: [0, 1, 0], up: 'y', d: 0.6, proj: 'persp' },
+  { nome: 'Câmera inclinada (up = (1,1,0))', E: [6, 3, 8], T: [0, 1, 0], up: 'incl', d: 1.6, proj: 'persp' },
+  { nome: 'Ortográfica', E: [6, 5, 8], T: [0, 1, 0], up: 'y', d: 1.6, proj: 'orto' },
+  { nome: 'Olhando para baixo (f × up = 0)', E: [0, 9, 0], T: [0, 0, 0], up: 'y', d: 1.6, proj: 'persp' },
+];
+const sel = $('#presetSel');
+sel.innerHTML = PRESETS.map((p, i) => `<option value="${i}">${p.nome}</option>`).join('');
+function loadPreset(i){
+  const p = PRESETS[i];
+  st.E = [...p.E]; st.T = [...p.T]; st.up = p.up; st.d = p.d; st.proj = p.proj; st.click = null;
+  sl.exSl.set(st.E[0]); sl.eySl.set(st.E[1]); sl.ezSl.set(st.E[2]); sl.txSl.set(st.T[0]); sl.tySl.set(st.T[1]); sl.tzSl.set(st.T[2]); sl.d.set(st.d);
+  upSeg.set(st.up); projSeg.set(st.proj); redraw();
+}
+sel.addEventListener('change', () => loadPreset(+sel.value));
+new ResizeObserver(() => drawImage()).observe(imgCv);
+onThemeChange(() => redraw());
+loadPreset(0);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+})();
+</script>

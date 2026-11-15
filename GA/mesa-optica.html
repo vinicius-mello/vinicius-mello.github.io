@@ -1,0 +1,849 @@
+<title>Mesa de Óptica</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mesas de GA: painel lateral + mesa (quadro) com leituras ao vivo. */
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-success:#1F9254;
+    --c-warning:#B4590E;
+    --c-danger:#C23B78;
+    --shadow:rgba(22,35,58,0.14);
+    --font-display:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    --font-body:'Public Sans','Segoe UI',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-success:#4ADE80;
+      --c-warning:#FBBF74;
+      --c-danger:#E86FA6;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-success:#4ADE80;
+    --c-warning:#FBBF74;
+    --c-danger:#E86FA6;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:var(--font-display);
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1360px;
+    margin:0 auto;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));
+    padding-right:max(16px, env(safe-area-inset-right, 0px));
+    padding-block:0.85rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+  }
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; min-width:0; }
+  .brand-mark{
+    font-family:var(--font-mono); font-weight:600;
+    font-size:1.05rem; color:var(--brand); line-height:1;
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem;
+    white-space:nowrap;
+  }
+  .brand-text{ min-width:0; }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:64ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(270px,320px) minmax(0,1fr);
+    gap:0.75rem;
+    align-items:start;
+  }
+  @media (max-width:880px){ .workspace{ grid-template-columns:minmax(0,1fr); } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+    min-width:0;
+  }
+  .panel h2{
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:0.45rem;
+  }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.45rem 0 0; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; border:none; background:var(--paper); font-size:0.74rem; font-weight:600;
+    padding:0.38rem 0.45rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .seg button + button{ border-left:1px solid var(--border); }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  .slider{ display:grid; grid-template-columns:4.6rem minmax(0,1fr) 3.6rem; align-items:center; gap:0.4rem; margin-top:0.35rem; }
+  .slider > span:first-child{ font-size:0.74rem; color:var(--ink-muted); font-weight:600; }
+  .slider input[type=range]{ width:100%; accent-color:var(--brand); min-width:0; }
+  .slider output{ font-family:var(--font-mono); font-size:0.76rem; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); max-width:100%; }
+  .btn-row{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.45rem; }
+
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:var(--font-mono);
+    font-size:0.74rem; line-height:1.6;
+    background:var(--paper-sunken);
+    border-radius:6px; padding:0.45rem 0.6rem;
+    overflow-x:auto; overflow-wrap:anywhere;
+  }
+  .formula-box > div{ padding-left:1.2em; text-indent:-1.2em; }
+  .formula-box .main{ color:var(--brand); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .board{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    height:min(70svh,700px);
+    min-height:340px;
+  }
+  .board canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .board canvas.grab{ cursor:grab; }
+  .board canvas.grabbing{ cursor:grabbing; }
+  .board-tag{
+    position:absolute; left:0.5rem; top:0.45rem; pointer-events:none;
+    font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--ink-muted); background:var(--paper-raised); border:1px solid var(--border);
+    border-radius:4px; padding:0.1rem 0.35rem;
+  }
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:0.4rem;
+  }
+  .ro{
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:7px;
+    padding:0.35rem 0.55rem; min-width:0;
+  }
+  .ro .k{ font-size:0.72rem; letter-spacing:0.01em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .pill{ display:inline-block; font-size:0.74rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; border:1.5px solid currentColor; font-family:var(--font-body); }
+  .note{
+    font-size:0.78rem; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--border); border-left:4px solid var(--c-warning);
+    border-radius:0 7px 7px 0; padding:0.4rem 0.6rem;
+  }
+  .note.ok{ border-left-color:var(--c-success); }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; max-width:110ch; }
+  .footer-note a{ color:var(--brand); }
+  .tbl-wrap{ overflow-x:auto; }
+  table.tbl{ border-collapse:collapse; font-family:var(--font-mono); font-size:0.74rem; font-variant-numeric:tabular-nums; width:100%; }
+  table.tbl th, table.tbl td{ padding:0.18rem 0.4rem; text-align:right; border-bottom:1px solid var(--line-minor); white-space:nowrap; }
+  table.tbl th{ color:var(--ink-muted); font-weight:600; font-family:var(--font-body); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.03em; }
+  table.tbl tfoot td{ font-weight:700; border-bottom:none; border-top:1.5px solid var(--line-major); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+  :root{
+    --c-espelho:#2B3A55;
+    --c-luz:#D9822B;
+    --c-foco:#B8791A;
+    --c-r1:#157F6E;
+    --c-r2:#C23B78;
+    --c-aux:#6E4FC2;
+    --c-caustica:#2955C8;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --c-espelho:#C9D6EA; --c-luz:#FFB45C; --c-foco:#F0A94E; --c-r1:#4FD8BE; --c-r2:#E86FA6; --c-aux:#A78BFA; --c-caustica:#6C93FF;
+    }
+  }
+  :root[data-theme="dark"]{
+    --c-espelho:#C9D6EA; --c-luz:#FFB45C; --c-foco:#F0A94E; --c-r1:#4FD8BE; --c-r2:#E86FA6; --c-aux:#A78BFA; --c-caustica:#6C93FF;
+  }
+  .pill.ok{ color:var(--c-success); }
+  .pill.neutra{ color:var(--ink-muted); }
+  .pill.aviso{ color:var(--c-warning); }
+  .tasks{ margin:0; padding-left:1.15rem; font-size:0.78rem; display:flex; flex-direction:column; gap:0.3rem; }
+  .tasks li::marker{ color:var(--brand); font-weight:700; }
+  .lbl{ font-size:0.72rem; color:var(--ink-muted); font-weight:600; margin:0.5rem 0 0.25rem; }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">v′=S(v)</span>
+      <div class="brand-text">
+        <h1>Mesa de Óptica</h1>
+        <p>A lei da reflexão, o Princípio de Heron e as propriedades refletoras das cônicas: faróis, antenas, salas de sussurro e bilhares, como no Capítulo 4 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label for="presetSel">Exemplo</label>
+      <select id="presetSel" class="ghost-btn"></select>
+      <button type="button" class="ghost-btn" id="resetView">Recentrar vista</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Modo</h2>
+        <div class="seg" id="modeSeg" role="group" aria-label="Modo">
+          <button type="button" data-v="heron" aria-pressed="true">Espelho plano (Heron)</button>
+          <button type="button" data-v="espelhos" aria-pressed="false">Espelhos cônicos</button>
+        </div>
+      </div>
+
+      <div class="panel mode-only m-heron">
+        <h2>Princípio de Heron</h2>
+        <div class="seg" id="heronSeg" role="group" aria-label="Variante">
+          <button type="button" data-v="soma" aria-pressed="true">Soma d(A,X)+d(X,B)</button>
+          <button type="button" data-v="dif" aria-pressed="false">Diferença |d(A,X)−d(X,B)|</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="chkRefl" checked> Espelhar B (ponto B′)</label>
+          <label><input type="checkbox" id="chkAng" checked> Ângulos com a normal em X</label>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" id="btnOtimo">Levar X ao ponto P₀</button>
+        </div>
+        <div class="formula-box" id="fbHeron"></div>
+      </div>
+
+      <div class="panel mode-only m-espelhos">
+        <h2>Espelho</h2>
+        <div class="seg" id="mirSeg" role="group" aria-label="Espelho">
+          <button type="button" data-v="parabola" aria-pressed="true">Parábola</button>
+          <button type="button" data-v="elipse" aria-pressed="false">Elipse</button>
+          <button type="button" data-v="hiperbole" aria-pressed="false">Hipérbole</button>
+          <button type="button" data-v="cassegrain" aria-pressed="false">Cassegrain</button>
+        </div>
+        <label class="slider k-ab"><span>a</span><input type="range" id="maSl" min="1" max="7" step="0.05" value="5"><output id="maSlOut"></output></label>
+        <label class="slider k-ab"><span>b</span><input type="range" id="mbSl" min="0.6" max="6" step="0.05" value="3"><output id="mbSlOut"></output></label>
+        <label class="slider k-p"><span>p</span><input type="range" id="mpSl" min="0.3" max="4" step="0.05" value="1.5"><output id="mpSlOut"></output></label>
+
+        <div class="lbl">Fonte de luz</div>
+        <div class="seg" id="srcSeg" role="group" aria-label="Fonte">
+          <button type="button" data-v="ponto" aria-pressed="true">Ponto</button>
+          <button type="button" data-v="feixe" aria-pressed="false">Feixe paralelo</button>
+          <button type="button" data-v="raio" aria-pressed="false">Raio único</button>
+        </div>
+        <label class="slider k-n"><span>raios</span><input type="range" id="nSl" min="2" max="90" step="1" value="36"><output id="nSlOut"></output></label>
+        <label class="slider k-dir"><span>direção</span><input type="range" id="dirSl" min="-180" max="180" step="1" value="180"><output id="dirSlOut"></output></label>
+        <label class="slider k-w"><span>largura</span><input type="range" id="wSl" min="0.5" max="12" step="0.1" value="7"><output id="wSlOut"></output></label>
+        <label class="slider"><span>reflexões</span><input type="range" id="bSl" min="1" max="80" step="1" value="1"><output id="bSlOut"></output></label>
+        <div class="checks">
+          <label><input type="checkbox" id="chkNormais"> Normais nos pontos de impacto</label>
+          <label><input type="checkbox" id="chkProlong"> Prolongar os raios refletidos para trás</label>
+          <label><input type="checkbox" id="chkCaustica"> Cônica confocal tangente ao raio (bilhar)</label>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" id="btnFoco">Pôr a fonte no foco</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Para investigar</h2>
+        <ol class="tasks mode-only m-heron">
+          <li>Arraste X ao longo do espelho e observe o gráfico: onde a soma é mínima? Compare com os ângulos de incidência e de reflexão.</li>
+          <li>Confira que o mínimo vale d(A,B′) e que A, P₀ e B′ estão alinhados (Teorema de Heron).</li>
+          <li>Passe para a diferença e ponha A e B em lados opostos do espelho. Onde |d(A,X) − d(X,B)| é máxima?</li>
+          <li>Na diferença, ponha A e B à mesma distância do espelho. Por que P₀ deixa de existir?</li>
+        </ol>
+        <ol class="tasks mode-only m-espelhos">
+          <li>Farol: com a fonte no foco da parábola, os raios refletidos saem paralelos. Afaste a fonte do foco e veja o feixe se abrir.</li>
+          <li>Sala de sussurro: na elipse, todo raio que sai de F₁ chega a F₂. Quanto mede a dispersão quando a fonte sai do foco?</li>
+          <li>Hipérbole: com a fonte em F₂, prolongue os raios refletidos para trás. Onde eles se cruzam?</li>
+          <li>Bilhar: um raio que passa entre os focos fica preso a uma hipérbole confocal; um que não passa, a uma elipse confocal. E um que passa por um foco?</li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="board" id="board">
+        <canvas id="cv" role="img" aria-label="Plano com um espelho, uma fonte de luz e os raios refletidos; arraste as alças para mover a fonte, os pontos e o espelho."></canvas>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="note" id="note" hidden></div>
+      <p class="footer-note">Os raios são retas O + tv; cada impacto é a menor raiz positiva de uma equação do segundo grau, e o raio refletido é v′ = v − 2⟨v,n⟩n, com n a normal unitária (o gradiente da equação da cônica). Companheira do Capítulo 4 (“Cônicas e Óptica”), Seções 5 e 6, de <em>Geometria Analítica com Aplicações</em>, de Vinícius Mello e Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- utilitários comuns ----------
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v, n = 2) => {
+  if (!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '−∞' : '—');
+  let s = (Math.abs(v) < 0.5 * Math.pow(10, -n) ? 0 : v).toFixed(n);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', '−');
+};
+const sgn = (v, n = 2) => (v < 0 ? ' − ' : ' + ') + fmt(Math.abs(v), n);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function onThemeChange(cb){
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', cb); } catch (_) {}
+  new MutationObserver(cb).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+}
+function bindSlider(id, cb, digits = 2){
+  const inp = document.getElementById(id), out = document.getElementById(id + 'Out');
+  const show = () => { if (out) out.textContent = fmt(+inp.value, digits); };
+  inp.addEventListener('input', () => { show(); cb(+inp.value); });
+  show();
+  return { get: () => +inp.value, set: v => { inp.value = v; show(); } };
+}
+function bindSeg(groupEl, cb){
+  const btns = [...groupEl.querySelectorAll('button')];
+  const set = v => btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+  btns.forEach(b => b.addEventListener('click', () => { set(b.dataset.v); cb(b.dataset.v); }));
+  return { set };
+}
+function setReadout(el, items){
+  el.innerHTML = items.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+// ---------- Plano: quadro cartesiano com alças arrastáveis ----------
+function Plano(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const P = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    cx: opts.cx ?? 0, cy: opts.cy ?? 0, scale: opts.scale ?? 60, unitsAcross: opts.unitsAcross ?? null,
+    handles: [], drag: null, onDraw: () => {}, onBackground: null, onDragEnd: null, pan: opts.pan ?? true,
+  };
+  P.X = x => P.w / 2 + (x - P.cx) * P.scale;
+  P.Y = y => P.h / 2 - (y - P.cy) * P.scale;
+  P.wx = px => (px - P.w / 2) / P.scale + P.cx;
+  P.wy = py => -(py - P.h / 2) / P.scale + P.cy;
+  P.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    P.dpr = window.devicePixelRatio || 1;
+    P.w = r.width; P.h = r.height;
+    canvas.width = Math.round(r.width * P.dpr); canvas.height = Math.round(r.height * P.dpr);
+    if (P.unitsAcross) P.scale = Math.min(P.w, P.h * 1.5) / P.unitsAcross;
+    P.draw();
+  };
+  P.view = () => ({ x0: P.wx(0), x1: P.wx(P.w), y0: P.wy(P.h), y1: P.wy(0) });
+  P.grid = () => {
+    const { x0, x1, y0, y1 } = P.view();
+    let step = 1; const target = 48 / P.scale;
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+    for (const s of steps){ if (s >= target){ step = s; break; } }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar('--line-minor');
+    ctx.beginPath();
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ const X = Math.round(P.X(x)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, P.h); }
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ const Y = Math.round(P.Y(y)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(P.w, Y); }
+    ctx.stroke();
+    ctx.strokeStyle = cssVar('--line-major'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(P.X(0), 0); ctx.lineTo(P.X(0), P.h); ctx.moveTo(0, P.Y(0)); ctx.lineTo(P.w, P.Y(0)); ctx.stroke();
+    ctx.fillStyle = cssVar('--ink-muted'); ctx.font = `500 10px ${cssVar('--font-mono')}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const lab = v => fmt(v, step < 1 ? 1 : 0);
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ if (Math.abs(x) < 1e-9) continue; ctx.fillText(lab(x), P.X(x), clamp(P.Y(0) + 3, 2, P.h - 13)); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ if (Math.abs(y) < 1e-9) continue; ctx.fillText(lab(y), clamp(P.X(0) - 4, 26, P.w - 2), P.Y(y)); }
+  };
+  P.line = (a, b, color, width = 1.5, dash = null) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(P.X(a.x), P.Y(a.y)); ctx.lineTo(P.X(b.x), P.Y(b.y)); ctx.stroke(); ctx.restore();
+  };
+  P.infLine = (p, d, color, width = 1.5, dash = null) => {
+    const L = 4 * (P.w + P.h) / P.scale, n = Math.hypot(d.x, d.y) || 1;
+    P.line({ x: p.x - L * d.x / n, y: p.y - L * d.y / n }, { x: p.x + L * d.x / n, y: p.y + L * d.y / n }, color, width, dash);
+  };
+  P.path = (pts, color, width = 2, dash = null, close = false) => {
+    if (pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    let pen = false;
+    for (const p of pts){
+      if (!p || !isFinite(p.x) || !isFinite(p.y)){ pen = false; continue; }
+      const X = P.X(p.x), Y = P.Y(p.y);
+      if (Math.abs(X) > 1e5 || Math.abs(Y) > 1e5){ pen = false; continue; }
+      if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  P.arrow = (a, b, color, width = 2) => {
+    const X1 = P.X(a.x), Y1 = P.Y(a.y), X2 = P.X(b.x), Y2 = P.Y(b.y);
+    const ang = Math.atan2(Y2 - Y1, X2 - X1), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2 - 0.6 * hl * Math.cos(ang), Y2 - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X2, Y2);
+    ctx.lineTo(X2 - hl * Math.cos(ang - 0.4), Y2 - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(X2 - hl * Math.cos(ang + 0.4), Y2 - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  };
+  P.dot = (p, color, r = 4, label = null, where = 'ne') => {
+    ctx.save(); ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(P.X(p.x), P.Y(p.y), r, 0, 2 * Math.PI); ctx.fill();
+    if (label) P.label(p, label, color, where, r + 3);
+    ctx.restore();
+  };
+  P.label = (p, text, color, where = 'ne', off = 6) => {
+    ctx.save();
+    ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.fillStyle = color;
+    const dx = where.includes('e') ? off : where.includes('w') ? -off : 0;
+    const dy = where.includes('n') ? -off : where.includes('s') ? off : 0;
+    ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+    ctx.textBaseline = dy < 0 ? 'bottom' : dy > 0 ? 'top' : 'middle';
+    const X = P.X(p.x) + dx, Y = P.Y(p.y) + dy;
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, X, Y);
+    ctx.fillText(text, X, Y);
+    ctx.restore();
+  };
+  P.draw = () => {
+    ctx.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+    ctx.clearRect(0, 0, P.w, P.h);
+    P.grid();
+    P.onDraw(ctx);
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), X = P.X(p.x), Y = P.Y(p.y);
+      ctx.save();
+      ctx.fillStyle = cssVar('--paper-raised'); ctx.strokeStyle = h.color(); ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      if (h.shape === 'square') ctx.rect(X - 5.5, Y - 5.5, 11, 11); else ctx.arc(X, Y, 6.5, 0, 2 * Math.PI);
+      ctx.fill(); ctx.stroke();
+      if (h.label) P.label(p, typeof h.label === 'function' ? h.label() : h.label, h.color(), h.where || 'ne', 9);
+      ctx.restore();
+    }
+  };
+  P.addHandle = h => { P.handles.push(h); return h; };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  const pick = (px, py) => {
+    let best = null, bd = 16;
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), d = Math.hypot(P.X(p.x) - px, P.Y(p.y) - py);
+      if (d < bd){ bd = d; best = h; }
+    }
+    return best;
+  };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    const h = pick(px, py);
+    canvas.setPointerCapture(e.pointerId);
+    if (h){ P.drag = { h }; canvas.classList.add('grabbing'); return; }
+    if (P.onBackground && P.onBackground(P.wx(px), P.wy(py), e) === true){ P.drag = { bg: true }; return; }
+    if (P.pan){ P.drag = { pan: true, px, py, cx: P.cx, cy: P.cy }; canvas.classList.add('grabbing'); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const { px, py } = pos(e);
+    if (!P.drag){ canvas.classList.toggle('grab', !!pick(px, py)); return; }
+    if (P.drag.h){ P.drag.h.set(P.wx(px), P.wy(py), e); P.changed && P.changed(); P.draw(); }
+    else if (P.drag.bg){ P.onBackground(P.wx(px), P.wy(py), e, true); }
+    else if (P.drag.pan){ P.cx = P.drag.cx - (px - P.drag.px) / P.scale; P.cy = P.drag.cy + (py - P.drag.py) / P.scale; P.draw(); }
+  });
+  const end = () => { if (P.drag && P.onDragEnd) P.onDragEnd(P.drag); P.drag = null; canvas.classList.remove('grabbing'); };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const { px, py } = pos(e), wx = P.wx(px), wy = P.wy(py);
+    P.scale = clamp(P.scale * Math.exp(-e.deltaY * 0.0015), 8, 600);
+    P.cx = wx - (px - P.w / 2) / P.scale; P.cy = wy + (py - P.h / 2) / P.scale;
+    P.unitsAcross = null; P.draw();
+  }, { passive: false });
+  new ResizeObserver(() => P.resize()).observe(canvas);
+  onThemeChange(() => P.draw());
+  return P;
+}
+
+
+const P = Plano($('#cv'), { unitsAcross: 18 });
+const C = n => cssVar(n);
+const st = {
+  mode: 'heron',
+  heron: 'soma', M1: { x: -6, y: -1.5 }, M2: { x: 6, y: -1.5 }, A: { x: -4, y: 3 }, B: { x: 3, y: 1.5 }, sX: 3.0, refl: true, ang: true,
+  mir: 'parabola', a: 5, b: 3, p: 1.5,
+  src: 'ponto', S: { x: 1.5, y: 0 }, D: { x: 3, y: 2 }, n: 36, dir: 180, w: 7, bounces: 1,
+  normais: false, prolong: false, caustica: false,
+};
+const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y }), sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+const mul = (a, k) => ({ x: a.x * k, y: a.y * k }), dot = (a, b) => a.x * b.x + a.y * b.y;
+const len = a => Math.hypot(a.x, a.y), unit = a => mul(a, 1 / (len(a) || 1)), dist = (a, b) => len(sub(a, b));
+
+// ===================== Heron =====================
+function mirrorFrame(){ const u = unit(sub(st.M2, st.M1)); return { O: st.M1, u, n: { x: -u.y, y: u.x } }; }
+const ptAt = s => { const f = mirrorFrame(); return add(f.O, mul(f.u, s)); };
+const sOf = X => dot(sub(X, st.M1), mirrorFrame().u);
+const side = X => dot(sub(X, st.M1), mirrorFrame().n);
+const reflect = X => { const f = mirrorFrame(), h = side(X); return sub(X, mul(f.n, 2 * h)); };
+function heronValue(s){ const X = ptAt(s), a = dist(st.A, X), b = dist(X, st.B); return st.heron === 'soma' ? a + b : Math.abs(a - b); }
+function optimum(){
+  // P0 = interseção de AB' com o espelho (B' = reflexo de B)
+  const Bp = reflect(st.B), hA = side(st.A), hB = side(Bp);
+  if (Math.abs(hA - hB) < 1e-9) return null;
+  const t = hA / (hA - hB);
+  return { X: add(st.A, mul(sub(Bp, st.A), t)), t, Bp };
+}
+function drawHeron(){
+  const f = mirrorFrame(), ctx = P.ctx;
+  const cM = C('--c-espelho'), cA = C('--c-r1'), cB = C('--c-r2'), cAux = C('--c-aux');
+  // espelho: reta grossa com hachura do lado de trás
+  P.infLine(st.M1, f.u, cM, 3);
+  const L = 60;
+  for (let s = -L; s <= L; s += 0.5){ const p = add(f.O, mul(f.u, s)), q = add(p, add(mul(f.n, -0.3), mul(f.u, -0.2))); P.line(p, q, cM, 1); }
+  P.label(add(st.M2, mul(f.n, 0.3)), 'ℓ', cM, 'ne');
+  const X = ptAt(st.sX), opt = optimum();
+  const hA = side(st.A), hB = side(st.B);
+  const sameSide = hA * hB > 0;
+  // B' e alinhamento
+  if (st.refl){
+    const Bp = reflect(st.B);
+    P.line(st.B, Bp, cAux, 1.2, [3, 4]);
+    P.dot(Bp, cAux, 4, 'B′', 'se');
+    P.line(X, Bp, cAux, 1.5, [6, 4]);
+    if (opt){
+      P.line(st.A, opt.Bp, C('--line-major'), 1, [2, 3]);
+      P.dot(opt.X, cAux, 4.5, 'P₀', 's');
+    }
+  }
+  // caminho A → X → B
+  P.line(st.A, X, cA, 2.6); P.line(X, st.B, cB, 2.6);
+  if (st.ang){
+    const nn = sameSide || hA > 0 ? f.n : mul(f.n, -1);
+    const nA = hA >= 0 ? f.n : mul(f.n, -1);
+    P.line(X, add(X, mul(nA, 2.2)), C('--ink-muted'), 1, [4, 3]);
+    const angTo = Q => Math.acos(clamp(dot(unit(sub(Q, X)), nA), -1, 1));
+    const thA = angTo(st.A), Bv = st.heron === 'soma' ? st.B : reflect(st.B), thB = angTo(Bv);
+    const arc = (Q, col, rad) => {
+      const a0 = Math.atan2(-nA.y, nA.x), a1 = Math.atan2(-(Q.y - X.y), Q.x - X.x);
+      ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+      let d = a1 - a0; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+      ctx.arc(P.X(X.x), P.Y(X.y), rad, a0, a0 + d, d < 0); ctx.stroke(); ctx.restore();
+    };
+    arc(st.A, cA, 30); arc(st.heron === 'soma' ? st.B : st.B, cB, 38);
+    st._ang = [thA, thB];
+  }
+  P.dot(X, C('--ink'), 3);
+  drawHeronGraph(opt);
+  // leituras
+  const a = dist(st.A, X), b = dist(X, st.B);
+  const deg = r => fmt(r * 180 / Math.PI, 1) + '°';
+  const items = [
+    ['d(A,X)', fmt(a, 3)], ['d(X,B)', fmt(b, 3)],
+    [st.heron === 'soma' ? 'soma' : '|diferença|', fmt(st.heron === 'soma' ? a + b : Math.abs(a - b), 3)],
+  ];
+  if (opt) items.push([st.heron === 'soma' ? 'mínimo = d(A,B′)' : 'máximo = d(A,B′)', fmt(dist(st.A, opt.Bp), 3)]);
+  if (st.ang && st._ang) items.push(['incidência', deg(st._ang[0])], [st.heron === 'soma' ? 'reflexão' : 'ângulo de B′', deg(st._ang[1])]);
+  setReadout($('#readout'), items);
+  const note = $('#note');
+  if (st.heron === 'soma' && !sameSide){ note.hidden = false; note.className = 'note'; note.textContent = 'A e B estão em lados opostos do espelho: o segmento AB atravessa ℓ e a soma mínima é d(A,B). O Teorema de Heron pede A e B do mesmo lado.'; }
+  else if (st.heron === 'dif' && sameSide){ note.hidden = false; note.className = 'note'; note.textContent = 'A variante da diferença pede A e B em lados opostos de ℓ (Proposição da diferença, Seção 4.5).'; }
+  else if (!opt){ note.hidden = false; note.className = 'note'; note.textContent = 'd(A,ℓ) = d(B,ℓ): a reta AB′ é paralela ao espelho e não há ponto ótimo.'; }
+  else { note.hidden = Math.abs(sOf(opt.X) - st.sX) > 0.03; note.className = 'note ok'; note.textContent = st.heron === 'soma' ? 'X = P₀: a soma é mínima e os ângulos de incidência e de reflexão são iguais.' : 'X = P₀: a diferença é máxima; X, A e B′ estão alinhados.'; }
+  $('#fbHeron').innerHTML =
+    `<div class="main">B′ = B − 2⟨B − M, n⟩n</div>` +
+    (opt ? `<div>P₀ = A + s₀(B′ − A), s₀ = h(A)/(h(A) − h(B′)) = ${fmt(opt.t, 3)}</div>` : '<div class="sub">P₀ não existe</div>') +
+    `<div class="sub">h(Q) = ⟨Q − M, n⟩ é a distância com sinal a ℓ</div>`;
+}
+function drawHeronGraph(opt){
+  const ctx = P.ctx, W = Math.min(240, P.w * 0.45), H = 120, x0 = P.w - W - 10, y0 = P.h - H - 10;
+  ctx.save();
+  ctx.fillStyle = C('--paper-raised'); ctx.strokeStyle = C('--border');
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, W, H, 6) : ctx.rect(x0, y0, W, H); ctx.fill(); ctx.stroke();
+  const sA = sOf(st.A), sB = sOf(st.B), s0 = Math.min(sA, sB, st.sX) - 4, s1 = Math.max(sA, sB, st.sX) + 4;
+  let lo = Infinity, hi = -Infinity; const vals = [];
+  for (let i = 0; i <= 160; i++){ const s = s0 + (s1 - s0) * i / 160, v = heronValue(s); vals.push([s, v]); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  const X = s => x0 + 8 + (s - s0) / (s1 - s0) * (W - 16), Y = v => y0 + H - 10 - (v - lo) / (hi - lo + 1e-9) * (H - 34);
+  ctx.strokeStyle = C('--brand'); ctx.lineWidth = 2; ctx.beginPath();
+  vals.forEach(([s, v], i) => i ? ctx.lineTo(X(s), Y(v)) : ctx.moveTo(X(s), Y(v))); ctx.stroke();
+  if (opt){ const so = sOf(opt.X); ctx.fillStyle = C('--c-aux'); ctx.beginPath(); ctx.arc(X(so), Y(heronValue(so)), 4, 0, 2 * Math.PI); ctx.fill(); }
+  ctx.fillStyle = C('--ink'); ctx.beginPath(); ctx.arc(X(st.sX), Y(heronValue(st.sX)), 3.5, 0, 2 * Math.PI); ctx.fill();
+  ctx.fillStyle = C('--ink-muted'); ctx.font = `600 10px ${C('--font-body')}`; ctx.textBaseline = 'top';
+  ctx.fillText(st.heron === 'soma' ? 'd(A,X) + d(X,B) ao longo de ℓ' : '|d(A,X) − d(X,B)| ao longo de ℓ', x0 + 8, y0 + 5);
+  ctx.restore();
+}
+
+// ===================== espelhos cônicos =====================
+// cada espelho: coeficientes de A x² + B xy + C y² + D x + E y + F = 0, recorte, e amostras para desenho
+function conicMirrors(){
+  const out = [];
+  if (st.mir === 'parabola'){
+    const p = st.p, ym = 5.5;
+    out.push({ k: [0, 0, 1, -4 * p, 0, 0], clip: (x, y) => Math.abs(y) <= ym, pts: range(-ym, ym, 300).map(y => ({ x: y * y / (4 * p), y })) });
+  } else if (st.mir === 'elipse'){
+    const a = st.a, b = st.b;
+    out.push({ k: [1 / (a * a), 0, 1 / (b * b), 0, 0, -1], clip: () => true, pts: range(0, 2 * Math.PI, 360).map(t => ({ x: a * Math.cos(t), y: b * Math.sin(t) })), closed: true });
+  } else if (st.mir === 'hiperbole'){
+    const a = st.a, b = st.b, ym = 6;
+    out.push({ k: [1 / (a * a), 0, -1 / (b * b), 0, 0, -1], clip: (x, y) => x > 0 && Math.abs(y) <= ym, pts: range(-Math.asinh(ym / b), Math.asinh(ym / b), 300).map(t => ({ x: a * Math.cosh(t), y: b * Math.sinh(t) })) });
+  } else {
+    const c = cass();
+    out.push({ k: [0, 0, 1, -4 * c.p, 0, 0], clip: (x, y) => Math.abs(y) <= c.ym && Math.abs(y) >= c.hole,
+      pts: [...range(-c.ym, -c.hole, 120).map(y => ({ x: y * y / (4 * c.p), y })), null, ...range(c.hole, c.ym, 120).map(y => ({ x: y * y / (4 * c.p), y }))] });
+    const { m, a, b } = c;
+    out.push({ k: [1 / (a * a), 0, -1 / (b * b), -2 * m / (a * a), 0, m * m / (a * a) - 1], clip: (x, y) => x > m && Math.abs(y) <= c.ys,
+      pts: range(-Math.asinh(c.ys / b), Math.asinh(c.ys / b), 80).map(t => ({ x: m + a * Math.cosh(t), y: b * Math.sinh(t) })) });
+  }
+  return out;
+}
+function cass(){ const p = 2.5, Fp = -0.8, m = (p + Fp) / 2, c = (p - Fp) / 2, a = 1.2; return { p, F: { x: p, y: 0 }, Fp: { x: Fp, y: 0 }, m, a, b: Math.sqrt(c * c - a * a), ym: 3.3, hole: 0.3, ys: 1.0 }; }
+function range(a, b, n){ const r = []; for (let i = 0; i <= n; i++) r.push(a + (b - a) * i / n); return r; }
+function foci(){
+  if (st.mir === 'parabola') return [{ x: st.p, y: 0, n: 'F' }];
+  if (st.mir === 'elipse'){ const big = st.a >= st.b, c = Math.sqrt(Math.abs(st.a * st.a - st.b * st.b)); return big ? [{ x: -c, y: 0, n: 'F₁' }, { x: c, y: 0, n: 'F₂' }] : [{ x: 0, y: -c, n: 'F₁' }, { x: 0, y: c, n: 'F₂' }]; }
+  if (st.mir === 'hiperbole'){ const c = Math.hypot(st.a, st.b); return [{ x: -c, y: 0, n: 'F₁' }, { x: c, y: 0, n: 'F₂' }]; }
+  const c = cass(); return [{ ...c.F, n: 'F' }, { ...c.Fp, n: 'F′' }];
+}
+function hit(mirrors, O, v){
+  let best = null;
+  for (const M of mirrors){
+    const [A, B, Cc, D, E, F] = M.k;
+    const al = A * v.x * v.x + B * v.x * v.y + Cc * v.y * v.y;
+    const be = 2 * A * O.x * v.x + B * (O.x * v.y + O.y * v.x) + 2 * Cc * O.y * v.y + D * v.x + E * v.y;
+    const ga = A * O.x * O.x + B * O.x * O.y + Cc * O.y * O.y + D * O.x + E * O.y + F;
+    let ts = [];
+    if (Math.abs(al) < 1e-12){ if (Math.abs(be) > 1e-12) ts = [-ga / be]; }
+    else { const dl = be * be - 4 * al * ga; if (dl >= 0){ const q = Math.sqrt(dl); ts = [(-be - q) / (2 * al), (-be + q) / (2 * al)]; } }
+    for (const t of ts){
+      if (t <= 1e-7) continue;
+      const X = add(O, mul(v, t));
+      if (!M.clip(X.x, X.y)) continue;
+      if (!best || t < best.t){ const n = unit({ x: 2 * A * X.x + B * X.y + D, y: B * X.x + 2 * Cc * X.y + E }); best = { t, X, n }; }
+    }
+  }
+  return best;
+}
+function sources(){
+  const rays = [];
+  if (st.src === 'ponto'){ for (let i = 0; i < st.n; i++){ const th = 2 * Math.PI * (i + 0.5) / st.n; rays.push({ O: st.S, v: { x: Math.cos(th), y: Math.sin(th) } }); } }
+  else if (st.src === 'feixe'){
+    const th = st.dir * Math.PI / 180, v = { x: Math.cos(th), y: Math.sin(th) }, w = { x: -v.y, y: v.x };
+    const obst = st.mir === 'cassegrain' ? cass().ys + 0.12 : 0;   // sombra do espelho secundário
+    for (let i = 0; i < st.n; i++){ const s = st.n === 1 ? 0 : -st.w / 2 + st.w * i / (st.n - 1); const O = add(st.S, mul(w, s)); if (obst && Math.abs(O.y) < obst) continue; rays.push({ O, v }); }
+  } else rays.push({ O: st.S, v: unit(sub(st.D, st.S)) });
+  return rays;
+}
+function traceAll(){
+  const mirrors = conicMirrors(), paths = [];
+  for (const r of sources()){
+    let O = r.O, v = r.v; const segs = [];
+    for (let k = 0; k < st.bounces; k++){
+      const h = hit(mirrors, O, v);
+      if (!h){ segs.push({ a: O, b: add(O, mul(v, 80)), k, out: true }); break; }
+      segs.push({ a: O, b: h.X, k, n: h.n });
+      const vn = dot(v, h.n);
+      v = sub(v, mul(h.n, 2 * vn));
+      O = add(h.X, mul(v, 1e-6));
+      if (k === st.bounces - 1){ const h2 = hit(mirrors, O, v); segs.push({ a: O, b: h2 ? h2.X : add(O, mul(v, 80)), k: k + 1, out: !h2, last: true }); }
+    }
+    paths.push(segs);
+  }
+  return { mirrors, paths };
+}
+function drawEspelhos(){
+  const { mirrors, paths } = traceAll(), ctx = P.ctx;
+  const cL = C('--c-luz'), cM = C('--c-espelho');
+  // cáustica (bilhar): cônica confocal tangente ao primeiro segmento
+  if (st.caustica && st.mir === 'elipse' && paths.length){
+    const seg = paths[0][0], d = unit(sub(seg.b, seg.a)), n = { x: -d.y, y: d.x }, h = dot(n, seg.a);
+    const a2 = st.a * st.a, b2 = st.b * st.b, lam = a2 * n.x * n.x + b2 * n.y * n.y - h * h;
+    const A2 = a2 - lam, B2 = b2 - lam, cc = C('--c-caustica'), pts = [];
+    if (A2 > 1e-6 && B2 > 1e-6){ for (let i = 0; i <= 240; i++){ const t = i / 120 * Math.PI; pts.push({ x: Math.sqrt(A2) * Math.cos(t), y: Math.sqrt(B2) * Math.sin(t) }); } P.path(pts, cc, 2, [6, 4]); st._caus = 'elipse confocal'; }
+    else if (A2 > 1e-6 && B2 < -1e-6){ for (const s of [1, -1]){ const q = []; for (let i = -150; i <= 150; i++){ const t = i / 50; q.push({ x: s * Math.sqrt(A2) * Math.cosh(t), y: Math.sqrt(-B2) * Math.sinh(t) }); } P.path(q, cc, 2, [6, 4]); } st._caus = 'hipérbole confocal'; }
+    else st._caus = 'passa pelos focos';
+  } else st._caus = null;
+  // raios
+  const fade = st.bounces > 6;
+  const alpha = Math.max(0.12, Math.min(0.85, 18 / Math.max(paths.length, 1)));
+  ctx.save(); ctx.globalAlpha = st.src === 'raio' ? 0.9 : alpha;
+  for (const segs of paths){
+    for (const s of segs){
+      const a = fade ? Math.max(0.15, 1 - s.k / (st.bounces + 1)) : 1;
+      ctx.globalAlpha = (st.src === 'raio' ? 0.9 : alpha) * a;
+      P.line(s.a, s.b, cL, st.src === 'raio' ? 1.6 : 1.3);
+    }
+  }
+  ctx.restore();
+  if (st.prolong){
+    ctx.save(); ctx.globalAlpha = 0.6;
+    for (const segs of paths){ const s = segs.find(z => z.k === 1); if (s){ const d = unit(sub(s.b, s.a)); P.line(s.a, sub(s.a, mul(d, 30)), C('--c-aux'), 1, [3, 4]); } }
+    ctx.restore();
+  }
+  if (st.normais){
+    for (const segs of paths) for (const s of segs) if (s.n) P.line(add(s.b, mul(s.n, -0.7)), add(s.b, mul(s.n, 0.7)), C('--c-r1'), 1.2, [3, 2]);
+  }
+  // espelhos
+  for (const M of mirrors) P.path(M.pts, cM, 3.4, null, !!M.closed);
+  for (const F of foci()) P.dot(F, C('--c-foco'), 4.5, F.n, 'sw');
+  if (st.src === 'feixe'){ const th = st.dir * Math.PI / 180; P.arrow(st.S, add(st.S, { x: Math.cos(th) * 1.2, y: Math.sin(th) * 1.2 }), cL, 2.4); }
+  // medidas: dispersão dos raios após a primeira reflexão em torno do alvo
+  const F = foci(), items = [];
+  const firsts = paths.map(s => s.find(z => z.k === 1)).filter(Boolean);
+  const target = st.mir === 'elipse' ? F[1] : st.mir === 'hiperbole' ? F[0] : st.mir === 'cassegrain' ? F[1] : null;
+  items.push(['raios', String(paths.length)], ['refletidos', String(firsts.length)]);
+  if (st.mir === 'parabola' && firsts.length && st.src !== 'raio'){
+    let mx = 0; for (const s of firsts){ const d = unit(sub(s.b, s.a)); mx = Math.max(mx, Math.acos(clamp(Math.abs(d.x), -1, 1))); }
+    items.push(['abertura do feixe refletido', fmt(mx * 180 / Math.PI, 2) + '°']);
+  }
+  if (target && firsts.length && st.mir !== 'cassegrain' && st.src !== 'raio'){
+    let mx = 0;
+    for (const s of firsts){ const d = unit(sub(s.b, s.a)), w = sub(target, s.a); mx = Math.max(mx, Math.abs(d.x * w.y - d.y * w.x)); }
+    items.push([`maior distância de ${target.n} às retas refletidas`, fmt(mx, 4)]);
+  }
+  if (st.mir === 'cassegrain'){
+    const seconds = paths.map(s => s.find(z => z.k === 2)).filter(Boolean);
+    let mx = 0; for (const s of seconds){ const d = unit(sub(s.b, s.a)), w = sub(F[1], s.a); mx = Math.max(mx, Math.abs(d.x * w.y - d.y * w.x)); }
+    items.push(['refletidos duas vezes', String(seconds.length)], ['maior distância de F′ às retas', seconds.length ? fmt(mx, 4) : '—']);
+  }
+  if (st._caus) items.push(['cáustica', st._caus]);
+  setReadout($('#readout'), items);
+  const note = $('#note');
+  const S = st.S, atFocus = F.some(f => dist(f, S) < 0.02);
+  note.hidden = true;
+  if (st.mir === 'hiperbole' && st.prolong){ note.hidden = false; note.className = 'note ok'; note.textContent = atFocus ? 'Os prolongamentos dos raios refletidos se cruzam em F₁: para quem está fora, a luz parece vir do outro foco.' : 'Ponha a fonte em F₂ para ver os prolongamentos se cruzarem em F₁.'; }
+  else if (atFocus && st.src === 'ponto'){ note.hidden = false; note.className = 'note ok'; note.textContent = st.mir === 'parabola' ? 'Fonte no foco: os raios refletidos saem paralelos ao eixo, como num farol.' : st.mir === 'elipse' ? 'Fonte num foco: todos os raios refletidos passam pelo outro foco.' : 'Fonte no foco.'; }
+}
+
+// ===================== alças =====================
+const isH = () => st.mode !== 'heron', isE = () => st.mode !== 'espelhos';
+P.addHandle({ get: () => st.M1, set: (x, y) => { st.M1 = { x, y }; }, color: () => C('--c-espelho'), shape: 'square', hidden: isH });
+P.addHandle({ get: () => st.M2, set: (x, y) => { st.M2 = { x, y }; }, color: () => C('--c-espelho'), shape: 'square', hidden: isH });
+P.addHandle({ get: () => st.A, set: (x, y) => { st.A = { x, y }; }, color: () => C('--c-r1'), label: 'A', where: 'nw', hidden: isH });
+P.addHandle({ get: () => st.B, set: (x, y) => { st.B = { x, y }; }, color: () => C('--c-r2'), label: 'B', where: 'ne', hidden: isH });
+P.addHandle({ get: () => ptAt(st.sX), set: (x, y) => { st.sX = sOf({ x, y }); }, color: () => C('--ink'), label: 'X', where: 's', hidden: isH });
+P.addHandle({ get: () => st.S, set: (x, y) => { st.S = { x, y }; const f = foci().find(f => dist(f, st.S) < 12 / P.scale); if (f) st.S = { x: f.x, y: f.y }; }, color: () => C('--c-luz'), label: 'S', where: 'ne', hidden: isE });
+P.addHandle({ get: () => st.D, set: (x, y) => { st.D = { x, y }; }, color: () => C('--c-luz'), shape: 'square', hidden: () => isE() || st.src !== 'raio' });
+P.onDraw = () => st.mode === 'heron' ? drawHeron() : drawEspelhos();
+
+// ===================== controles =====================
+const ctl = {};
+bindSeg($('#heronSeg'), v => { st.heron = v; if (v === 'dif' && side(st.A) * side(st.B) > 0){ const f = mirrorFrame(), h = side(st.B); st.B = sub(st.B, mul(f.n, 2 * h + (h > 0 ? 0.8 : -0.8))); } P.draw(); });
+$('#chkRefl').addEventListener('change', e => { st.refl = e.target.checked; P.draw(); });
+$('#chkAng').addEventListener('change', e => { st.ang = e.target.checked; P.draw(); });
+$('#btnOtimo').addEventListener('click', () => { const o = optimum(); if (o) st.sX = sOf(o.X); P.draw(); });
+ctl.mir = bindSeg($('#mirSeg'), v => { st.mir = v; syncMir(); P.draw(); });
+ctl.a = bindSlider('maSl', v => { st.a = v; P.draw(); });
+ctl.b = bindSlider('mbSl', v => { st.b = v; P.draw(); });
+ctl.p = bindSlider('mpSl', v => { st.p = v; P.draw(); });
+ctl.src = bindSeg($('#srcSeg'), v => { st.src = v; syncMir(); P.draw(); });
+ctl.n = bindSlider('nSl', v => { st.n = v; P.draw(); }, 0);
+ctl.dir = bindSlider('dirSl', v => { st.dir = v; P.draw(); }, 0);
+ctl.w = bindSlider('wSl', v => { st.w = v; P.draw(); }, 1);
+ctl.b2 = bindSlider('bSl', v => { st.bounces = v; P.draw(); }, 0);
+const chk = (id, key) => { const el = $('#' + id); el.addEventListener('change', () => { st[key] = el.checked; P.draw(); }); return el; };
+ctl.normais = chk('chkNormais', 'normais'); ctl.prolong = chk('chkProlong', 'prolong'); ctl.caus = chk('chkCaustica', 'caustica');
+$('#btnFoco').addEventListener('click', () => { const F = foci(); const f = st.mir === 'hiperbole' ? F[1] : F[0]; st.S = { x: f.x, y: f.y }; if (st.src === 'feixe'){ st.src = 'ponto'; ctl.src.set('ponto'); syncMir(); } P.draw(); });
+function syncMir(){
+  document.querySelectorAll('.k-ab').forEach(el => el.hidden = !(st.mir === 'elipse' || st.mir === 'hiperbole'));
+  document.querySelectorAll('.k-p').forEach(el => el.hidden = st.mir !== 'parabola');
+  document.querySelectorAll('.k-n').forEach(el => el.hidden = st.src === 'raio');
+  document.querySelectorAll('.k-dir, .k-w').forEach(el => el.hidden = st.src !== 'feixe');
+  $('#chkCaustica').closest('label').hidden = st.mir !== 'elipse';
+}
+function setMode(m){
+  st.mode = m;
+  document.querySelectorAll('.mode-only').forEach(el => { el.hidden = !el.classList.contains('m-' + m); });
+  P.cx = m === 'heron' ? 0 : 1; P.cy = m === 'heron' ? 1 : 0; P.unitsAcross = 18; P.resize();
+}
+ctl.mode = bindSeg($('#modeSeg'), setMode);
+
+const PRESETS = [
+  { nome: 'Heron: espelho plano', mode: 'heron', set: () => { Object.assign(st, { heron: 'soma', M1: { x: -6, y: -1.5 }, M2: { x: 6, y: -1.5 }, A: { x: -4, y: 3 }, B: { x: 3, y: 1.5 }, sX: 3 }); } },
+  { nome: 'Farol (fonte no foco da parábola)', mode: 'espelhos', set: () => Object.assign(st, { mir: 'parabola', p: 1.5, src: 'ponto', S: { x: 1.5, y: 0 }, n: 40, bounces: 1, prolong: false, caustica: false }) },
+  { nome: 'Antena (feixe paralelo ao eixo)', mode: 'espelhos', set: () => Object.assign(st, { mir: 'parabola', p: 1.5, src: 'feixe', S: { x: 9, y: 0 }, dir: 180, w: 9, n: 25, bounces: 1, prolong: false, caustica: false }) },
+  { nome: 'Sala de sussurro (elipse)', mode: 'espelhos', set: () => Object.assign(st, { mir: 'elipse', a: 6, b: 3.6, src: 'ponto', S: { x: -4.8, y: 0 }, n: 40, bounces: 1, prolong: false, caustica: false }) },
+  { nome: 'Hipérbole: o foco virtual', mode: 'espelhos', set: () => Object.assign(st, { mir: 'hiperbole', a: 2, b: 2.5, src: 'ponto', S: { x: Math.hypot(2, 2.5), y: 0 }, n: 40, bounces: 1, prolong: true, caustica: false }) },
+  { nome: 'Bilhar elíptico: cáustica elíptica', mode: 'espelhos', set: () => Object.assign(st, { mir: 'elipse', a: 6, b: 3.6, src: 'raio', S: { x: -1, y: 2.2 }, D: { x: 3, y: 2.8 }, bounces: 60, prolong: false, caustica: true }) },
+  { nome: 'Bilhar elíptico: cáustica hiperbólica', mode: 'espelhos', set: () => Object.assign(st, { mir: 'elipse', a: 6, b: 3.6, src: 'raio', S: { x: -1, y: 2.5 }, D: { x: 0.3, y: -1 }, bounces: 60, prolong: false, caustica: true }) },
+  { nome: 'Telescópio Cassegrain', mode: 'espelhos', set: () => Object.assign(st, { mir: 'cassegrain', src: 'feixe', S: { x: 9, y: 0 }, dir: 180, w: 6.4, n: 30, bounces: 3, prolong: false, caustica: false }) },
+];
+const sel = $('#presetSel');
+sel.innerHTML = PRESETS.map((p, i) => `<option value="${i}">${p.nome}</option>`).join('');
+function loadPreset(i){
+  const p = PRESETS[i]; p.set();
+  if (st.mir === 'cassegrain'){ /* feixe fora do espelho secundário */ st.w = 6.4; }
+  ctl.mode.set(p.mode); ctl.mir.set(st.mir); ctl.src.set(st.src);
+  ctl.a.set(st.a); ctl.b.set(st.b); ctl.p.set(st.p); ctl.n.set(st.n); ctl.dir.set(st.dir); ctl.w.set(st.w); ctl.b2.set(st.bounces);
+  ctl.normais.checked = st.normais; ctl.prolong.checked = st.prolong; ctl.caus.checked = st.caustica;
+  $('#heronSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === st.heron ? 'true' : 'false'));
+  syncMir(); setMode(p.mode);
+}
+sel.addEventListener('change', () => loadPreset(+sel.value));
+$('#resetView').addEventListener('click', () => setMode(st.mode));
+const h0 = location.hash.slice(1);
+const idx = h0 === 'espelhos' ? 1 : h0 === 'bilhar' ? 5 : h0 === 'cassegrain' ? 7 : 0;
+sel.value = idx; loadPreset(idx);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => P.draw());
+})();
+</script>

@@ -1,0 +1,852 @@
+<title>Mesa de Ray Tracing</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mesas de GA: painel lateral + mesa (quadro) com leituras ao vivo. */
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-success:#1F9254;
+    --c-warning:#B4590E;
+    --c-danger:#C23B78;
+    --shadow:rgba(22,35,58,0.14);
+    --font-display:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    --font-body:'Public Sans','Segoe UI',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-success:#4ADE80;
+      --c-warning:#FBBF74;
+      --c-danger:#E86FA6;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-success:#4ADE80;
+    --c-warning:#FBBF74;
+    --c-danger:#E86FA6;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:var(--font-display);
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1360px;
+    margin:0 auto;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));
+    padding-right:max(16px, env(safe-area-inset-right, 0px));
+    padding-block:0.85rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+  }
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; min-width:0; }
+  .brand-mark{
+    font-family:var(--font-mono); font-weight:600;
+    font-size:1.05rem; color:var(--brand); line-height:1;
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem;
+    white-space:nowrap;
+  }
+  .brand-text{ min-width:0; }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:64ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(270px,320px) minmax(0,1fr);
+    gap:0.75rem;
+    align-items:start;
+  }
+  @media (max-width:880px){ .workspace{ grid-template-columns:minmax(0,1fr); } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+    min-width:0;
+  }
+  .panel h2{
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:0.45rem;
+  }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.45rem 0 0; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; border:none; background:var(--paper); font-size:0.74rem; font-weight:600;
+    padding:0.38rem 0.45rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .seg button + button{ border-left:1px solid var(--border); }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  .slider{ display:grid; grid-template-columns:4.6rem minmax(0,1fr) 3.6rem; align-items:center; gap:0.4rem; margin-top:0.35rem; }
+  .slider > span:first-child{ font-size:0.74rem; color:var(--ink-muted); font-weight:600; }
+  .slider input[type=range]{ width:100%; accent-color:var(--brand); min-width:0; }
+  .slider output{ font-family:var(--font-mono); font-size:0.76rem; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); max-width:100%; }
+  .btn-row{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.45rem; }
+
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:var(--font-mono);
+    font-size:0.74rem; line-height:1.6;
+    background:var(--paper-sunken);
+    border-radius:6px; padding:0.45rem 0.6rem;
+    overflow-x:auto; overflow-wrap:anywhere;
+  }
+  .formula-box > div{ padding-left:1.2em; text-indent:-1.2em; }
+  .formula-box .main{ color:var(--brand); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .board{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    height:min(70svh,700px);
+    min-height:340px;
+  }
+  .board canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .board canvas.grab{ cursor:grab; }
+  .board canvas.grabbing{ cursor:grabbing; }
+  .board-tag{
+    position:absolute; left:0.5rem; top:0.45rem; pointer-events:none;
+    font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--ink-muted); background:var(--paper-raised); border:1px solid var(--border);
+    border-radius:4px; padding:0.1rem 0.35rem;
+  }
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:0.4rem;
+  }
+  .ro{
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:7px;
+    padding:0.35rem 0.55rem; min-width:0;
+  }
+  .ro .k{ font-size:0.72rem; letter-spacing:0.01em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .pill{ display:inline-block; font-size:0.74rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; border:1.5px solid currentColor; font-family:var(--font-body); }
+  .note{
+    font-size:0.78rem; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--border); border-left:4px solid var(--c-warning);
+    border-radius:0 7px 7px 0; padding:0.4rem 0.6rem;
+  }
+  .note.ok{ border-left-color:var(--c-success); }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; max-width:110ch; }
+  .footer-note a{ color:var(--brand); }
+  .tbl-wrap{ overflow-x:auto; }
+  table.tbl{ border-collapse:collapse; font-family:var(--font-mono); font-size:0.74rem; font-variant-numeric:tabular-nums; width:100%; }
+  table.tbl th, table.tbl td{ padding:0.18rem 0.4rem; text-align:right; border-bottom:1px solid var(--line-minor); white-space:nowrap; }
+  table.tbl th{ color:var(--ink-muted); font-weight:600; font-family:var(--font-body); font-size:0.7rem; }
+  table.tbl tfoot td{ font-weight:700; border-bottom:none; border-top:1.5px solid var(--line-major); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+  :root{ --c-mira:#C23B78; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --c-mira:#E86FA6; } }
+  :root[data-theme="dark"]{ --c-mira:#E86FA6; }
+  .render{ position:relative; background:#000; border:1px solid var(--border); border-radius:8px; overflow:hidden; aspect-ratio:8 / 5; max-width:100%; }
+  .render canvas{ position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; cursor:crosshair; }
+  .render canvas.over{ pointer-events:none; image-rendering:auto; }
+  .progress{ position:absolute; right:0.5rem; bottom:0.4rem; font-size:0.7rem; font-family:var(--font-mono); color:#fff; background:rgba(0,0,0,0.45); padding:0.05rem 0.35rem; border-radius:4px; }
+  .tasks{ margin:0; padding-left:1.15rem; font-size:0.78rem; display:flex; flex-direction:column; gap:0.3rem; }
+  .tasks li::marker{ color:var(--brand); font-weight:700; }
+  .steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:0.35rem; }
+  .steps li{ background:var(--paper-raised); border:1px solid var(--border); border-radius:7px; padding:0.35rem 0.6rem; min-width:0; }
+  .steps .h{ font-size:0.72rem; font-weight:700; color:var(--brand); }
+  .steps .b{ font-family:var(--font-mono); font-size:0.76rem; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .steps .b .sub{ color:var(--ink-muted); }
+  .lbl{ font-size:0.72rem; color:var(--ink-muted); font-weight:600; margin:0.5rem 0 0.1rem; }
+  .swatch{ display:inline-block; width:0.9em; height:0.9em; border-radius:3px; vertical-align:-0.1em; border:1px solid var(--border); margin-right:0.3em; }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">O + tD</span>
+      <div class="brand-text">
+        <h1>Mesa de Ray Tracing</h1>
+        <p>Um ray tracer mínimo: raios pela câmera lookAt, interseção com esferas e plano, normais, iluminação de Lambert e Phong, sombras e reflexões, como no Capítulo 6 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label for="presetSel">Cena</label>
+      <select id="presetSel" class="ghost-btn"></select>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Iluminação</h2>
+        <div class="lbl">Luz pontual</div>
+        <label class="slider"><span>x</span><input type="range" id="lxSl" min="-8" max="8" step="0.1" value="-4"><output id="lxSlOut"></output></label>
+        <label class="slider"><span>y</span><input type="range" id="lySl" min="-1" max="10" step="0.1" value="6"><output id="lySlOut"></output></label>
+        <label class="slider"><span>z</span><input type="range" id="lzSl" min="-8" max="8" step="0.1" value="-4"><output id="lzSlOut"></output></label>
+        <div class="lbl">I = kₐ + k_d·max(0,⟨N,L⟩) + kₛ·max(0,⟨R,V⟩)ᵏ</div>
+        <label class="slider"><span>kₐ</span><input type="range" id="kaSl" min="0" max="1" step="0.01" value="0.12"><output id="kaSlOut"></output></label>
+        <label class="slider"><span>k_d</span><input type="range" id="kdSl" min="0" max="1" step="0.01" value="0.88"><output id="kdSlOut"></output></label>
+        <label class="slider"><span>kₛ</span><input type="range" id="ksSl" min="0" max="1" step="0.01" value="0.6"><output id="ksSlOut"></output></label>
+        <label class="slider"><span>k (brilho)</span><input type="range" id="kSl" min="1" max="120" step="1" value="40"><output id="kSlOut"></output></label>
+      </div>
+
+      <div class="panel">
+        <h2>Algoritmo</h2>
+        <label class="slider"><span>reflexões</span><input type="range" id="depthSl" min="0" max="4" step="1" value="3"><output id="depthSlOut"></output></label>
+        <div class="checks">
+          <label><input type="checkbox" id="chkSombra" checked> Raios de sombra</label>
+          <label><input type="checkbox" id="chkEps"> Sem tolerância ε (mostra a “acne”)</label>
+        </div>
+        <div class="lbl">Mostrar</div>
+        <select id="vista" class="ghost-btn" style="width:100%">
+          <option value="cor">Cor final</option>
+          <option value="difusa">Só a parcela difusa ⟨N,L⟩</option>
+          <option value="especular">Só a parcela especular ⟨R,V⟩ᵏ</option>
+          <option value="sombra">Iluminado (branco) × em sombra (preto)</option>
+          <option value="normal">Normais N como cores</option>
+          <option value="t">Distância t até o ponto visível</option>
+        </select>
+        <div class="lbl">Resolução</div>
+        <div class="seg" id="resSeg" role="group" aria-label="Resolução">
+          <button type="button" data-v="80" aria-pressed="false">128×80</button>
+          <button type="button" data-v="200" aria-pressed="true">320×200</button>
+          <button type="button" data-v="400" aria-pressed="false">640×400</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Para investigar</h2>
+        <ol class="tasks">
+          <li>Na cena “Um pixel”, clique em “Pixel do livro” e confira cada passo com o texto da Seção 6.5.</li>
+          <li>Ligue “sem tolerância ε” e observe as manchas: é a acne das sombras. Por que ela some com ε?</li>
+          <li>Mostre só a parcela difusa e mova a luz. Onde fica a linha de sombra ⟨N,L⟩ = 0 em cada esfera?</li>
+          <li>Aumente k e veja o brilho especular encolher. Por que um expoente maior deixa a superfície mais “polida”?</li>
+          <li>Com zero reflexões, a esfera espelhada vira cinza. Quantas reflexões você precisa para ver o reflexo do reflexo?</li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="render" id="render">
+        <canvas id="img" role="img" aria-label="Imagem gerada pelo ray tracer; clique num pixel para ver as contas daquele raio."></canvas>
+        <canvas id="over" class="over" aria-hidden="true"></canvas>
+        <span class="progress" id="prog"></span>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="ghost-btn" id="btnLivro">Pixel do livro (0, 0.25)</button>
+        <span class="hint" style="margin:0">Clique num pixel da imagem para seguir o seu raio, passo a passo.</span>
+      </div>
+      <ol class="steps" id="steps"></ol>
+      <p class="footer-note">Raio pelo pixel: D = (x·r + y·u + d·f)/‖·‖, com a base lookAt do Capítulo 5. Interseção com a esfera: t² + 2⟨D, O − C⟩t + ‖O − C‖² − ρ² = 0 (Proposição raio-esfera). A imagem passa por uma correção gama (expoente 1/2.2) só para exibição; os números abaixo são os da fórmula. Companheira do Capítulo 6 (“Quádricas e Ray Tracing”), Seções 2 a 5, de <em>Geometria Analítica com Aplicações</em>, de Vinícius Mello e Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- utilitários comuns ----------
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v, n = 2) => {
+  if (!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '−∞' : '—');
+  let s = (Math.abs(v) < 0.5 * Math.pow(10, -n) ? 0 : v).toFixed(n);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', '−');
+};
+const sgn = (v, n = 2) => (v < 0 ? ' − ' : ' + ') + fmt(Math.abs(v), n);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function onThemeChange(cb){
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', cb); } catch (_) {}
+  new MutationObserver(cb).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+}
+function bindSlider(id, cb, digits = 2){
+  const inp = document.getElementById(id), out = document.getElementById(id + 'Out');
+  const show = () => { if (out) out.textContent = fmt(+inp.value, digits); };
+  inp.addEventListener('input', () => { show(); cb(+inp.value); });
+  show();
+  return { get: () => +inp.value, set: v => { inp.value = v; show(); } };
+}
+function bindSeg(groupEl, cb){
+  const btns = [...groupEl.querySelectorAll('button')];
+  const set = v => btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+  btns.forEach(b => b.addEventListener('click', () => { set(b.dataset.v); cb(b.dataset.v); }));
+  return { set };
+}
+function setReadout(el, items){
+  el.innerHTML = items.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+// ---------- Plano: quadro cartesiano com alças arrastáveis ----------
+function Plano(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const P = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    cx: opts.cx ?? 0, cy: opts.cy ?? 0, scale: opts.scale ?? 60, unitsAcross: opts.unitsAcross ?? null,
+    handles: [], drag: null, onDraw: () => {}, onBackground: null, onDragEnd: null, pan: opts.pan ?? true,
+  };
+  P.X = x => P.w / 2 + (x - P.cx) * P.scale;
+  P.Y = y => P.h / 2 - (y - P.cy) * P.scale;
+  P.wx = px => (px - P.w / 2) / P.scale + P.cx;
+  P.wy = py => -(py - P.h / 2) / P.scale + P.cy;
+  P.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    P.dpr = window.devicePixelRatio || 1;
+    P.w = r.width; P.h = r.height;
+    canvas.width = Math.round(r.width * P.dpr); canvas.height = Math.round(r.height * P.dpr);
+    if (P.unitsAcross) P.scale = Math.min(P.w, P.h * 1.5) / P.unitsAcross;
+    P.draw();
+  };
+  P.view = () => ({ x0: P.wx(0), x1: P.wx(P.w), y0: P.wy(P.h), y1: P.wy(0) });
+  P.grid = () => {
+    const { x0, x1, y0, y1 } = P.view();
+    let step = 1; const target = 48 / P.scale;
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+    for (const s of steps){ if (s >= target){ step = s; break; } }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar('--line-minor');
+    ctx.beginPath();
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ const X = Math.round(P.X(x)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, P.h); }
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ const Y = Math.round(P.Y(y)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(P.w, Y); }
+    ctx.stroke();
+    ctx.strokeStyle = cssVar('--line-major'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(P.X(0), 0); ctx.lineTo(P.X(0), P.h); ctx.moveTo(0, P.Y(0)); ctx.lineTo(P.w, P.Y(0)); ctx.stroke();
+    ctx.fillStyle = cssVar('--ink-muted'); ctx.font = `500 10px ${cssVar('--font-mono')}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const lab = v => fmt(v, step < 1 ? 1 : 0);
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ if (Math.abs(x) < 1e-9) continue; ctx.fillText(lab(x), P.X(x), clamp(P.Y(0) + 3, 2, P.h - 13)); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ if (Math.abs(y) < 1e-9) continue; ctx.fillText(lab(y), clamp(P.X(0) - 4, 26, P.w - 2), P.Y(y)); }
+  };
+  P.line = (a, b, color, width = 1.5, dash = null) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(P.X(a.x), P.Y(a.y)); ctx.lineTo(P.X(b.x), P.Y(b.y)); ctx.stroke(); ctx.restore();
+  };
+  P.infLine = (p, d, color, width = 1.5, dash = null) => {
+    const L = 4 * (P.w + P.h) / P.scale, n = Math.hypot(d.x, d.y) || 1;
+    P.line({ x: p.x - L * d.x / n, y: p.y - L * d.y / n }, { x: p.x + L * d.x / n, y: p.y + L * d.y / n }, color, width, dash);
+  };
+  P.path = (pts, color, width = 2, dash = null, close = false) => {
+    if (pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    let pen = false;
+    for (const p of pts){
+      if (!p || !isFinite(p.x) || !isFinite(p.y)){ pen = false; continue; }
+      const X = P.X(p.x), Y = P.Y(p.y);
+      if (Math.abs(X) > 1e5 || Math.abs(Y) > 1e5){ pen = false; continue; }
+      if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  P.arrow = (a, b, color, width = 2) => {
+    const X1 = P.X(a.x), Y1 = P.Y(a.y), X2 = P.X(b.x), Y2 = P.Y(b.y);
+    const ang = Math.atan2(Y2 - Y1, X2 - X1), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2 - 0.6 * hl * Math.cos(ang), Y2 - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X2, Y2);
+    ctx.lineTo(X2 - hl * Math.cos(ang - 0.4), Y2 - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(X2 - hl * Math.cos(ang + 0.4), Y2 - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  };
+  P.dot = (p, color, r = 4, label = null, where = 'ne') => {
+    ctx.save(); ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(P.X(p.x), P.Y(p.y), r, 0, 2 * Math.PI); ctx.fill();
+    if (label) P.label(p, label, color, where, r + 3);
+    ctx.restore();
+  };
+  P.label = (p, text, color, where = 'ne', off = 6) => {
+    ctx.save();
+    ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.fillStyle = color;
+    const dx = where.includes('e') ? off : where.includes('w') ? -off : 0;
+    const dy = where.includes('n') ? -off : where.includes('s') ? off : 0;
+    ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+    ctx.textBaseline = dy < 0 ? 'bottom' : dy > 0 ? 'top' : 'middle';
+    const X = P.X(p.x) + dx, Y = P.Y(p.y) + dy;
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, X, Y);
+    ctx.fillText(text, X, Y);
+    ctx.restore();
+  };
+  P.draw = () => {
+    ctx.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+    ctx.clearRect(0, 0, P.w, P.h);
+    P.grid();
+    P.onDraw(ctx);
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), X = P.X(p.x), Y = P.Y(p.y);
+      ctx.save();
+      ctx.fillStyle = cssVar('--paper-raised'); ctx.strokeStyle = h.color(); ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      if (h.shape === 'square') ctx.rect(X - 5.5, Y - 5.5, 11, 11); else ctx.arc(X, Y, 6.5, 0, 2 * Math.PI);
+      ctx.fill(); ctx.stroke();
+      if (h.label) P.label(p, typeof h.label === 'function' ? h.label() : h.label, h.color(), h.where || 'ne', 9);
+      ctx.restore();
+    }
+  };
+  P.addHandle = h => { P.handles.push(h); return h; };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  const pick = (px, py) => {
+    let best = null, bd = 16;
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), d = Math.hypot(P.X(p.x) - px, P.Y(p.y) - py);
+      if (d < bd){ bd = d; best = h; }
+    }
+    return best;
+  };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    const h = pick(px, py);
+    canvas.setPointerCapture(e.pointerId);
+    if (h){ P.drag = { h }; canvas.classList.add('grabbing'); return; }
+    if (P.onBackground && P.onBackground(P.wx(px), P.wy(py), e) === true){ P.drag = { bg: true }; return; }
+    if (P.pan){ P.drag = { pan: true, px, py, cx: P.cx, cy: P.cy }; canvas.classList.add('grabbing'); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const { px, py } = pos(e);
+    if (!P.drag){ canvas.classList.toggle('grab', !!pick(px, py)); return; }
+    if (P.drag.h){ P.drag.h.set(P.wx(px), P.wy(py), e); P.changed && P.changed(); P.draw(); }
+    else if (P.drag.bg){ P.onBackground(P.wx(px), P.wy(py), e, true); }
+    else if (P.drag.pan){ P.cx = P.drag.cx - (px - P.drag.px) / P.scale; P.cy = P.drag.cy + (py - P.drag.py) / P.scale; P.draw(); }
+  });
+  const end = () => { if (P.drag && P.onDragEnd) P.onDragEnd(P.drag); P.drag = null; canvas.classList.remove('grabbing'); };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const { px, py } = pos(e), wx = P.wx(px), wy = P.wy(py);
+    P.scale = clamp(P.scale * Math.exp(-e.deltaY * 0.0015), 8, 600);
+    P.cx = wx - (px - P.w / 2) / P.scale; P.cy = wy + (py - P.h / 2) / P.scale;
+    P.unitsAcross = null; P.draw();
+  }, { passive: false });
+  new ResizeObserver(() => P.resize()).observe(canvas);
+  onThemeChange(() => P.draw());
+  return P;
+}
+
+// ---------- vetores em R^3 ----------
+const V3 = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  norm: a => Math.hypot(a[0], a[1], a[2]),
+  unit: a => { const n = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / n, a[1] / n, a[2] / n]; },
+  lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+};
+const fv = (v, n = 2) => '(' + v.map(c => fmt(c, n)).join(', ') + ')';
+
+// ---------- Espaco: vista orbital de uma cena 3D, desenhada em canvas 2D ----------
+// up = 'z' (quádricas, como na tabela do Cap. 6) ou 'y' (câmera e ray tracer).
+function Espaco(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const S = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    az: opts.az ?? 0.7, el: opts.el ?? 0.45, dist: opts.dist ?? 12, target: opts.target ?? [0, 0, 0],
+    up: opts.up ?? 'z', fov: opts.fov ?? 0.9, onDraw: () => {}, onClick: null, drag: null,
+  };
+  // vetores da câmera orbital
+  S.basis = () => {
+    const ca = Math.cos(S.az), sa = Math.sin(S.az), ce = Math.cos(S.el), se = Math.sin(S.el);
+    let back, upW;
+    if (S.up === 'z'){ back = [ce * ca, ce * sa, se]; upW = [0, 0, 1]; }
+    else { back = [ce * sa, se, ce * ca]; upW = [0, 1, 0]; }
+    const eye = V3.add(S.target, V3.mul(back, S.dist));
+    const f = V3.mul(back, -1);
+    const r = V3.unit(V3.cross(f, upW));
+    const u = V3.cross(r, f);
+    return { eye, f, r, u };
+  };
+  let B = null;
+  S.project = p => {
+    const q = V3.sub(p, B.eye), z = V3.dot(q, B.f);
+    const k = (Math.min(S.w, S.h) / 2) / Math.tan(S.fov / 2);
+    if (z < 0.05) return { x: NaN, y: NaN, z };
+    return { x: S.w / 2 + k * V3.dot(q, B.r) / z, y: S.h / 2 - k * V3.dot(q, B.u) / z, z };
+  };
+  S.depth = p => V3.dot(V3.sub(p, B.eye), B.f);
+  S.viewDir = () => B.f;
+  S.eye = () => B.eye;
+  S.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    S.dpr = window.devicePixelRatio || 1; S.w = r.width; S.h = r.height;
+    canvas.width = Math.round(r.width * S.dpr); canvas.height = Math.round(r.height * S.dpr);
+    S.draw();
+  };
+  S.seg = (a, b, color, width = 1.5, dash = null) => {
+    const A = S.project(a), Bp = S.project(b);
+    if (!isFinite(A.x) || !isFinite(Bp.x)) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(Bp.x, Bp.y); ctx.stroke(); ctx.restore();
+  };
+  S.poly = (pts, color, width = 1.5, dash = null, close = false) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); let pen = false;
+    for (const p of pts){
+      if (!p){ pen = false; continue; }
+      const q = S.project(p);
+      if (!isFinite(q.x)){ pen = false; continue; }
+      if (pen) ctx.lineTo(q.x, q.y); else { ctx.moveTo(q.x, q.y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  S.fillPoly = (pts, fill, stroke = null, width = 1) => {
+    const qs = pts.map(S.project);
+    if (qs.some(q => !isFinite(q.x))) return;
+    ctx.beginPath(); qs.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(); }
+  };
+  S.arrow = (a, b, color, width = 2.2, label = null) => {
+    const A = S.project(a), Bp = S.project(b);
+    if (!isFinite(A.x) || !isFinite(Bp.x)) return;
+    const ang = Math.atan2(Bp.y - A.y, Bp.x - A.x), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(Bp.x - 0.6 * hl * Math.cos(ang), Bp.y - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(Bp.x, Bp.y);
+    ctx.lineTo(Bp.x - hl * Math.cos(ang - 0.4), Bp.y - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(Bp.x - hl * Math.cos(ang + 0.4), Bp.y - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+    if (label) S.text(Bp.x + 6 * Math.cos(ang), Bp.y + 6 * Math.sin(ang), label, color, Math.cos(ang) >= 0 ? 'left' : 'right');
+    ctx.restore();
+  };
+  S.dot = (p, color, r = 4, label = null) => {
+    const q = S.project(p); if (!isFinite(q.x)) return;
+    ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, 2 * Math.PI); ctx.fill(); ctx.restore();
+    if (label) S.text(q.x + r + 3, q.y - r - 2, label, color, 'left');
+  };
+  S.text = (x, y, text, color, align = 'left') => {
+    ctx.save(); ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.textAlign = align; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y); ctx.restore();
+  };
+  S.axes = (len = 3, labels = true) => {
+    const muted = cssVar('--ink-muted');
+    const O = [0, 0, 0];
+    S.arrow(O, [len, 0, 0], muted, 1.3, labels ? 'x' : null);
+    S.arrow(O, [0, len, 0], muted, 1.3, labels ? 'y' : null);
+    S.arrow(O, [0, 0, len], muted, 1.3, labels ? 'z' : null);
+  };
+  S.draw = () => {
+    B = S.basis();
+    ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+    ctx.clearRect(0, 0, S.w, S.h);
+    S.onDraw(ctx);
+  };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    canvas.setPointerCapture(e.pointerId);
+    S.drag = { px, py, az: S.az, el: S.el, moved: false };
+    canvas.classList.add('grabbing');
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!S.drag) return;
+    const { px, py } = pos(e);
+    if (Math.hypot(px - S.drag.px, py - S.drag.py) > 3) S.drag.moved = true;
+    const sgnAz = S.up === 'z' ? -1 : -1;
+    S.az = S.drag.az + sgnAz * (px - S.drag.px) * 0.008;
+    S.el = clamp(S.drag.el + (py - S.drag.py) * 0.008, -1.45, 1.45);
+    S.draw();
+  });
+  const end = e => {
+    if (S.drag && !S.drag.moved && S.onClick){ const { px, py } = pos(e); S.onClick(px, py); }
+    S.drag = null; canvas.classList.remove('grabbing');
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', () => { S.drag = null; canvas.classList.remove('grabbing'); });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault(); S.dist = clamp(S.dist * Math.exp(e.deltaY * 0.0012), 2, 80); S.draw();
+  }, { passive: false });
+  canvas.classList.add('grab');
+  new ResizeObserver(() => S.resize()).observe(canvas);
+  onThemeChange(() => S.draw());
+  return S;
+}
+
+// cor CSS (#rrggbb) → [r,g,b] em 0..1
+function hexRGB(h){
+  h = h.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+const rgbCSS = (c, a = 1) => `rgba(${Math.round(clamp(c[0], 0, 1) * 255)},${Math.round(clamp(c[1], 0, 1) * 255)},${Math.round(clamp(c[2], 0, 1) * 255)},${a})`;
+
+
+const C = n => cssVar(n);
+const SCENES = {
+  livro: {
+    nome: 'A cena da Figura 6 (três esferas e piso)',
+    E: [0, 1.2, -5], T: [0, 0.4, 0], up: [0, 1, 0], d: 1.6,
+    spheres: [
+      { C: [-1.7, 0, 0.9], r: 1, cor: [0.85, 0.25, 0.2], refl: 0, nome: 'vermelha' },
+      { C: [0, -0.25, -0.7], r: 0.75, cor: [0.2, 0.45, 0.85], refl: 0, nome: 'azul' },
+      { C: [1.8, 0, 1.6], r: 1, cor: [0.95, 0.95, 0.95], refl: 0.85, nome: 'espelhada' },
+    ],
+    floor: -1, floorRefl: 0.15, light: [-4, 6, -4], fundo: [0.75, 0.85, 0.95],
+    k: { ka: 0.12, kd: 0.88, ks: 0.6, k: 40 },
+  },
+  pixel: {
+    nome: 'Um pixel, do começo ao fim (Seção 6.5)',
+    E: [0, 0, 0], T: [0, 0, -5], up: [0, 1, 0], d: 1,
+    spheres: [{ C: [0, 0, -5], r: 2, cor: [1, 1, 1], refl: 0, nome: 'esfera' }],
+    floor: null, floorRefl: 0, light: [0, 5, 0], fundo: [0.08, 0.1, 0.16],
+    k: { ka: 0.1, kd: 0.7, ks: 0.3, k: 8 },
+  },
+};
+const st = { scene: 'livro', S: null, depth: 3, sombra: true, eps: true, vista: 'cor', H: 200, pick: null };
+const EPS = 1e-4;
+
+function camera(S){
+  const f = V3.unit(V3.sub(S.T, S.E)), r = V3.unit(V3.cross(f, S.up)), u = V3.cross(r, f);
+  return { f, r, u };
+}
+function hitSphere(O, D, s, eps){
+  const OC = V3.sub(O, s.C), b = V3.dot(D, OC), c = V3.dot(OC, OC) - s.r * s.r, delta = b * b - c;
+  if (delta < 0) return { delta, t: Infinity };
+  const q = Math.sqrt(delta), t1 = -b - q, t2 = -b + q;
+  const t = t1 > eps ? t1 : (t2 > eps ? t2 : Infinity);
+  return { delta, t, t1, t2, b, c };
+}
+function hitFloor(O, D, y0, eps){ if (y0 === null || Math.abs(D[1]) < 1e-12) return Infinity; const t = (y0 - O[1]) / D[1]; return t > eps ? t : Infinity; }
+function nearest(S, O, D, eps){
+  let best = { t: Infinity, obj: -1 };
+  S.spheres.forEach((s, i) => { const h = hitSphere(O, D, s, eps); if (h.t < best.t) best = { t: h.t, obj: i }; });
+  const tf = hitFloor(O, D, S.floor, eps); if (tf < best.t) best = { t: tf, obj: 'piso' };
+  return best;
+}
+// traça um raio; se log for um array, registra os passos
+function trace(S, O, D, depth, log){
+  const eps = st.eps ? EPS : 0;
+  const h = nearest(S, O, D, eps);
+  if (log) log.push({ kind: 'hit', O, D, h, tests: S.spheres.map(s => hitSphere(O, D, s, eps)), tf: hitFloor(O, D, S.floor, eps) });
+  if (!isFinite(h.t)) return { cor: S.fundo, t: Infinity };
+  const P = V3.add(O, V3.mul(D, h.t));
+  let N, base, refl;
+  if (h.obj === 'piso'){ N = [0, 1, 0]; const chk = ((Math.floor(P[0]) + Math.floor(P[2])) % 2 + 2) % 2 === 0; base = chk ? [0.9, 0.9, 0.85] : [0.25, 0.25, 0.3]; refl = S.floorRefl; }
+  else { const s = S.spheres[h.obj]; N = V3.mul(V3.sub(P, s.C), 1 / s.r); base = s.cor; refl = s.refl; }
+  const toL = V3.sub(S.light, P), distL = V3.norm(toL), L = V3.mul(toL, 1 / distL);
+  let lit = true, sh = null;
+  if (st.sombra){
+    const Os = st.eps ? V3.add(P, V3.mul(N, EPS)) : P;
+    sh = nearest(S, Os, L, st.eps ? EPS : 0);
+    lit = !(sh.t < distL);
+    if (!st.eps && !lit){ /* acne: raízes minúsculas positivas */ }
+  }
+  const NL = V3.dot(N, L), lam = Math.max(0, NL) * (lit ? 1 : 0);
+  const R = V3.sub(V3.mul(N, 2 * NL), L), V = V3.mul(D, -1), RV = V3.dot(R, V);
+  const spec = (lit && NL > 0 ? Math.pow(Math.max(0, RV), S.k.k) : 0);
+  const I = S.k.ka + S.k.kd * lam;
+  let cor = base.map(c => c * I + S.k.ks * spec);
+  if (log) log.push({ kind: 'shade', P, N, L, NL, lit, sh, distL, R, V, RV, spec, lam, I, obj: h.obj, base, Itot: S.k.ka + S.k.kd * lam + S.k.ks * spec, depth });
+  if (st.vista === 'difusa') return { cor: [lam, lam, lam], t: h.t };
+  if (st.vista === 'especular') return { cor: [spec, spec, spec], t: h.t };
+  if (st.vista === 'sombra') return { cor: lit ? [1, 1, 1] : [0, 0, 0], t: h.t };
+  if (st.vista === 'normal') return { cor: N.map(c => 0.5 + 0.5 * c), t: h.t };
+  if (st.vista === 't') return { cor: [h.t, h.t, h.t], t: h.t };
+  if (depth < st.depth && refl > 0){
+    const D2 = V3.sub(D, V3.mul(N, 2 * V3.dot(D, N)));
+    const rc = trace(S, V3.add(P, V3.mul(N, EPS)), D2, depth + 1, log ? [] : null).cor;
+    if (log) log.push({ kind: 'refl', D2, refl });
+    cor = cor.map((c, i) => (1 - refl) * c + refl * rc[i]);
+  }
+  return { cor, t: h.t };
+}
+function pixelRay(S, i, j, W, H){
+  const cam = camera(S), esc = 2 / H, x = (i + 0.5 - W / 2) * esc, y = -(j + 0.5 - H / 2) * esc;
+  return rayAt(S, x, y, cam);
+}
+function rayAt(S, x, y, cam = camera(S)){
+  const raw = V3.add(V3.add(V3.mul(cam.r, x), V3.mul(cam.u, y)), V3.mul(cam.f, S.d));
+  return { x, y, raw, D: V3.unit(raw), cam };
+}
+
+// ===================== renderização progressiva =====================
+const cv = $('#img'), ctx = cv.getContext('2d'), over = $('#over'), octx = over.getContext('2d');
+let job = 0;
+function render(){
+  const my = ++job, S = st.S, H = st.H, W = Math.round(H * 1.6);
+  cv.width = W; cv.height = H;
+  const img = ctx.createImageData(W, H), data = img.data;
+  let j = 0, tmax = 0;
+  const tvals = st.vista === 't' ? new Float32Array(W * H) : null;
+  const t0 = performance.now();
+  const step = () => {
+    if (my !== job) return;
+    const until = performance.now() + 24;
+    while (j < H && performance.now() < until){
+      for (let i = 0; i < W; i++){
+        const ray = pixelRay(S, i, j, W, H), res = trace(S, S.E, ray.D, 0, null), k = 4 * (j * W + i);
+        if (tvals){ tvals[j * W + i] = res.t; if (isFinite(res.t)) tmax = Math.max(tmax, res.t); continue; }
+        const g = st.vista === 'cor' ? 1 / 2.2 : 1;
+        data[k] = 255 * Math.pow(clamp(res.cor[0], 0, 1), g); data[k + 1] = 255 * Math.pow(clamp(res.cor[1], 0, 1), g); data[k + 2] = 255 * Math.pow(clamp(res.cor[2], 0, 1), g); data[k + 3] = 255;
+      }
+      j++;
+    }
+    if (tvals){
+      if (j >= H){ for (let q = 0; q < W * H; q++){ const v = isFinite(tvals[q]) ? 255 * (1 - tvals[q] / (tmax * 1.05)) : 0; data[4 * q] = data[4 * q + 1] = data[4 * q + 2] = v; data[4 * q + 3] = 255; } ctx.putImageData(img, 0, 0); }
+    } else ctx.putImageData(img, 0, 0);
+    $('#prog').textContent = j < H ? `${Math.round(100 * j / H)}%` : `${W}×${H} · ${Math.round(performance.now() - t0)} ms`;
+    if (j < H) requestAnimationFrame(step);
+  };
+  step();
+  drawOver();
+}
+function drawOver(){
+  const r = over.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  over.width = Math.round(r.width * dpr); over.height = Math.round(r.height * dpr);
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, r.width, r.height);
+  if (!st.pick) return;
+  const H = 2, W = 3.2, X = (st.pick.x / W + 0.5) * r.width, Y = (0.5 - st.pick.y / H) * r.height;
+  octx.strokeStyle = C('--c-mira'); octx.lineWidth = 2;
+  octx.beginPath(); octx.arc(X, Y, 9, 0, 2 * Math.PI); octx.moveTo(X - 15, Y); octx.lineTo(X - 5, Y); octx.moveTo(X + 5, Y); octx.lineTo(X + 15, Y); octx.moveTo(X, Y - 15); octx.lineTo(X, Y - 5); octx.moveTo(X, Y + 5); octx.lineTo(X, Y + 15); octx.stroke();
+}
+new ResizeObserver(drawOver).observe(over);
+
+// ===================== inspeção de um pixel =====================
+const F = (v, n = 3) => fv(v, n);
+function inspect(x, y){
+  st.pick = { x, y }; drawOver();
+  const S = st.S, ray = rayAt(S, x, y), log = [];
+  trace(S, S.E, ray.D, 0, log);
+  const L = [];
+  L.push(['Passo 1: o raio', `<div>x·r + y·u + d·f = ${F(ray.raw)} <span class="sub">com (x, y) = (${fmt(x, 3)}, ${fmt(y, 3)}), d = ${fmt(S.d, 2)}</span></div><div>D = ${F(ray.D, 4)}</div>`]);
+  const hit = log[0];
+  let s2 = '';
+  S.spheres.forEach((s, i) => {
+    const h = hit.tests[i];
+    s2 += `<div><span class="swatch" style="background:${rgbCSS(s.cor)}"></span>${s.nome}: ⟨D, O − C⟩ = ${fmt(h.b ?? V3.dot(ray.D, V3.sub(S.E, s.C)), 3)}, ‖O − C‖² − ρ² = ${fmt(h.c ?? (V3.dot(V3.sub(S.E, s.C), V3.sub(S.E, s.C)) - s.r * s.r), 3)}, Δ/4 = ${fmt(h.delta, 3)}` +
+      (h.delta >= 0 ? `, t = ${fmt(h.t1, 3)} e ${fmt(h.t2, 3)}` : ' <span class="sub">(não acerta)</span>') + '</div>';
+  });
+  if (S.floor !== null) s2 += `<div>piso y = ${fmt(S.floor, 2)}: t = ${isFinite(hit.tf) ? fmt(hit.tf, 3) : '<span class="sub">não acerta à frente</span>'}</div>`;
+  const nome = o => o === 'piso' ? 'o piso' : 'a esfera ' + S.spheres[o].nome;
+  s2 += isFinite(hit.h.t) ? `<div><strong>mais próximo: ${nome(hit.h.obj)}, t = ${fmt(hit.h.t, 3)}</strong></div>` : '<div><strong>nada é atingido: cor de fundo</strong></div>';
+  L.push(['Passo 2: as interseções', s2]);
+  const sh = log.find(z => z.kind === 'shade');
+  if (sh){
+    L.push(['Passo 3: a normal e a luz', `<div>P = ${F(sh.P)}</div><div>N = ${F(sh.N)}, L = ${F(sh.L)}</div><div>⟨N, L⟩ = ${fmt(sh.NL, 3)}</div>`]);
+    L.push(['Passo 4: a sombra', !st.sombra ? '<div class="sub">raios de sombra desligados</div>' :
+      `<div>raio de sombra de P na direção L: ${sh.lit ? 'nada bloqueia a luz' : `bloqueado em s = ${fmt(sh.sh.t, 6)} por ${nome(sh.sh.obj)}`} <span class="sub">(distância até a luz ${fmt(sh.distL, 3)})</span></div>` +
+      (!st.eps && !sh.lit && sh.sh.t < 1e-6 ? '<div class="sub">s minúsculo: é a acne, o ponto “se sombreia” por erro de arredondamento</div>' : '')]);
+    L.push(['Passo 5: o brilho', `<div>V = −D = ${F(sh.V)}, R = 2⟨N,L⟩N − L = ${F(sh.R)}</div><div>⟨R, V⟩ = ${fmt(sh.RV, 3)}, ⟨R, V⟩^${S.k.k} = ${fmt(Math.pow(Math.max(0, sh.RV), S.k.k), 3)}</div>`]);
+    L.push(['Passo 6: a cor', `<div>I = ${fmt(S.k.ka, 2)} + ${fmt(S.k.kd, 2)}·${fmt(sh.lam, 3)} + ${fmt(S.k.ks, 2)}·${fmt(sh.spec, 3)} = <strong>${fmt(sh.Itot, 3)}</strong></div>` +
+      (log.some(z => z.kind === 'refl') ? `<div class="sub">superfície refletora: a cor final mistura esta com a do raio refletido D′ = D − 2⟨D,N⟩N</div>` : '')]);
+  }
+  $('#steps').innerHTML = L.map(([h, b]) => `<li><div class="h">${h}</div><div class="b">${b}</div></li>`).join('');
+}
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect(), H = st.H, W = Math.round(H * 1.6);
+  const i = Math.floor((e.clientX - r.left) / r.width * W), j = Math.floor((e.clientY - r.top) / r.height * H);
+  const esc = 2 / H; inspect((i + 0.5 - W / 2) * esc, -(j + 0.5 - H / 2) * esc);
+});
+$('#btnLivro').addEventListener('click', () => { if (st.scene !== 'pixel'){ sel.value = 'pixel'; loadScene('pixel'); } inspect(0, 0.25); });
+
+// ===================== controles =====================
+const sl = {};
+const rer = () => { render(); if (st.pick) inspect(st.pick.x, st.pick.y); };
+sl.lx = bindSlider('lxSl', v => { st.S.light[0] = v; rer(); }, 1);
+sl.ly = bindSlider('lySl', v => { st.S.light[1] = v; rer(); }, 1);
+sl.lz = bindSlider('lzSl', v => { st.S.light[2] = v; rer(); }, 1);
+sl.ka = bindSlider('kaSl', v => { st.S.k.ka = v; rer(); });
+sl.kd = bindSlider('kdSl', v => { st.S.k.kd = v; rer(); });
+sl.ks = bindSlider('ksSl', v => { st.S.k.ks = v; rer(); });
+sl.k = bindSlider('kSl', v => { st.S.k.k = v; rer(); }, 0);
+bindSlider('depthSl', v => { st.depth = v; rer(); }, 0);
+$('#chkSombra').addEventListener('change', e => { st.sombra = e.target.checked; rer(); });
+$('#chkEps').addEventListener('change', e => { st.eps = !e.target.checked; rer(); });
+$('#vista').addEventListener('change', e => { st.vista = e.target.value; rer(); });
+bindSeg($('#resSeg'), v => { st.H = +v; rer(); });
+const sel = $('#presetSel');
+sel.innerHTML = Object.entries(SCENES).map(([k, s]) => `<option value="${k}">${s.nome}</option>`).join('');
+function loadScene(k){
+  st.scene = k; st.S = JSON.parse(JSON.stringify(SCENES[k])); st.pick = null; $('#steps').innerHTML = '';
+  sl.lx.set(st.S.light[0]); sl.ly.set(st.S.light[1]); sl.lz.set(st.S.light[2]);
+  sl.ka.set(st.S.k.ka); sl.kd.set(st.S.k.kd); sl.ks.set(st.S.k.ks); sl.k.set(st.S.k.k);
+  render();
+}
+sel.addEventListener('change', () => loadScene(sel.value));
+const h0 = location.hash.slice(1);
+if (h0 === 'pixel'){ sel.value = 'pixel'; loadScene('pixel'); inspect(0, 0.25); }
+else { loadScene('livro'); inspect(0.62, 0.05); }
+onThemeChange(drawOver);
+})();
+</script>

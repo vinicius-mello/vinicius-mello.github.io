@@ -1,0 +1,878 @@
+<title>Mesa de Quádricas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mesas de GA: painel lateral + mesa (quadro) com leituras ao vivo. */
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-success:#1F9254;
+    --c-warning:#B4590E;
+    --c-danger:#C23B78;
+    --shadow:rgba(22,35,58,0.14);
+    --font-display:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    --font-body:'Public Sans','Segoe UI',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-success:#4ADE80;
+      --c-warning:#FBBF74;
+      --c-danger:#E86FA6;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-success:#4ADE80;
+    --c-warning:#FBBF74;
+    --c-danger:#E86FA6;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:var(--font-display);
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1360px;
+    margin:0 auto;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));
+    padding-right:max(16px, env(safe-area-inset-right, 0px));
+    padding-block:0.85rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+  }
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; min-width:0; }
+  .brand-mark{
+    font-family:var(--font-mono); font-weight:600;
+    font-size:1.05rem; color:var(--brand); line-height:1;
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem;
+    white-space:nowrap;
+  }
+  .brand-text{ min-width:0; }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:64ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(270px,320px) minmax(0,1fr);
+    gap:0.75rem;
+    align-items:start;
+  }
+  @media (max-width:880px){ .workspace{ grid-template-columns:minmax(0,1fr); } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+    min-width:0;
+  }
+  .panel h2{
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:0.45rem;
+  }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.45rem 0 0; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; border:none; background:var(--paper); font-size:0.74rem; font-weight:600;
+    padding:0.38rem 0.45rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .seg button + button{ border-left:1px solid var(--border); }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  .slider{ display:grid; grid-template-columns:4.6rem minmax(0,1fr) 3.6rem; align-items:center; gap:0.4rem; margin-top:0.35rem; }
+  .slider > span:first-child{ font-size:0.74rem; color:var(--ink-muted); font-weight:600; }
+  .slider input[type=range]{ width:100%; accent-color:var(--brand); min-width:0; }
+  .slider output{ font-family:var(--font-mono); font-size:0.76rem; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); max-width:100%; }
+  .btn-row{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.45rem; }
+
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:var(--font-mono);
+    font-size:0.74rem; line-height:1.6;
+    background:var(--paper-sunken);
+    border-radius:6px; padding:0.45rem 0.6rem;
+    overflow-x:auto; overflow-wrap:anywhere;
+  }
+  .formula-box > div{ padding-left:1.2em; text-indent:-1.2em; }
+  .formula-box .main{ color:var(--brand); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .board{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    height:min(70svh,700px);
+    min-height:340px;
+  }
+  .board canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .board canvas.grab{ cursor:grab; }
+  .board canvas.grabbing{ cursor:grabbing; }
+  .board-tag{
+    position:absolute; left:0.5rem; top:0.45rem; pointer-events:none;
+    font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--ink-muted); background:var(--paper-raised); border:1px solid var(--border);
+    border-radius:4px; padding:0.1rem 0.35rem;
+  }
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:0.4rem;
+  }
+  .ro{
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:7px;
+    padding:0.35rem 0.55rem; min-width:0;
+  }
+  .ro .k{ font-size:0.72rem; letter-spacing:0.01em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .pill{ display:inline-block; font-size:0.74rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; border:1.5px solid currentColor; font-family:var(--font-body); }
+  .note{
+    font-size:0.78rem; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--border); border-left:4px solid var(--c-warning);
+    border-radius:0 7px 7px 0; padding:0.4rem 0.6rem;
+  }
+  .note.ok{ border-left-color:var(--c-success); }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; max-width:110ch; }
+  .footer-note a{ color:var(--brand); }
+  .tbl-wrap{ overflow-x:auto; }
+  table.tbl{ border-collapse:collapse; font-family:var(--font-mono); font-size:0.74rem; font-variant-numeric:tabular-nums; width:100%; }
+  table.tbl th, table.tbl td{ padding:0.18rem 0.4rem; text-align:right; border-bottom:1px solid var(--line-minor); white-space:nowrap; }
+  table.tbl th{ color:var(--ink-muted); font-weight:600; font-family:var(--font-body); font-size:0.7rem; }
+  table.tbl tfoot td{ font-weight:700; border-bottom:none; border-top:1.5px solid var(--line-major); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+  :root{
+    --c-sup:#5B7FD6;
+    --c-sup-in:#C9A46A;
+    --c-plano:rgba(194,59,120,0.16);
+    --c-plano-borda:#C23B78;
+    --c-secao:#C23B78;
+    --c-regua:#157F6E;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --c-sup:#6C93FF; --c-sup-in:#F0A94E; --c-plano:rgba(232,111,166,0.18); --c-plano-borda:#E86FA6; --c-secao:#E86FA6; --c-regua:#4FD8BE;
+    }
+  }
+  :root[data-theme="dark"]{
+    --c-sup:#6C93FF; --c-sup-in:#F0A94E; --c-plano:rgba(232,111,166,0.18); --c-plano-borda:#E86FA6; --c-secao:#E86FA6; --c-regua:#4FD8BE;
+  }
+  .views{ display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr); gap:0.5rem; }
+  @media (max-width:1100px){ .views{ grid-template-columns:minmax(0,1fr); } }
+  .views .board{ height:min(62svh,600px); min-height:320px; }
+  .tasks{ margin:0; padding-left:1.15rem; font-size:0.78rem; display:flex; flex-direction:column; gap:0.3rem; }
+  .tasks li::marker{ color:var(--brand); font-weight:700; }
+  .pill.elipse{ color:var(--c-regua); } .pill.parabola{ color:#B8791A; } .pill.hiperbole{ color:var(--c-secao); } .pill.neutra{ color:var(--ink-muted); }
+  .eq{ font-family:var(--font-mono); font-size:0.9rem; color:var(--brand); font-weight:600; margin-top:0.4rem; overflow-wrap:anywhere; }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">XᵀQX=0</span>
+      <div class="brand-text">
+        <h1>Mesa de Quádricas</h1>
+        <p>Elipsoides, hiperboloides, paraboloides, cones e cilindros, e as cônicas que aparecem quando cortamos cada um por um plano, como no Capítulo 6 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label for="presetSel">Exemplo</label>
+      <select id="presetSel" class="ghost-btn"></select>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Quádrica</h2>
+        <select id="tipoSel" class="ghost-btn" style="width:100%"></select>
+        <div class="eq" id="eqBox"></div>
+        <label class="slider"><span>a</span><input type="range" id="aSl" min="0.4" max="3" step="0.05" value="1.5"><output id="aSlOut"></output></label>
+        <label class="slider"><span>b</span><input type="range" id="bSl" min="0.4" max="3" step="0.05" value="1"><output id="bSlOut"></output></label>
+        <label class="slider" id="cRow"><span>c</span><input type="range" id="cSl" min="0.4" max="3" step="0.05" value="1"><output id="cSlOut"></output></label>
+        <div class="checks">
+          <label id="reguaRow"><input type="checkbox" id="chkRegua"> Retas contidas na superfície</label>
+          <label><input type="checkbox" id="chkEixos" checked> Eixos coordenados</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Plano de corte</h2>
+        <div class="seg" id="planoSeg" role="group" aria-label="Plano de corte">
+          <button type="button" data-v="z" aria-pressed="true">z = k</button>
+          <button type="button" data-v="x" aria-pressed="false">x = k</button>
+          <button type="button" data-v="y" aria-pressed="false">y = k</button>
+          <button type="button" data-v="incl" aria-pressed="false">z = k + m·y</button>
+        </div>
+        <label class="slider"><span>k</span><input type="range" id="kSl" min="-3" max="3" step="0.02" value="0.5"><output id="kSlOut"></output></label>
+        <label class="slider" id="mRow"><span>m</span><input type="range" id="mSl" min="0" max="3" step="0.01" value="0.5"><output id="mSlOut"></output></label>
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" id="btnAnim">Varrer k</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Para investigar</h2>
+        <ol class="tasks">
+          <li>No paraboloide z = x²/a² + y²/b², corte por z = k e varie k. Que curvas aparecem, e o que acontece em k = 0 e k &lt; 0?</li>
+          <li>No hiperboloide de uma folha, corte por x = k. Para que valor de k a hipérbole se degenera num par de retas? Ligue as retas contidas na superfície.</li>
+          <li>No cone x² + y² = z², use o plano z = 1 + m·y e passe por m = 1 (Teorema das seções do cone). Acompanhe o sinal de B² − 4AC.</li>
+          <li>Na sela, corte por z = k com k &gt; 0, k = 0 e k &lt; 0. Por que o eixo das hipérboles gira 90°?</li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="views">
+        <div class="board">
+          <canvas id="cv3" role="img" aria-label="A quádrica em três dimensões, com o plano de corte e a seção; arraste para girar."></canvas>
+          <span class="board-tag">Espaço · arraste para girar</span>
+        </div>
+        <div class="board">
+          <canvas id="cv2" role="img" aria-label="A seção plana desenhada nas coordenadas do próprio plano."></canvas>
+          <span class="board-tag">Seção no plano de corte (s, t)</span>
+        </div>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="formula-box" id="fbSec"></div>
+      <div class="note" id="note" hidden></div>
+      <p class="footer-note">A seção é obtida substituindo X = O + s·e₁ + t·e₂ na equação da quádrica: sobra uma equação de grau no máximo 2 em (s, t), uma cônica (Seção 6.1). Ela é desenhada pelo método dos quadrados marchantes sobre essa equação. Companheira do Capítulo 6 (“Quádricas e Ray Tracing”), Seção 1, de <em>Geometria Analítica com Aplicações</em>, de Vinícius Mello e Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- utilitários comuns ----------
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v, n = 2) => {
+  if (!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '−∞' : '—');
+  let s = (Math.abs(v) < 0.5 * Math.pow(10, -n) ? 0 : v).toFixed(n);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', '−');
+};
+const sgn = (v, n = 2) => (v < 0 ? ' − ' : ' + ') + fmt(Math.abs(v), n);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function onThemeChange(cb){
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', cb); } catch (_) {}
+  new MutationObserver(cb).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+}
+function bindSlider(id, cb, digits = 2){
+  const inp = document.getElementById(id), out = document.getElementById(id + 'Out');
+  const show = () => { if (out) out.textContent = fmt(+inp.value, digits); };
+  inp.addEventListener('input', () => { show(); cb(+inp.value); });
+  show();
+  return { get: () => +inp.value, set: v => { inp.value = v; show(); } };
+}
+function bindSeg(groupEl, cb){
+  const btns = [...groupEl.querySelectorAll('button')];
+  const set = v => btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+  btns.forEach(b => b.addEventListener('click', () => { set(b.dataset.v); cb(b.dataset.v); }));
+  return { set };
+}
+function setReadout(el, items){
+  el.innerHTML = items.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+// ---------- Plano: quadro cartesiano com alças arrastáveis ----------
+function Plano(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const P = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    cx: opts.cx ?? 0, cy: opts.cy ?? 0, scale: opts.scale ?? 60, unitsAcross: opts.unitsAcross ?? null,
+    handles: [], drag: null, onDraw: () => {}, onBackground: null, onDragEnd: null, pan: opts.pan ?? true,
+  };
+  P.X = x => P.w / 2 + (x - P.cx) * P.scale;
+  P.Y = y => P.h / 2 - (y - P.cy) * P.scale;
+  P.wx = px => (px - P.w / 2) / P.scale + P.cx;
+  P.wy = py => -(py - P.h / 2) / P.scale + P.cy;
+  P.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    P.dpr = window.devicePixelRatio || 1;
+    P.w = r.width; P.h = r.height;
+    canvas.width = Math.round(r.width * P.dpr); canvas.height = Math.round(r.height * P.dpr);
+    if (P.unitsAcross) P.scale = Math.min(P.w, P.h * 1.5) / P.unitsAcross;
+    P.draw();
+  };
+  P.view = () => ({ x0: P.wx(0), x1: P.wx(P.w), y0: P.wy(P.h), y1: P.wy(0) });
+  P.grid = () => {
+    const { x0, x1, y0, y1 } = P.view();
+    let step = 1; const target = 48 / P.scale;
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+    for (const s of steps){ if (s >= target){ step = s; break; } }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar('--line-minor');
+    ctx.beginPath();
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ const X = Math.round(P.X(x)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, P.h); }
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ const Y = Math.round(P.Y(y)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(P.w, Y); }
+    ctx.stroke();
+    ctx.strokeStyle = cssVar('--line-major'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(P.X(0), 0); ctx.lineTo(P.X(0), P.h); ctx.moveTo(0, P.Y(0)); ctx.lineTo(P.w, P.Y(0)); ctx.stroke();
+    ctx.fillStyle = cssVar('--ink-muted'); ctx.font = `500 10px ${cssVar('--font-mono')}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const lab = v => fmt(v, step < 1 ? 1 : 0);
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ if (Math.abs(x) < 1e-9) continue; ctx.fillText(lab(x), P.X(x), clamp(P.Y(0) + 3, 2, P.h - 13)); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ if (Math.abs(y) < 1e-9) continue; ctx.fillText(lab(y), clamp(P.X(0) - 4, 26, P.w - 2), P.Y(y)); }
+  };
+  P.line = (a, b, color, width = 1.5, dash = null) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(P.X(a.x), P.Y(a.y)); ctx.lineTo(P.X(b.x), P.Y(b.y)); ctx.stroke(); ctx.restore();
+  };
+  P.infLine = (p, d, color, width = 1.5, dash = null) => {
+    const L = 4 * (P.w + P.h) / P.scale, n = Math.hypot(d.x, d.y) || 1;
+    P.line({ x: p.x - L * d.x / n, y: p.y - L * d.y / n }, { x: p.x + L * d.x / n, y: p.y + L * d.y / n }, color, width, dash);
+  };
+  P.path = (pts, color, width = 2, dash = null, close = false) => {
+    if (pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    let pen = false;
+    for (const p of pts){
+      if (!p || !isFinite(p.x) || !isFinite(p.y)){ pen = false; continue; }
+      const X = P.X(p.x), Y = P.Y(p.y);
+      if (Math.abs(X) > 1e5 || Math.abs(Y) > 1e5){ pen = false; continue; }
+      if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  P.arrow = (a, b, color, width = 2) => {
+    const X1 = P.X(a.x), Y1 = P.Y(a.y), X2 = P.X(b.x), Y2 = P.Y(b.y);
+    const ang = Math.atan2(Y2 - Y1, X2 - X1), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2 - 0.6 * hl * Math.cos(ang), Y2 - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X2, Y2);
+    ctx.lineTo(X2 - hl * Math.cos(ang - 0.4), Y2 - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(X2 - hl * Math.cos(ang + 0.4), Y2 - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  };
+  P.dot = (p, color, r = 4, label = null, where = 'ne') => {
+    ctx.save(); ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(P.X(p.x), P.Y(p.y), r, 0, 2 * Math.PI); ctx.fill();
+    if (label) P.label(p, label, color, where, r + 3);
+    ctx.restore();
+  };
+  P.label = (p, text, color, where = 'ne', off = 6) => {
+    ctx.save();
+    ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.fillStyle = color;
+    const dx = where.includes('e') ? off : where.includes('w') ? -off : 0;
+    const dy = where.includes('n') ? -off : where.includes('s') ? off : 0;
+    ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+    ctx.textBaseline = dy < 0 ? 'bottom' : dy > 0 ? 'top' : 'middle';
+    const X = P.X(p.x) + dx, Y = P.Y(p.y) + dy;
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, X, Y);
+    ctx.fillText(text, X, Y);
+    ctx.restore();
+  };
+  P.draw = () => {
+    ctx.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+    ctx.clearRect(0, 0, P.w, P.h);
+    P.grid();
+    P.onDraw(ctx);
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), X = P.X(p.x), Y = P.Y(p.y);
+      ctx.save();
+      ctx.fillStyle = cssVar('--paper-raised'); ctx.strokeStyle = h.color(); ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      if (h.shape === 'square') ctx.rect(X - 5.5, Y - 5.5, 11, 11); else ctx.arc(X, Y, 6.5, 0, 2 * Math.PI);
+      ctx.fill(); ctx.stroke();
+      if (h.label) P.label(p, typeof h.label === 'function' ? h.label() : h.label, h.color(), h.where || 'ne', 9);
+      ctx.restore();
+    }
+  };
+  P.addHandle = h => { P.handles.push(h); return h; };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  const pick = (px, py) => {
+    let best = null, bd = 16;
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), d = Math.hypot(P.X(p.x) - px, P.Y(p.y) - py);
+      if (d < bd){ bd = d; best = h; }
+    }
+    return best;
+  };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    const h = pick(px, py);
+    canvas.setPointerCapture(e.pointerId);
+    if (h){ P.drag = { h }; canvas.classList.add('grabbing'); return; }
+    if (P.onBackground && P.onBackground(P.wx(px), P.wy(py), e) === true){ P.drag = { bg: true }; return; }
+    if (P.pan){ P.drag = { pan: true, px, py, cx: P.cx, cy: P.cy }; canvas.classList.add('grabbing'); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const { px, py } = pos(e);
+    if (!P.drag){ canvas.classList.toggle('grab', !!pick(px, py)); return; }
+    if (P.drag.h){ P.drag.h.set(P.wx(px), P.wy(py), e); P.changed && P.changed(); P.draw(); }
+    else if (P.drag.bg){ P.onBackground(P.wx(px), P.wy(py), e, true); }
+    else if (P.drag.pan){ P.cx = P.drag.cx - (px - P.drag.px) / P.scale; P.cy = P.drag.cy + (py - P.drag.py) / P.scale; P.draw(); }
+  });
+  const end = () => { if (P.drag && P.onDragEnd) P.onDragEnd(P.drag); P.drag = null; canvas.classList.remove('grabbing'); };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const { px, py } = pos(e), wx = P.wx(px), wy = P.wy(py);
+    P.scale = clamp(P.scale * Math.exp(-e.deltaY * 0.0015), 8, 600);
+    P.cx = wx - (px - P.w / 2) / P.scale; P.cy = wy + (py - P.h / 2) / P.scale;
+    P.unitsAcross = null; P.draw();
+  }, { passive: false });
+  new ResizeObserver(() => P.resize()).observe(canvas);
+  onThemeChange(() => P.draw());
+  return P;
+}
+
+// ---------- vetores em R^3 ----------
+const V3 = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  norm: a => Math.hypot(a[0], a[1], a[2]),
+  unit: a => { const n = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / n, a[1] / n, a[2] / n]; },
+  lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+};
+const fv = (v, n = 2) => '(' + v.map(c => fmt(c, n)).join(', ') + ')';
+
+// ---------- Espaco: vista orbital de uma cena 3D, desenhada em canvas 2D ----------
+// up = 'z' (quádricas, como na tabela do Cap. 6) ou 'y' (câmera e ray tracer).
+function Espaco(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const S = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    az: opts.az ?? 0.7, el: opts.el ?? 0.45, dist: opts.dist ?? 12, target: opts.target ?? [0, 0, 0],
+    up: opts.up ?? 'z', fov: opts.fov ?? 0.9, onDraw: () => {}, onClick: null, drag: null,
+  };
+  // vetores da câmera orbital
+  S.basis = () => {
+    const ca = Math.cos(S.az), sa = Math.sin(S.az), ce = Math.cos(S.el), se = Math.sin(S.el);
+    let back, upW;
+    if (S.up === 'z'){ back = [ce * ca, ce * sa, se]; upW = [0, 0, 1]; }
+    else { back = [ce * sa, se, ce * ca]; upW = [0, 1, 0]; }
+    const eye = V3.add(S.target, V3.mul(back, S.dist));
+    const f = V3.mul(back, -1);
+    const r = V3.unit(V3.cross(f, upW));
+    const u = V3.cross(r, f);
+    return { eye, f, r, u };
+  };
+  let B = null;
+  S.project = p => {
+    const q = V3.sub(p, B.eye), z = V3.dot(q, B.f);
+    const k = (Math.min(S.w, S.h) / 2) / Math.tan(S.fov / 2);
+    if (z < 0.05) return { x: NaN, y: NaN, z };
+    return { x: S.w / 2 + k * V3.dot(q, B.r) / z, y: S.h / 2 - k * V3.dot(q, B.u) / z, z };
+  };
+  S.depth = p => V3.dot(V3.sub(p, B.eye), B.f);
+  S.viewDir = () => B.f;
+  S.eye = () => B.eye;
+  S.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    S.dpr = window.devicePixelRatio || 1; S.w = r.width; S.h = r.height;
+    canvas.width = Math.round(r.width * S.dpr); canvas.height = Math.round(r.height * S.dpr);
+    S.draw();
+  };
+  S.seg = (a, b, color, width = 1.5, dash = null) => {
+    const A = S.project(a), Bp = S.project(b);
+    if (!isFinite(A.x) || !isFinite(Bp.x)) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(Bp.x, Bp.y); ctx.stroke(); ctx.restore();
+  };
+  S.poly = (pts, color, width = 1.5, dash = null, close = false) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); let pen = false;
+    for (const p of pts){
+      if (!p){ pen = false; continue; }
+      const q = S.project(p);
+      if (!isFinite(q.x)){ pen = false; continue; }
+      if (pen) ctx.lineTo(q.x, q.y); else { ctx.moveTo(q.x, q.y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  S.fillPoly = (pts, fill, stroke = null, width = 1) => {
+    const qs = pts.map(S.project);
+    if (qs.some(q => !isFinite(q.x))) return;
+    ctx.beginPath(); qs.forEach((q, i) => i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(); }
+  };
+  S.arrow = (a, b, color, width = 2.2, label = null) => {
+    const A = S.project(a), Bp = S.project(b);
+    if (!isFinite(A.x) || !isFinite(Bp.x)) return;
+    const ang = Math.atan2(Bp.y - A.y, Bp.x - A.x), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(Bp.x - 0.6 * hl * Math.cos(ang), Bp.y - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(Bp.x, Bp.y);
+    ctx.lineTo(Bp.x - hl * Math.cos(ang - 0.4), Bp.y - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(Bp.x - hl * Math.cos(ang + 0.4), Bp.y - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+    if (label) S.text(Bp.x + 6 * Math.cos(ang), Bp.y + 6 * Math.sin(ang), label, color, Math.cos(ang) >= 0 ? 'left' : 'right');
+    ctx.restore();
+  };
+  S.dot = (p, color, r = 4, label = null) => {
+    const q = S.project(p); if (!isFinite(q.x)) return;
+    ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, 2 * Math.PI); ctx.fill(); ctx.restore();
+    if (label) S.text(q.x + r + 3, q.y - r - 2, label, color, 'left');
+  };
+  S.text = (x, y, text, color, align = 'left') => {
+    ctx.save(); ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.textAlign = align; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y); ctx.restore();
+  };
+  S.axes = (len = 3, labels = true) => {
+    const muted = cssVar('--ink-muted');
+    const O = [0, 0, 0];
+    S.arrow(O, [len, 0, 0], muted, 1.3, labels ? 'x' : null);
+    S.arrow(O, [0, len, 0], muted, 1.3, labels ? 'y' : null);
+    S.arrow(O, [0, 0, len], muted, 1.3, labels ? 'z' : null);
+  };
+  S.draw = () => {
+    B = S.basis();
+    ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+    ctx.clearRect(0, 0, S.w, S.h);
+    S.onDraw(ctx);
+  };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    canvas.setPointerCapture(e.pointerId);
+    S.drag = { px, py, az: S.az, el: S.el, moved: false };
+    canvas.classList.add('grabbing');
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!S.drag) return;
+    const { px, py } = pos(e);
+    if (Math.hypot(px - S.drag.px, py - S.drag.py) > 3) S.drag.moved = true;
+    const sgnAz = S.up === 'z' ? -1 : -1;
+    S.az = S.drag.az + sgnAz * (px - S.drag.px) * 0.008;
+    S.el = clamp(S.drag.el + (py - S.drag.py) * 0.008, -1.45, 1.45);
+    S.draw();
+  });
+  const end = e => {
+    if (S.drag && !S.drag.moved && S.onClick){ const { px, py } = pos(e); S.onClick(px, py); }
+    S.drag = null; canvas.classList.remove('grabbing');
+  };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', () => { S.drag = null; canvas.classList.remove('grabbing'); });
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault(); S.dist = clamp(S.dist * Math.exp(e.deltaY * 0.0012), 2, 80); S.draw();
+  }, { passive: false });
+  canvas.classList.add('grab');
+  new ResizeObserver(() => S.resize()).observe(canvas);
+  onThemeChange(() => S.draw());
+  return S;
+}
+
+// cor CSS (#rrggbb) → [r,g,b] em 0..1
+function hexRGB(h){
+  h = h.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+}
+const rgbCSS = (c, a = 1) => `rgba(${Math.round(clamp(c[0], 0, 1) * 255)},${Math.round(clamp(c[1], 0, 1) * 255)},${Math.round(clamp(c[2], 0, 1) * 255)},${a})`;
+
+
+const C = n => cssVar(n);
+const st = { tipo: 'parab', a: 1.5, b: 1, c: 1, regua: false, eixos: true, plano: 'z', k: 0.5, m: 0.5 };
+const R = 3;   // caixa de desenho
+const TIPOS = {
+  elips:  { nome: 'Elipsoide', eq: 'x²/a² + y²/b² + z²/c² = 1', usaC: true },
+  hip1:   { nome: 'Hiperboloide de uma folha', eq: 'x²/a² + y²/b² − z²/c² = 1', usaC: true, regrada: true },
+  hip2:   { nome: 'Hiperboloide de duas folhas', eq: '−x²/a² − y²/b² + z²/c² = 1', usaC: true },
+  parab:  { nome: 'Paraboloide elíptico', eq: 'z = x²/a² + y²/b²', usaC: false },
+  sela:   { nome: 'Paraboloide hiperbólico (sela)', eq: 'z = x²/a² − y²/b²', usaC: false, regrada: true },
+  cone:   { nome: 'Cone', eq: 'x²/a² + y²/b² − z²/c² = 0', usaC: true, regrada: true },
+  cil:    { nome: 'Cilindro elíptico', eq: 'x²/a² + y²/b² = 1', usaC: false, regrada: true },
+};
+// matriz 4×4 simétrica Q, com f(X) = X̃ᵀ Q X̃
+function Qmat(){
+  const A = 1 / (st.a * st.a), B = 1 / (st.b * st.b), Cc = 1 / (st.c * st.c);
+  const Q = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+  const d = (x, y, z, w) => { Q[0][0] = x; Q[1][1] = y; Q[2][2] = z; Q[3][3] = w; };
+  switch (st.tipo){
+    case 'elips': d(A, B, Cc, -1); break;
+    case 'hip1': d(A, B, -Cc, -1); break;
+    case 'hip2': d(-A, -B, Cc, -1); break;
+    case 'parab': d(A, B, 0, 0); Q[2][3] = Q[3][2] = -0.5; break;
+    case 'sela': d(A, -B, 0, 0); Q[2][3] = Q[3][2] = -0.5; break;
+    case 'cone': d(A, B, -Cc, 0); break;
+    case 'cil': d(A, B, 0, -1); break;
+  }
+  return Q;
+}
+// parametrizações para desenhar a superfície (grade u × v)
+function surfaceGrid(){
+  const { a, b, c } = st, nu = 40, nv = 22, G = [];
+  const push = (fn, u0, u1, v0, v1) => { const g = []; for (let i = 0; i <= nv; i++){ const row = []; for (let j = 0; j <= nu; j++){ row.push(fn(u0 + (u1 - u0) * j / nu, v0 + (v1 - v0) * i / nv)); } g.push(row); } G.push(g); };
+  const T = Math.PI * 2;
+  switch (st.tipo){
+    case 'elips': push((u, v) => [a * Math.cos(v) * Math.cos(u), b * Math.cos(v) * Math.sin(u), c * Math.sin(v)], 0, T, -Math.PI / 2, Math.PI / 2); break;
+    case 'hip1': { const s = Math.asinh(R / c); push((u, v) => [a * Math.cosh(v) * Math.cos(u), b * Math.cosh(v) * Math.sin(u), c * Math.sinh(v)], 0, T, -s, s); break; }
+    case 'hip2': { const s = Math.acosh(Math.max(R / c, 1.0001)); for (const sg of [1, -1]) push((u, v) => [a * Math.sinh(v) * Math.cos(u), b * Math.sinh(v) * Math.sin(u), sg * c * Math.cosh(v)], 0, T, 0, s); break; }
+    case 'parab': push((u, v) => [a * v * Math.cos(u), b * v * Math.sin(u), v * v], 0, T, 0, Math.sqrt(R)); break;
+    case 'sela': push((u, v) => [u, v, u * u / (a * a) - v * v / (b * b)], -2.2, 2.2, -2.2, 2.2); break;
+    case 'cone': { const s = R / c; push((u, v) => [a * v * Math.cos(u), b * v * Math.sin(u), c * v], 0, T, -s, s); break; }
+    case 'cil': push((u, v) => [a * Math.cos(u), b * Math.sin(u), v], 0, T, -2.2, 2.2); break;
+  }
+  return G;
+}
+function rulings(){
+  const { a, b, c } = st, L = [];
+  if (st.tipo === 'hip1'){ for (let i = 0; i < 16; i++){ const u = i / 16 * 2 * Math.PI; for (const sg of [1, -1]){ const pts = []; for (let v = -2.2; v <= 2.2; v += 0.1) pts.push([a * (Math.cos(u) - sg * v * Math.sin(u)), b * (Math.sin(u) + sg * v * Math.cos(u)), c * v]); L.push(pts); } } }
+  if (st.tipo === 'sela'){ for (let k = -2; k <= 2.01; k += 0.5){ for (const sg of [1, -1]){ const pts = []; for (let w = -2.6; w <= 2.6; w += 0.1){ const x = a * (k + w) / 2, y = sg * b * (w - k) / 2; if (Math.abs(x) <= 2.3 && Math.abs(y) <= 2.3) pts.push([x, y, x * x / (a * a) - y * y / (b * b)]); else pts.push(null); } L.push(pts); } } }
+  if (st.tipo === 'cone'){ for (let i = 0; i < 16; i++){ const u = i / 16 * 2 * Math.PI; L.push([[-a * Math.cos(u) * R / c, -b * Math.sin(u) * R / c, -R], [a * Math.cos(u) * R / c, b * Math.sin(u) * R / c, R]]); } }
+  if (st.tipo === 'cil'){ for (let i = 0; i < 16; i++){ const u = i / 16 * 2 * Math.PI; L.push([[a * Math.cos(u), b * Math.sin(u), -2.2], [a * Math.cos(u), b * Math.sin(u), 2.2]]); } }
+  return L;
+}
+// plano de corte X = O + s e1 + t e2
+function plane(){
+  const k = st.k;
+  switch (st.plano){
+    case 'z': return { O: [0, 0, k], e1: [1, 0, 0], e2: [0, 1, 0], nome: `z = ${fmt(k, 2)}` };
+    case 'x': return { O: [k, 0, 0], e1: [0, 1, 0], e2: [0, 0, 1], nome: `x = ${fmt(k, 2)}` };
+    case 'y': return { O: [0, k, 0], e1: [1, 0, 0], e2: [0, 0, 1], nome: `y = ${fmt(k, 2)}` };
+    default: { const n = Math.hypot(1, st.m); return { O: [0, 0, k], e1: [1, 0, 0], e2: [0, 1 / n, st.m / n], nome: `z = ${fmt(k, 2)} + ${fmt(st.m, 2)}·y` }; }
+  }
+}
+function sectionConic(){
+  const Q = Qmat(), p = plane();
+  const G = [[...p.e1, 0], [...p.e2, 0], [...p.O, 1]];   // colunas
+  const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++){ let s = 0; for (let r = 0; r < 4; r++) for (let q = 0; q < 4; q++) s += G[i][r] * Q[r][q] * G[j][q]; M[i][j] = s; }
+  return { A: M[0][0], B: 2 * M[0][1], Cc: M[1][1], D: 2 * M[0][2], E: 2 * M[1][2], F: M[2][2], M, p };
+}
+const cval = (k, s, t) => k.A * s * s + k.B * s * t + k.Cc * t * t + k.D * s + k.E * t + k.F;
+function march(k, L = 5, N = 200){
+  const segs = [], h = 2 * L / N, val = [];
+  for (let i = 0; i <= N; i++){ val.push([]); for (let j = 0; j <= N; j++) val[i].push(cval(k, -L + j * h, -L + i * h)); }
+  const lerp = (p, q, vp, vq) => { const t = vp / (vp - vq); return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]; };
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++){
+    const s0 = -L + j * h, t0 = -L + i * h;
+    const c = [[s0, t0], [s0 + h, t0], [s0 + h, t0 + h], [s0, t0 + h]];
+    const v = [val[i][j], val[i][j + 1], val[i + 1][j + 1], val[i + 1][j]];
+    const pts = [];
+    for (let e = 0; e < 4; e++){ const a = v[e], b = v[(e + 1) % 4]; if ((a < 0) !== (b < 0)) pts.push(lerp(c[e], c[(e + 1) % 4], a, b)); }
+    if (pts.length === 2) segs.push(pts);
+    else if (pts.length === 4){ segs.push([pts[0], pts[1]]); segs.push([pts[2], pts[3]]); }
+  }
+  return segs;
+}
+function classify(k){
+  const sc = Math.max(Math.abs(k.A), Math.abs(k.B), Math.abs(k.Cc), 1e-12);
+  const A = k.A / sc, B = k.B / sc, Cc = k.Cc / sc;
+  const det3 = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const dM = det3(k.M) / Math.max(1e-12, Math.pow(Math.max(...k.M.flat().map(Math.abs)), 3));
+  if (Math.abs(k.A) + Math.abs(k.B) + Math.abs(k.Cc) < 1e-9) return { tipo: 'neutra', nome: 'reta ou vazio (grau 1)', disc: 0 };
+  const disc = B * B - 4 * A * Cc, degen = Math.abs(dM) < 1e-6;
+  if (Math.abs(disc) < 1e-6) return { tipo: 'parabola', nome: degen ? 'parábola degenerada (retas paralelas ou vazio)' : 'parábola', disc, degen };
+  if (disc < 0) return { tipo: 'elipse', nome: degen ? 'elipse degenerada (um ponto)' : 'elipse', disc, degen };
+  return { tipo: 'hiperbole', nome: degen ? 'hipérbole degenerada (par de retas)' : 'hipérbole', disc, degen };
+}
+const polyStr = (terms, n = 3) => { let s = ''; for (const [c, m] of terms){ if (Math.abs(c) < 5e-4) continue; const body = (m && Math.abs(Math.abs(c) - 1) < 5e-4) ? m : fmt(Math.abs(c), n) + m; s += s ? (c < 0 ? ' − ' : ' + ') + body : (c < 0 ? '−' : '') + body; } return s || '0'; };
+
+// ===================== vista 3D =====================
+const S = Espaco($('#cv3'), { up: 'z', az: 0.75, el: 0.42, dist: 13 });
+let cache = null;
+S.onDraw = ctx => {
+  const k = sectionConic(), segs = march(k), p = k.p;
+  cache = { k, segs };
+  if (st.eixos) S.axes(3.4);
+  // superfície: quadriláteros ordenados por profundidade (algoritmo do pintor)
+  const quads = [], eye = S.eye();
+  const cOut = hexRGB(C('--c-sup')), cIn = hexRGB(C('--c-sup-in'));
+  const Lt = V3.unit([0.4, -0.5, 0.8]);
+  for (const g of surfaceGrid()){
+    for (let i = 0; i < g.length - 1; i++) for (let j = 0; j < g[i].length - 1; j++){
+      const q = [g[i][j], g[i][j + 1], g[i + 1][j + 1], g[i + 1][j]];
+      if (q.some(v => Math.abs(v[0]) > R + 0.3 || Math.abs(v[1]) > R + 0.3 || Math.abs(v[2]) > R + 0.3)) continue;
+      const n = V3.unit(V3.cross(V3.sub(q[2], q[0]), V3.sub(q[3], q[1])));
+      const ctr = V3.mul(V3.add(V3.add(q[0], q[1]), V3.add(q[2], q[3])), 0.25);
+      quads.push({ q, d: S.depth(ctr), n, front: V3.dot(n, V3.sub(eye, ctr)) > 0 });
+    }
+  }
+  quads.sort((u, v) => v.d - u.d);
+  for (const Q of quads){
+    const base = Q.front ? cOut : cIn, sh = 0.45 + 0.55 * Math.abs(V3.dot(Q.n, Lt));
+    S.fillPoly(Q.q, rgbCSS(base.map(x => x * sh + (1 - sh) * 0.12), 0.88), rgbCSS(base.map(x => x * 0.6), 0.35), 0.6);
+  }
+  if (st.regua) for (const l of rulings()) S.poly(l, C('--c-regua'), 1.3);
+  // plano de corte
+  const Lp = 3.4, corner = (u, v) => V3.add(p.O, V3.add(V3.mul(p.e1, u), V3.mul(p.e2, v)));
+  S.fillPoly([corner(-Lp, -Lp), corner(Lp, -Lp), corner(Lp, Lp), corner(-Lp, Lp)], C('--c-plano'), C('--c-plano-borda'), 1);
+  // seção
+  ctx.save(); ctx.strokeStyle = C('--c-secao'); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath();
+  for (const [u, v] of segs){
+    const A = V3.add(p.O, V3.add(V3.mul(p.e1, u[0]), V3.mul(p.e2, u[1]))), B = V3.add(p.O, V3.add(V3.mul(p.e1, v[0]), V3.mul(p.e2, v[1])));
+    if ([A, B].some(X => Math.abs(X[0]) > R + 0.3 || Math.abs(X[1]) > R + 0.3 || Math.abs(X[2]) > R + 0.3)) continue;
+    const a = S.project(A), b = S.project(B); if (!isFinite(a.x) || !isFinite(b.x)) continue;
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+  }
+  ctx.stroke(); ctx.restore();
+};
+
+// ===================== vista 2D da seção =====================
+const P2 = Plano($('#cv2'), { unitsAcross: 8 });
+P2.onDraw = () => {
+  if (!cache) return;
+  const ctx = P2.ctx;
+  ctx.save(); ctx.strokeStyle = C('--c-secao'); ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.beginPath();
+  for (const [u, v] of cache.segs){ ctx.moveTo(P2.X(u[0]), P2.Y(u[1])); ctx.lineTo(P2.X(v[0]), P2.Y(v[1])); }
+  ctx.stroke(); ctx.restore();
+  const names = { z: ['x', 'y'], x: ['y', 'z'], y: ['x', 'z'], incl: ['x', 's'] }[st.plano];
+  P2.label({ x: P2.wx(P2.w - 14), y: 0 }, names[0], C('--ink-muted'), 'n');
+  P2.label({ x: 0, y: P2.wy(14) }, names[1], C('--ink-muted'), 'e');
+};
+
+// ===================== leituras =====================
+function update(){
+  S.draw(); P2.draw();
+  const k = cache.k, cl = classify(k), p = cache.k.p;
+  const names = { z: ['x', 'y'], x: ['y', 'z'], y: ['x', 'z'], incl: ['x', 's'] }[st.plano];
+  const [u, v] = names;
+  const empty = cache.segs.length === 0;
+  setReadout($('#readout'), [
+    ['Plano', p.nome],
+    ['Seção', empty ? '<span class="pill neutra">vazia (ou um ponto)</span>' : `<span class="pill ${cl.tipo}">${cl.nome}</span>`],
+    ['B² − 4AC', fmt(k.B * k.B - 4 * k.A * k.Cc, 4)],
+  ]);
+  $('#fbSec').innerHTML = `<div class="sub">equação da seção nas coordenadas (${u}, ${v}) do plano${st.plano === 'incl' ? ', com s medido ao longo de (0, 1, m)/√(1 + m²)' : ''}:</div>` +
+    `<div class="main">${polyStr([[k.A, u + '²'], [k.B, u + v], [k.Cc, v + '²'], [k.D, u], [k.E, v], [k.F, '']])} = 0</div>`;
+  $('#eqBox').textContent = TIPOS[st.tipo].eq;
+  const note = $('#note');
+  if (st.tipo === 'cone' && st.plano === 'incl' && Math.abs(st.k) > 1e-9){
+    note.hidden = false; note.className = 'note ok';
+    const ang = Math.atan(st.m) * 180 / Math.PI, half = Math.atan(st.a / st.c) * 180 / Math.PI;
+    note.textContent = `O plano faz ${fmt(ang, 1)}° com a horizontal; a geratriz do cone faz ${fmt(90 - half, 1)}°. Plano menos inclinado que a geratriz: elipse; igual: parábola; mais: hipérbole.`;
+  } else if (cl.degen && !empty){ note.hidden = false; note.className = 'note'; note.textContent = 'Seção degenerada: o plano passa por um ponto especial da superfície (o vértice do cone, ou uma reta contida nela).'; }
+  else note.hidden = true;
+}
+
+// ===================== controles =====================
+const tipoSel = $('#tipoSel');
+tipoSel.innerHTML = Object.entries(TIPOS).map(([k, t]) => `<option value="${k}">${t.nome}</option>`).join('');
+function syncTipo(){
+  $('#cRow').hidden = !TIPOS[st.tipo].usaC;
+  $('#reguaRow').hidden = !TIPOS[st.tipo].regrada;
+  $('#mRow').hidden = st.plano !== 'incl';
+}
+tipoSel.addEventListener('change', () => { st.tipo = tipoSel.value; syncTipo(); update(); });
+const sl = {};
+sl.a = bindSlider('aSl', v => { st.a = v; update(); });
+sl.b = bindSlider('bSl', v => { st.b = v; update(); });
+sl.c = bindSlider('cSl', v => { st.c = v; update(); });
+sl.k = bindSlider('kSl', v => { st.k = v; update(); });
+sl.m = bindSlider('mSl', v => { st.m = v; update(); });
+const planoSeg = bindSeg($('#planoSeg'), v => { st.plano = v; syncTipo(); update(); });
+const cReg = $('#chkRegua'); cReg.addEventListener('change', () => { st.regua = cReg.checked; update(); });
+$('#chkEixos').addEventListener('change', e => { st.eixos = e.target.checked; update(); });
+let anim = null;
+$('#btnAnim').addEventListener('click', () => {
+  if (anim){ cancelAnimationFrame(anim); anim = null; $('#btnAnim').textContent = 'Varrer k'; return; }
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches){ st.k = -st.k; sl.k.set(st.k); update(); return; }
+  $('#btnAnim').textContent = 'Parar'; let t0 = null;
+  const step = ts => { if (t0 === null) t0 = ts; const ph = ((ts - t0) / 6000) % 1; st.k = -2.6 + 5.2 * (0.5 - 0.5 * Math.cos(2 * Math.PI * ph)); sl.k.set(st.k); update(); anim = requestAnimationFrame(step); };
+  anim = requestAnimationFrame(step);
+});
+const PRESETS = [
+  { nome: 'Paraboloide cortado por z = k', tipo: 'parab', a: 1.5, b: 1, c: 1, plano: 'z', k: 1, m: 0.5, regua: false },
+  { nome: 'Cone: seções do cone (z = 1 + m·y)', tipo: 'cone', a: 1, b: 1, c: 1, plano: 'incl', k: 1, m: 0.6, regua: false },
+  { nome: 'Hiperboloide de uma folha e suas retas', tipo: 'hip1', a: 1, b: 1, c: 1, plano: 'x', k: 0.6, m: 0.5, regua: true },
+  { nome: 'Sela cortada por z = k', tipo: 'sela', a: 1, b: 1, c: 1, plano: 'z', k: 0.6, m: 0.5, regua: false },
+  { nome: 'Elipsoide cortado por y = k', tipo: 'elips', a: 2, b: 1.4, c: 1, plano: 'y', k: 0.5, m: 0.5, regua: false },
+  { nome: 'Hiperboloide de duas folhas', tipo: 'hip2', a: 1, b: 1, c: 1, plano: 'z', k: 1.6, m: 0.5, regua: false },
+];
+const sel = $('#presetSel');
+sel.innerHTML = PRESETS.map((p, i) => `<option value="${i}">${p.nome}</option>`).join('');
+function loadPreset(i){
+  const p = PRESETS[i]; Object.assign(st, { tipo: p.tipo, a: p.a, b: p.b, c: p.c, plano: p.plano, k: p.k, m: p.m, regua: p.regua });
+  tipoSel.value = st.tipo; sl.a.set(st.a); sl.b.set(st.b); sl.c.set(st.c); sl.k.set(st.k); sl.m.set(st.m); planoSeg.set(st.plano); cReg.checked = st.regua;
+  syncTipo(); update();
+}
+sel.addEventListener('change', () => loadPreset(+sel.value));
+onThemeChange(() => update());
+new ResizeObserver(() => update()).observe($('#cv2'));
+const h0 = location.hash.slice(1);
+loadPreset(h0 === 'cone' ? 1 : h0 === 'regradas' ? 2 : 0); sel.value = h0 === 'cone' ? 1 : h0 === 'regradas' ? 2 : 0;
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(update);
+})();
+</script>

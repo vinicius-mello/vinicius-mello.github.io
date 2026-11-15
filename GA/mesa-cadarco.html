@@ -1,0 +1,760 @@
+<title>Mesa do Cadarço</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mesas de GA: painel lateral + mesa (quadro) com leituras ao vivo. */
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-success:#1F9254;
+    --c-warning:#B4590E;
+    --c-danger:#C23B78;
+    --shadow:rgba(22,35,58,0.14);
+    --font-display:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    --font-body:'Public Sans','Segoe UI',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-success:#4ADE80;
+      --c-warning:#FBBF74;
+      --c-danger:#E86FA6;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-success:#4ADE80;
+    --c-warning:#FBBF74;
+    --c-danger:#E86FA6;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:var(--font-display);
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1360px;
+    margin:0 auto;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));
+    padding-right:max(16px, env(safe-area-inset-right, 0px));
+    padding-block:0.85rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+  }
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; min-width:0; }
+  .brand-mark{
+    font-family:var(--font-mono); font-weight:600;
+    font-size:1.05rem; color:var(--brand); line-height:1;
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem;
+    white-space:nowrap;
+  }
+  .brand-text{ min-width:0; }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:64ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(270px,320px) minmax(0,1fr);
+    gap:0.75rem;
+    align-items:start;
+  }
+  @media (max-width:880px){ .workspace{ grid-template-columns:minmax(0,1fr); } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+    min-width:0;
+  }
+  .panel h2{
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:0.45rem;
+  }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.45rem 0 0; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; border:none; background:var(--paper); font-size:0.74rem; font-weight:600;
+    padding:0.38rem 0.45rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .seg button + button{ border-left:1px solid var(--border); }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  .slider{ display:grid; grid-template-columns:4.6rem minmax(0,1fr) 3.6rem; align-items:center; gap:0.4rem; margin-top:0.35rem; }
+  .slider > span:first-child{ font-size:0.74rem; color:var(--ink-muted); font-weight:600; }
+  .slider input[type=range]{ width:100%; accent-color:var(--brand); min-width:0; }
+  .slider output{ font-family:var(--font-mono); font-size:0.76rem; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); max-width:100%; }
+  .btn-row{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.45rem; }
+
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:var(--font-mono);
+    font-size:0.74rem; line-height:1.6;
+    background:var(--paper-sunken);
+    border-radius:6px; padding:0.45rem 0.6rem;
+    overflow-x:auto; overflow-wrap:anywhere;
+  }
+  .formula-box > div{ padding-left:1.2em; text-indent:-1.2em; }
+  .formula-box .main{ color:var(--brand); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .board{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    height:min(70svh,700px);
+    min-height:340px;
+  }
+  .board canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .board canvas.grab{ cursor:grab; }
+  .board canvas.grabbing{ cursor:grabbing; }
+  .board-tag{
+    position:absolute; left:0.5rem; top:0.45rem; pointer-events:none;
+    font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--ink-muted); background:var(--paper-raised); border:1px solid var(--border);
+    border-radius:4px; padding:0.1rem 0.35rem;
+  }
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:0.4rem;
+  }
+  .ro{
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:7px;
+    padding:0.35rem 0.55rem; min-width:0;
+  }
+  .ro .k{ font-size:0.72rem; letter-spacing:0.01em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .pill{ display:inline-block; font-size:0.74rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; border:1.5px solid currentColor; font-family:var(--font-body); }
+  .note{
+    font-size:0.78rem; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--border); border-left:4px solid var(--c-warning);
+    border-radius:0 7px 7px 0; padding:0.4rem 0.6rem;
+  }
+  .note.ok{ border-left-color:var(--c-success); }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; max-width:110ch; }
+  .footer-note a{ color:var(--brand); }
+  .tbl-wrap{ overflow-x:auto; }
+  table.tbl{ border-collapse:collapse; font-family:var(--font-mono); font-size:0.74rem; font-variant-numeric:tabular-nums; width:100%; }
+  table.tbl th, table.tbl td{ padding:0.18rem 0.4rem; text-align:right; border-bottom:1px solid var(--line-minor); white-space:nowrap; }
+  table.tbl th{ color:var(--ink-muted); font-weight:600; font-family:var(--font-body); font-size:0.7rem; }
+  table.tbl tfoot td{ font-weight:700; border-bottom:none; border-top:1.5px solid var(--line-major); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+  :root{
+    --c-pos:#2955C8;
+    --c-neg:#D9822B;
+    --c-e1:#157F6E;
+    --c-e2:#C23B78;
+    --c-poly:#16233A;
+    --fill-pos:rgba(41,85,200,0.16);
+    --fill-neg:rgba(217,130,43,0.20);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --c-pos:#6C93FF; --c-neg:#FFB45C; --c-e1:#4FD8BE; --c-e2:#E86FA6; --c-poly:#E7EEFA;
+      --fill-pos:rgba(108,147,255,0.22); --fill-neg:rgba(255,180,92,0.22);
+    }
+  }
+  :root[data-theme="dark"]{
+    --c-pos:#6C93FF; --c-neg:#FFB45C; --c-e1:#4FD8BE; --c-e2:#E86FA6; --c-poly:#E7EEFA;
+    --fill-pos:rgba(108,147,255,0.22); --fill-neg:rgba(255,180,92,0.22);
+  }
+  .pill.pos{ color:var(--c-pos); }
+  .pill.neg{ color:var(--c-neg); }
+  .pill.neutra{ color:var(--ink-muted); }
+  .tasks{ margin:0; padding-left:1.15rem; font-size:0.78rem; display:flex; flex-direction:column; gap:0.3rem; }
+  .tasks li::marker{ color:var(--brand); font-weight:700; }
+  td.pos{ color:var(--c-pos); } td.neg{ color:var(--c-neg); }
+  .matrix{ display:inline-grid; grid-template-columns:auto auto; gap:0.1rem 0.8rem; padding:0.15rem 0.5rem; border-left:2px solid var(--ink); border-right:2px solid var(--ink); border-radius:4px; font-family:var(--font-mono); font-size:0.85rem; }
+  .matrix .c1{ color:var(--c-e1); } .matrix .c2{ color:var(--c-e2); }
+  .tbl-panel{ max-height:280px; overflow:auto; }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">det</span>
+      <div class="brand-text">
+        <h1>Mesa do Cadarço</h1>
+        <p>Determinante como área com sinal, orientação e a fórmula do cadarço para a área de polígonos, como no Capítulo 5 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label for="presetSel">Exemplo</label>
+      <select id="presetSel" class="ghost-btn"></select>
+      <button type="button" class="ghost-btn" id="resetView">Recentrar vista</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Modo</h2>
+        <div class="seg" id="modeSeg" role="group" aria-label="Modo">
+          <button type="button" data-v="linear" aria-pressed="true">Transformação linear</button>
+          <button type="button" data-v="cadarco" aria-pressed="false">Fórmula do cadarço</button>
+        </div>
+      </div>
+
+      <div class="panel mode-only m-linear">
+        <h2>A matriz A = [Ae₁ Ae₂]</h2>
+        <div id="matBox"></div>
+        <div class="checks">
+          <label><input type="checkbox" id="chkFig" checked> Figura assimétrica (a letra F)</label>
+          <label><input type="checkbox" id="chkCirc"> Círculo unitário e sua imagem</label>
+          <label><input type="checkbox" id="chkGrade" checked> Grade transformada</label>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" data-m="1,0,0,1">identidade</button>
+          <button type="button" class="ghost-btn" data-m="0.707,0.707,-0.707,0.707">rotação 45°</button>
+          <button type="button" class="ghost-btn" data-m="1,0,0,-1">espelho M₁</button>
+          <button type="button" class="ghost-btn" data-m="1,0,1,1">cisalhamento</button>
+          <button type="button" class="ghost-btn" data-m="2,1,4,2">det = 0</button>
+        </div>
+        <p class="hint">Arraste as pontas das setas Ae₁ e Ae₂: elas são as colunas de A.</p>
+      </div>
+
+      <div class="panel mode-only m-cadarco">
+        <h2>Polígono</h2>
+        <div class="checks">
+          <label><input type="checkbox" id="chkLeque" checked> Triângulos a partir de O, com sinal</label>
+          <label><input type="checkbox" id="chkVoltas"> Número de voltas de cada região</label>
+          <label><input type="checkbox" id="chkInt"> Prender os vértices à malha inteira (Pick)</label>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" id="btnInv">Inverter o sentido</button>
+          <button type="button" class="ghost-btn" id="btnO">O na origem</button>
+        </div>
+        <p class="hint">Clique num ponto vazio para inserir um vértice no lado mais próximo; clique duas vezes num vértice para apagá-lo. Arraste O para ver que a soma não muda.</p>
+        <div class="tbl-panel tbl-wrap" id="tblBox"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Para investigar</h2>
+        <ol class="tasks mode-only m-linear">
+          <li>Gire Ae₂ em volta da origem, passando por Ae₁. Quando o det troca de sinal? O que acontece com a letra F nesse momento?</li>
+          <li>Confira que a área da imagem do círculo é π·|det A| (Proposição det-área, Seção 5.2).</li>
+          <li>Ponha Ae₁ e Ae₂ alinhados. Que figura sobra, e quanto vale a área?</li>
+          <li>Compare rotação e espelho: os dois preservam áreas; qual deles preserva a orientação?</li>
+        </ol>
+        <ol class="tasks mode-only m-cadarco">
+          <li>Arraste O para longe do polígono. Os triângulos mudam, mas a soma não: por quê?</li>
+          <li>Inverta o sentido de percurso: o que acontece com a soma? (Seção 5.2.)</li>
+          <li>Carregue a estrela de cinco pontas e ligue o número de voltas. Explique o valor do cadarço (Exercício 5).</li>
+          <li>Com a malha inteira, confira o Teorema de Pick, A = I + B/2 − 1, em polígonos simples (Exercício 4).</li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="board" id="board">
+        <canvas id="cv" role="img" aria-label="Plano cartesiano com uma transformação linear ou um polígono; arraste as alças para modificar."></canvas>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="note" id="note" hidden></div>
+      <p class="footer-note">Área com sinal do triângulo OPQ: ½·det[P − O, Q − O]. A fórmula do cadarço soma esses triângulos ao longo do polígono: A = ½ Σ (xᵢyᵢ₊₁ − xᵢ₊₁yᵢ). Companheira do Capítulo 5 (“Retas, Planos e Projeções”), Seção 2, de <em>Geometria Analítica com Aplicações</em>, de Vinícius Mello e Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- utilitários comuns ----------
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v, n = 2) => {
+  if (!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '−∞' : '—');
+  let s = (Math.abs(v) < 0.5 * Math.pow(10, -n) ? 0 : v).toFixed(n);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', '−');
+};
+const sgn = (v, n = 2) => (v < 0 ? ' − ' : ' + ') + fmt(Math.abs(v), n);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function onThemeChange(cb){
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', cb); } catch (_) {}
+  new MutationObserver(cb).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+}
+function bindSlider(id, cb, digits = 2){
+  const inp = document.getElementById(id), out = document.getElementById(id + 'Out');
+  const show = () => { if (out) out.textContent = fmt(+inp.value, digits); };
+  inp.addEventListener('input', () => { show(); cb(+inp.value); });
+  show();
+  return { get: () => +inp.value, set: v => { inp.value = v; show(); } };
+}
+function bindSeg(groupEl, cb){
+  const btns = [...groupEl.querySelectorAll('button')];
+  const set = v => btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+  btns.forEach(b => b.addEventListener('click', () => { set(b.dataset.v); cb(b.dataset.v); }));
+  return { set };
+}
+function setReadout(el, items){
+  el.innerHTML = items.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+// ---------- Plano: quadro cartesiano com alças arrastáveis ----------
+function Plano(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const P = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    cx: opts.cx ?? 0, cy: opts.cy ?? 0, scale: opts.scale ?? 60, unitsAcross: opts.unitsAcross ?? null,
+    handles: [], drag: null, onDraw: () => {}, onBackground: null, onDragEnd: null, pan: opts.pan ?? true,
+  };
+  P.X = x => P.w / 2 + (x - P.cx) * P.scale;
+  P.Y = y => P.h / 2 - (y - P.cy) * P.scale;
+  P.wx = px => (px - P.w / 2) / P.scale + P.cx;
+  P.wy = py => -(py - P.h / 2) / P.scale + P.cy;
+  P.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    P.dpr = window.devicePixelRatio || 1;
+    P.w = r.width; P.h = r.height;
+    canvas.width = Math.round(r.width * P.dpr); canvas.height = Math.round(r.height * P.dpr);
+    if (P.unitsAcross) P.scale = Math.min(P.w, P.h * 1.5) / P.unitsAcross;
+    P.draw();
+  };
+  P.view = () => ({ x0: P.wx(0), x1: P.wx(P.w), y0: P.wy(P.h), y1: P.wy(0) });
+  P.grid = () => {
+    const { x0, x1, y0, y1 } = P.view();
+    let step = 1; const target = 48 / P.scale;
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+    for (const s of steps){ if (s >= target){ step = s; break; } }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar('--line-minor');
+    ctx.beginPath();
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ const X = Math.round(P.X(x)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, P.h); }
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ const Y = Math.round(P.Y(y)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(P.w, Y); }
+    ctx.stroke();
+    ctx.strokeStyle = cssVar('--line-major'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(P.X(0), 0); ctx.lineTo(P.X(0), P.h); ctx.moveTo(0, P.Y(0)); ctx.lineTo(P.w, P.Y(0)); ctx.stroke();
+    ctx.fillStyle = cssVar('--ink-muted'); ctx.font = `500 10px ${cssVar('--font-mono')}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const lab = v => fmt(v, step < 1 ? 1 : 0);
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ if (Math.abs(x) < 1e-9) continue; ctx.fillText(lab(x), P.X(x), clamp(P.Y(0) + 3, 2, P.h - 13)); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ if (Math.abs(y) < 1e-9) continue; ctx.fillText(lab(y), clamp(P.X(0) - 4, 26, P.w - 2), P.Y(y)); }
+  };
+  P.line = (a, b, color, width = 1.5, dash = null) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(P.X(a.x), P.Y(a.y)); ctx.lineTo(P.X(b.x), P.Y(b.y)); ctx.stroke(); ctx.restore();
+  };
+  P.infLine = (p, d, color, width = 1.5, dash = null) => {
+    const L = 4 * (P.w + P.h) / P.scale, n = Math.hypot(d.x, d.y) || 1;
+    P.line({ x: p.x - L * d.x / n, y: p.y - L * d.y / n }, { x: p.x + L * d.x / n, y: p.y + L * d.y / n }, color, width, dash);
+  };
+  P.path = (pts, color, width = 2, dash = null, close = false) => {
+    if (pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    let pen = false;
+    for (const p of pts){
+      if (!p || !isFinite(p.x) || !isFinite(p.y)){ pen = false; continue; }
+      const X = P.X(p.x), Y = P.Y(p.y);
+      if (Math.abs(X) > 1e5 || Math.abs(Y) > 1e5){ pen = false; continue; }
+      if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  P.arrow = (a, b, color, width = 2) => {
+    const X1 = P.X(a.x), Y1 = P.Y(a.y), X2 = P.X(b.x), Y2 = P.Y(b.y);
+    const ang = Math.atan2(Y2 - Y1, X2 - X1), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2 - 0.6 * hl * Math.cos(ang), Y2 - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X2, Y2);
+    ctx.lineTo(X2 - hl * Math.cos(ang - 0.4), Y2 - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(X2 - hl * Math.cos(ang + 0.4), Y2 - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  };
+  P.dot = (p, color, r = 4, label = null, where = 'ne') => {
+    ctx.save(); ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(P.X(p.x), P.Y(p.y), r, 0, 2 * Math.PI); ctx.fill();
+    if (label) P.label(p, label, color, where, r + 3);
+    ctx.restore();
+  };
+  P.label = (p, text, color, where = 'ne', off = 6) => {
+    ctx.save();
+    ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.fillStyle = color;
+    const dx = where.includes('e') ? off : where.includes('w') ? -off : 0;
+    const dy = where.includes('n') ? -off : where.includes('s') ? off : 0;
+    ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+    ctx.textBaseline = dy < 0 ? 'bottom' : dy > 0 ? 'top' : 'middle';
+    const X = P.X(p.x) + dx, Y = P.Y(p.y) + dy;
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, X, Y);
+    ctx.fillText(text, X, Y);
+    ctx.restore();
+  };
+  P.draw = () => {
+    ctx.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+    ctx.clearRect(0, 0, P.w, P.h);
+    P.grid();
+    P.onDraw(ctx);
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), X = P.X(p.x), Y = P.Y(p.y);
+      ctx.save();
+      ctx.fillStyle = cssVar('--paper-raised'); ctx.strokeStyle = h.color(); ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      if (h.shape === 'square') ctx.rect(X - 5.5, Y - 5.5, 11, 11); else ctx.arc(X, Y, 6.5, 0, 2 * Math.PI);
+      ctx.fill(); ctx.stroke();
+      if (h.label) P.label(p, typeof h.label === 'function' ? h.label() : h.label, h.color(), h.where || 'ne', 9);
+      ctx.restore();
+    }
+  };
+  P.addHandle = h => { P.handles.push(h); return h; };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  const pick = (px, py) => {
+    let best = null, bd = 16;
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), d = Math.hypot(P.X(p.x) - px, P.Y(p.y) - py);
+      if (d < bd){ bd = d; best = h; }
+    }
+    return best;
+  };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    const h = pick(px, py);
+    canvas.setPointerCapture(e.pointerId);
+    if (h){ P.drag = { h }; canvas.classList.add('grabbing'); return; }
+    if (P.onBackground && P.onBackground(P.wx(px), P.wy(py), e) === true){ P.drag = { bg: true }; return; }
+    if (P.pan){ P.drag = { pan: true, px, py, cx: P.cx, cy: P.cy }; canvas.classList.add('grabbing'); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const { px, py } = pos(e);
+    if (!P.drag){ canvas.classList.toggle('grab', !!pick(px, py)); return; }
+    if (P.drag.h){ P.drag.h.set(P.wx(px), P.wy(py), e); P.changed && P.changed(); P.draw(); }
+    else if (P.drag.bg){ P.onBackground(P.wx(px), P.wy(py), e, true); }
+    else if (P.drag.pan){ P.cx = P.drag.cx - (px - P.drag.px) / P.scale; P.cy = P.drag.cy + (py - P.drag.py) / P.scale; P.draw(); }
+  });
+  const end = () => { if (P.drag && P.onDragEnd) P.onDragEnd(P.drag); P.drag = null; canvas.classList.remove('grabbing'); };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const { px, py } = pos(e), wx = P.wx(px), wy = P.wy(py);
+    P.scale = clamp(P.scale * Math.exp(-e.deltaY * 0.0015), 8, 600);
+    P.cx = wx - (px - P.w / 2) / P.scale; P.cy = wy + (py - P.h / 2) / P.scale;
+    P.unitsAcross = null; P.draw();
+  }, { passive: false });
+  new ResizeObserver(() => P.resize()).observe(canvas);
+  onThemeChange(() => P.draw());
+  return P;
+}
+
+
+const P = Plano($('#cv'), { unitsAcross: 14 });
+const C = n => cssVar(n);
+const st = {
+  mode: 'linear',
+  a1: { x: 2, y: 0.5 }, a2: { x: 0.6, y: 1.6 }, fig: true, circ: false, grade: true,
+  poly: [], O: { x: 0, y: 0 }, leque: true, voltas: false, inteiro: false,
+};
+const det2 = (u, v) => u.x * v.y - u.y * v.x;
+const LETRA_F = [[0, 0], [0.25, 0], [0.25, 0.45], [0.6, 0.45], [0.6, 0.65], [0.25, 0.65], [0.25, 0.8], [0.75, 0.8], [0.75, 1], [0, 1]].map(([x, y]) => ({ x: x * 0.9 + 0.05, y: y * 0.9 + 0.05 }));
+const apply = q => ({ x: st.a1.x * q.x + st.a2.x * q.y, y: st.a1.y * q.x + st.a2.y * q.y });
+
+function fillPoly(pts, fill, stroke, w = 1.5){
+  const ctx = P.ctx; ctx.save(); ctx.beginPath();
+  pts.forEach((p, i) => i ? ctx.lineTo(P.X(p.x), P.Y(p.y)) : ctx.moveTo(P.X(p.x), P.Y(p.y))); ctx.closePath();
+  if (fill){ ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = w; ctx.stroke(); }
+  ctx.restore();
+}
+
+// ===================== transformação linear =====================
+function drawLinear(){
+  const d = det2(st.a1, st.a2), ctx = P.ctx;
+  if (st.grade){
+    ctx.save(); ctx.globalAlpha = 0.5;
+    for (let k = -8; k <= 8; k++){
+      P.infLine(apply({ x: k, y: 0 }), st.a2, C('--line-major'), 0.8);
+      P.infLine(apply({ x: 0, y: k }), st.a1, C('--line-major'), 0.8);
+    }
+    ctx.restore();
+  }
+  // quadrado unitário e paralelogramo imagem
+  const sq = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
+  fillPoly(sq, null, C('--ink-muted'), 1);
+  const par = sq.map(apply);
+  fillPoly(par, d >= 0 ? C('--fill-pos') : C('--fill-neg'), d >= 0 ? C('--c-pos') : C('--c-neg'), 2);
+  if (st.circ){
+    const c0 = [], c1 = [];
+    for (let i = 0; i <= 120; i++){ const t = i / 60 * Math.PI, q = { x: Math.cos(t), y: Math.sin(t) }; c0.push(q); c1.push(apply(q)); }
+    P.path(c0, C('--ink-muted'), 1, [3, 3], true); P.path(c1, C('--brand'), 2, null, true);
+  }
+  if (st.fig){ fillPoly(LETRA_F, null, C('--ink-muted'), 1); fillPoly(LETRA_F.map(apply), d >= 0 ? C('--c-pos') : C('--c-neg'), null); }
+  // orientação: arco de e1 para e2 na imagem
+  const ang1 = Math.atan2(st.a1.y, st.a1.x), ang2 = Math.atan2(st.a2.y, st.a2.x);
+  let dd = ang2 - ang1; while (dd > Math.PI) dd -= 2 * Math.PI; while (dd < -Math.PI) dd += 2 * Math.PI;
+  ctx.save(); ctx.strokeStyle = d >= 0 ? C('--c-pos') : C('--c-neg'); ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.arc(P.X(0), P.Y(0), 30, -ang1, -ang1 - dd, dd > 0); ctx.stroke(); ctx.restore();
+  P.arrow({ x: 0, y: 0 }, st.a1, C('--c-e1'), 2.6);
+  P.arrow({ x: 0, y: 0 }, st.a2, C('--c-e2'), 2.6);
+  $('#matBox').innerHTML = `<div class="matrix"><span class="c1">${fmt(st.a1.x, 2)}</span><span class="c2">${fmt(st.a2.x, 2)}</span><span class="c1">${fmt(st.a1.y, 2)}</span><span class="c2">${fmt(st.a2.y, 2)}</span></div>
+    <div class="formula-box"><div class="main">det A = ${fmt(st.a1.x, 2)}·${fmt(st.a2.y, 2)} − ${fmt(st.a2.x, 2)}·${fmt(st.a1.y, 2)} = ${fmt(d, 3)}</div></div>`;
+  const items = [
+    ['det A', fmt(d, 3)],
+    ['orientação', Math.abs(d) < 1e-3 ? '<span class="pill neutra">degenerada</span>' : d > 0 ? '<span class="pill pos">preservada</span>' : '<span class="pill neg">invertida</span>'],
+    ['área do paralelogramo', fmt(Math.abs(d), 3)],
+  ];
+  if (st.circ) items.push(['área da imagem do círculo', `π·${fmt(Math.abs(d), 3)} = ${fmt(Math.PI * Math.abs(d), 3)}`]);
+  items.push(['|Ae₁|, |Ae₂|', `${fmt(Math.hypot(st.a1.x, st.a1.y), 2)}, ${fmt(Math.hypot(st.a2.x, st.a2.y), 2)}`]);
+  setReadout($('#readout'), items);
+  const note = $('#note');
+  const ortho = Math.abs(Math.hypot(st.a1.x, st.a1.y) - 1) < 0.02 && Math.abs(Math.hypot(st.a2.x, st.a2.y) - 1) < 0.02 && Math.abs(st.a1.x * st.a2.x + st.a1.y * st.a2.y) < 0.02;
+  if (Math.abs(d) < 1e-3){ note.hidden = false; note.className = 'note'; note.textContent = 'det A = 0: as colunas são paralelas e o plano inteiro é achatado sobre uma reta. Toda área vira 0.'; }
+  else if (ortho){ note.hidden = false; note.className = 'note ok'; note.textContent = d > 0 ? 'As colunas formam uma base ortonormal positiva: A é uma rotação, isometria direta (det = 1).' : 'As colunas formam uma base ortonormal negativa: A é um espelhamento composto com rotação, isometria indireta (det = −1).'; }
+  else note.hidden = true;
+}
+
+// ===================== cadarço =====================
+function shoelace(poly){ let s = 0; for (let i = 0; i < poly.length; i++){ const a = poly[i], b = poly[(i + 1) % poly.length]; s += a.x * b.y - b.x * a.y; } return s / 2; }
+function winding(poly, x, y){
+  let w = 0;
+  for (let i = 0; i < poly.length; i++){
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    if (a.y <= y){ if (b.y > y && det2({ x: b.x - a.x, y: b.y - a.y }, { x: x - a.x, y: y - a.y }) > 0) w++; }
+    else if (b.y <= y && det2({ x: b.x - a.x, y: b.y - a.y }, { x: x - a.x, y: y - a.y }) < 0) w--;
+  }
+  return w;
+}
+function isSimple(poly){
+  const n = poly.length;
+  const inter = (p, q, r, s) => { const d1 = det2(sub(q, p), sub(r, p)), d2 = det2(sub(q, p), sub(s, p)), d3 = det2(sub(s, r), sub(p, r)), d4 = det2(sub(s, r), sub(q, r)); return d1 * d2 < 0 && d3 * d4 < 0; };
+  for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++){ if (i === 0 && j === n - 1) continue; if (inter(poly[i], poly[(i + 1) % n], poly[j], poly[(j + 1) % n])) return false; }
+  return true;
+}
+const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+let windCache = null;
+function drawCadarco(){
+  const poly = st.poly, n = poly.length, ctx = P.ctx, O = st.O;
+  if (st.voltas){
+    // número de voltas amostrado numa malha de pixels grossa
+    const step = 6, cols = { 0: null };
+    ctx.save();
+    for (let py = 0; py < P.h; py += step) for (let px = 0; px < P.w; px += step){
+      const w = winding(poly, P.wx(px + step / 2), P.wy(py + step / 2));
+      if (!w) continue;
+      ctx.globalAlpha = Math.min(0.18 * Math.abs(w), 0.6);
+      ctx.fillStyle = w > 0 ? C('--c-pos') : C('--c-neg');
+      ctx.fillRect(px, py, step, step);
+    }
+    ctx.restore();
+    // rótulos no centro de cada triângulo do leque não ajudam aqui; rotular pontos amostrados
+  }
+  let total = 0;
+  const rows = [];
+  for (let i = 0; i < n; i++){
+    const a = poly[i], b = poly[(i + 1) % n];
+    const ar = det2(sub(a, O), sub(b, O)) / 2; total += ar;
+    rows.push({ i, a, b, ar, term: a.x * b.y - b.x * a.y });
+    if (st.leque && !st.voltas) fillPoly([O, a, b], ar >= 0 ? C('--fill-pos') : C('--fill-neg'), ar >= 0 ? C('--c-pos') : C('--c-neg'), 0.8);
+  }
+  // polígono com setas de percurso
+  fillPoly(poly, null, C('--c-poly'), 2.2);
+  for (let i = 0; i < n; i++){
+    const a = poly[i], b = poly[(i + 1) % n], m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const d = sub(b, a), L = Math.hypot(d.x, d.y) || 1;
+    P.arrow({ x: m.x - d.x / L * 0.18, y: m.y - d.y / L * 0.18 }, { x: m.x + d.x / L * 0.18, y: m.y + d.y / L * 0.18 }, C('--c-poly'), 2);
+  }
+  poly.forEach((p, i) => P.label(p, `P${i + 1}`, C('--ink'), 'ne', 9));
+  if (st.voltas){
+    // número de voltas em alguns pontos: centroides de triângulos da malha grossa
+    const seen = new Set();
+    const gs = Math.max(0.1, Math.round(70 / P.scale * 10) / 10);
+    for (let gy = P.wy(P.h); gy < P.wy(0); gy += gs) for (let gx = P.wx(0); gx < P.wx(P.w); gx += gs){
+      const x = (Math.floor(gx / gs) + 0.5) * gs, y = (Math.floor(gy / gs) + 0.5) * gs, k = x + ',' + y; if (seen.has(k)) continue; seen.add(k);
+      const w = winding(poly, x, y); if (w) P.label({ x, y }, String(w), w > 0 ? C('--c-pos') : C('--c-neg'), 'c', 0);
+    }
+  }
+  const simple = isSimple(poly);
+  // Pick
+  let pick = null;
+  if (st.inteiro && simple && poly.every(p => Number.isInteger(p.x) && Number.isInteger(p.y))){
+    let B = 0, I = 0;
+    for (let i = 0; i < n; i++){ const a = poly[i], b = poly[(i + 1) % n]; B += gcd(Math.abs(b.x - a.x), Math.abs(b.y - a.y)); }
+    const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
+    for (let x = Math.min(...xs) + 1; x < Math.max(...xs); x++) for (let y = Math.min(...ys) + 1; y < Math.max(...ys); y++){
+      if (onBoundary(poly, x, y)) continue;
+      if (winding(poly, x, y) !== 0) I++;
+    }
+    pick = { I, B };
+    // marca os pontos
+    for (let x = Math.min(...xs); x <= Math.max(...xs); x++) for (let y = Math.min(...ys); y <= Math.max(...ys); y++){
+      if (onBoundary(poly, x, y)) P.dot({ x, y }, C('--c-e2'), 3.2);
+      else if (winding(poly, x, y) !== 0) P.dot({ x, y }, C('--c-e1'), 3.2);
+    }
+  }
+  P.dot(O, C('--ink'), 3);
+  // tabela
+  $('#tblBox').innerHTML = `<table class="tbl"><thead><tr><th>i</th><th>xᵢ</th><th>yᵢ</th><th>xᵢyᵢ₊₁ − xᵢ₊₁yᵢ</th><th>área OPᵢPᵢ₊₁</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${r.i + 1}</td><td>${fmt(r.a.x, 2)}</td><td>${fmt(r.a.y, 2)}</td><td class="${r.term >= 0 ? 'pos' : 'neg'}">${fmt(r.term, 3)}</td><td class="${r.ar >= 0 ? 'pos' : 'neg'}">${fmt(r.ar, 3)}</td></tr>`).join('') +
+    `</tbody><tfoot><tr><td colspan="3">soma</td><td>${fmt(2 * shoelace(poly), 3)}</td><td>${fmt(total, 3)}</td></tr></tfoot></table>`;
+  const A = shoelace(poly);
+  const items = [
+    ['cadarço ½Σ', fmt(A, 3)],
+    ['sentido', Math.abs(A) < 1e-9 ? '—' : A > 0 ? '<span class="pill pos">anti-horário</span>' : '<span class="pill neg">horário</span>'],
+    ['polígono', simple ? '<span class="pill pos">simples</span>' : '<span class="pill neg">com autointerseção</span>'],
+    ['vértices', String(n)],
+  ];
+  if (pick) items.push(['Pick: I + B/2 − 1', `${pick.I} + ${pick.B}/2 − 1 = ${fmt(pick.I + pick.B / 2 - 1, 2)}`]);
+  setReadout($('#readout'), items);
+  const note = $('#note');
+  if (!simple){ note.hidden = false; note.className = 'note'; note.textContent = 'Com autointerseções, o cadarço não mede a área da região: ele soma cada região com peso igual ao seu número de voltas (ligue a opção para ver).'; }
+  else if (st.inteiro && !pick){ note.hidden = false; note.className = 'note'; note.textContent = 'Arraste os vértices: eles vão se prender à malha de pontos inteiros.'; }
+  else note.hidden = true;
+}
+function gcd(a, b){ while (b){ [a, b] = [b, a % b]; } return a; }
+function onBoundary(poly, x, y){
+  for (let i = 0; i < poly.length; i++){
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    if (Math.abs(det2(sub(b, a), { x: x - a.x, y: y - a.y })) < 1e-9 && x >= Math.min(a.x, b.x) - 1e-9 && x <= Math.max(a.x, b.x) + 1e-9 && y >= Math.min(a.y, b.y) - 1e-9 && y <= Math.max(a.y, b.y) + 1e-9) return true;
+  }
+  return false;
+}
+
+// ===================== alças =====================
+const snap = (x, y) => st.inteiro ? { x: Math.round(x), y: Math.round(y) } : { x, y };
+P.addHandle({ get: () => st.a1, set: (x, y) => { st.a1 = { x, y }; }, color: () => C('--c-e1'), label: 'Ae₁', hidden: () => st.mode !== 'linear' });
+P.addHandle({ get: () => st.a2, set: (x, y) => { st.a2 = { x, y }; }, color: () => C('--c-e2'), label: 'Ae₂', hidden: () => st.mode !== 'linear' });
+P.addHandle({ get: () => st.O, set: (x, y) => { st.O = { x, y }; }, color: () => C('--ink'), label: 'O', shape: 'square', where: 'sw', hidden: () => st.mode !== 'cadarco' || !st.leque });
+const vHandles = [];
+function rebuildVertexHandles(){
+  P.handles = P.handles.filter(h => !vHandles.includes(h)); vHandles.length = 0;
+  st.poly.forEach((_, i) => vHandles.push(P.addHandle({ get: () => st.poly[i], set: (x, y) => { st.poly[i] = snap(x, y); }, color: () => C('--c-poly'), hidden: () => st.mode !== 'cadarco' })));
+}
+let lastClick = { t: 0, i: -1 };
+P.onBackground = (x, y, e, moving) => {
+  if (st.mode !== 'cadarco' || moving) return false;
+  // insere vértice no lado mais próximo
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < st.poly.length; i++){
+    const a = st.poly[i], b = st.poly[(i + 1) % st.poly.length], d = sub(b, a), L2 = d.x * d.x + d.y * d.y || 1;
+    const t = clamp(((x - a.x) * d.x + (y - a.y) * d.y) / L2, 0, 1), q = { x: a.x + t * d.x, y: a.y + t * d.y }, dd = Math.hypot(x - q.x, y - q.y);
+    if (dd < bd){ bd = dd; best = i; }
+  }
+  if (bd * P.scale > 60) return false;
+  st.poly.splice(best + 1, 0, snap(x, y)); rebuildVertexHandles(); P.draw(); return true;
+};
+P.canvas.addEventListener('dblclick', e => {
+  if (st.mode !== 'cadarco' || st.poly.length <= 3) return;
+  const r = P.canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const i = st.poly.findIndex(p => Math.hypot(P.X(p.x) - px, P.Y(p.y) - py) < 12);
+  if (i >= 0){ st.poly.splice(i, 1); rebuildVertexHandles(); P.draw(); }
+});
+P.onDraw = () => st.mode === 'linear' ? drawLinear() : drawCadarco();
+
+// ===================== controles =====================
+const ctl = {};
+document.querySelectorAll('[data-m]').forEach(b => b.addEventListener('click', () => { const [a, c, bb, d] = b.dataset.m.split(',').map(Number); st.a1 = { x: a, y: c }; st.a2 = { x: bb, y: d }; P.draw(); }));
+const chk = (id, key) => { const el = $('#' + id); el.addEventListener('change', () => { st[key] = el.checked; if (key === 'inteiro' && el.checked){ st.poly = st.poly.map(p => snap(p.x, p.y)); } P.draw(); }); return el; };
+chk('chkFig', 'fig'); chk('chkCirc', 'circ'); chk('chkGrade', 'grade');
+ctl.leque = chk('chkLeque', 'leque'); ctl.voltas = chk('chkVoltas', 'voltas'); ctl.inteiro = chk('chkInt', 'inteiro');
+$('#btnInv').addEventListener('click', () => { st.poly.reverse(); rebuildVertexHandles(); P.draw(); });
+$('#btnO').addEventListener('click', () => { st.O = { x: 0, y: 0 }; P.draw(); });
+function setMode(m){
+  st.mode = m;
+  document.querySelectorAll('.mode-only').forEach(el => { el.hidden = !el.classList.contains('m-' + m); });
+  const c = viewFor[m] || { cx: 0, cy: 0, u: 14 }; P.cx = c.cx; P.cy = c.cy; P.unitsAcross = c.u; P.resize();
+}
+const viewFor = { linear: { cx: 0.5, cy: 0.5, u: 12 }, cadarco: { cx: 2, cy: 1.5, u: 12 } };
+ctl.mode = bindSeg($('#modeSeg'), setMode);
+const star = [0, 1, 2, 3, 4].map(k => { const t = (90 + 144 * k) * Math.PI / 180; return { x: Math.cos(t), y: Math.sin(t) }; });
+const PRESETS = [
+  { nome: 'Transformação: cisalhamento e giro', mode: 'linear', set: () => { st.a1 = { x: 2, y: 0.5 }; st.a2 = { x: 0.6, y: 1.6 }; } },
+  { nome: 'Poligonal do Capítulo 2 (Figura do cadarço)', mode: 'cadarco', view: { cx: 1, cy: 1.1, u: 5 }, set: () => { st.poly = [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1.5 }, { x: 0.7, y: 2.3 }]; st.inteiro = false; st.voltas = false; st.leque = true; st.O = { x: 0, y: 0 }; } },
+  { nome: 'Polígono em L (Exercício 3)', mode: 'cadarco', view: { cx: 2, cy: 1.5, u: 8 }, set: () => { st.poly = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 3 }, { x: 0, y: 3 }]; st.inteiro = true; st.voltas = false; st.leque = true; st.O = { x: 0, y: 0 }; } },
+  { nome: 'Triângulo de Pick (Exercício 4)', mode: 'cadarco', view: { cx: 2, cy: 1.5, u: 8 }, set: () => { st.poly = [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 0, y: 3 }]; st.inteiro = true; st.voltas = false; st.leque = false; st.O = { x: 0, y: 0 }; } },
+  { nome: 'Estrela de cinco pontas (Exercício 5)', mode: 'cadarco', set: () => { st.poly = star.map(p => ({ ...p })); st.inteiro = false; st.voltas = true; st.leque = false; st.O = { x: 0, y: 0 }; }, view: { cx: 0, cy: 0, u: 3.6 } },
+];
+const sel = $('#presetSel');
+sel.innerHTML = PRESETS.map((p, i) => `<option value="${i}">${p.nome}</option>`).join('');
+function loadPreset(i){
+  const p = PRESETS[i]; p.set();
+  ctl.leque.checked = st.leque; ctl.voltas.checked = st.voltas; ctl.inteiro.checked = st.inteiro;
+  rebuildVertexHandles(); ctl.mode.set(p.mode); if (p.view) viewFor[p.mode] = p.view; setMode(p.mode);
+}
+sel.addEventListener('change', () => loadPreset(+sel.value));
+$('#resetView').addEventListener('click', () => setMode(st.mode));
+const h0 = location.hash.slice(1);
+const idx = h0 === 'cadarco' ? 1 : h0 === 'estrela' ? 4 : 0;
+sel.value = idx; loadPreset(idx);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => P.draw());
+})();
+</script>

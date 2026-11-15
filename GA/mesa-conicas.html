@@ -1,0 +1,929 @@
+<title>Mesa de Cônicas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Mesas de GA: painel lateral + mesa (quadro) com leituras ao vivo. */
+  :root{
+    --paper:#EEF3FA;
+    --paper-raised:#FFFFFF;
+    --paper-sunken:#E4ECF7;
+    --ink:#16233A;
+    --ink-muted:#57678A;
+    --line-minor:#D6E0EF;
+    --line-major:#A9BBD6;
+    --border:#C7D4E8;
+    --brand:#2955C8;
+    --brand-ink:#FFFFFF;
+    --c-success:#1F9254;
+    --c-warning:#B4590E;
+    --c-danger:#C23B78;
+    --shadow:rgba(22,35,58,0.14);
+    --font-display:'Big Shoulders Display','Oswald','Arial Narrow',sans-serif;
+    --font-body:'Public Sans','Segoe UI',system-ui,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --paper:#0E1B33;
+      --paper-raised:#152A50;
+      --paper-sunken:#0B1730;
+      --ink:#E7EEFA;
+      --ink-muted:#9BB0D6;
+      --line-minor:#1E3260;
+      --line-major:#3A5590;
+      --border:#2A3F6B;
+      --brand:#6C93FF;
+      --brand-ink:#0E1B33;
+      --c-success:#4ADE80;
+      --c-warning:#FBBF74;
+      --c-danger:#E86FA6;
+      --shadow:rgba(0,0,0,0.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#0E1B33;
+    --paper-raised:#152A50;
+    --paper-sunken:#0B1730;
+    --ink:#E7EEFA;
+    --ink-muted:#9BB0D6;
+    --line-minor:#1E3260;
+    --line-major:#3A5590;
+    --border:#2A3F6B;
+    --brand:#6C93FF;
+    --brand-ink:#0E1B33;
+    --c-success:#4ADE80;
+    --c-warning:#FBBF74;
+    --c-danger:#E86FA6;
+    --shadow:rgba(0,0,0,0.45);
+  }
+
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ margin:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:var(--font-display);
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  button,select,input{ font-family:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--brand); outline-offset:2px; }
+
+  .app{
+    max-width:1360px;
+    margin:0 auto;
+    padding-left:max(16px, env(safe-area-inset-left, 0px));
+    padding-right:max(16px, env(safe-area-inset-right, 0px));
+    padding-block:0.85rem 1.1rem;
+    display:flex;
+    flex-direction:column;
+    gap:0.7rem;
+  }
+  .app-header{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;
+    gap:0.6rem 1rem;
+    border-bottom:1.5px solid var(--line-major);
+    padding-bottom:0.5rem;
+  }
+  .brand{ display:flex; gap:0.6rem; align-items:center; min-width:0; }
+  .brand-mark{
+    font-family:var(--font-mono); font-weight:600;
+    font-size:1.05rem; color:var(--brand); line-height:1;
+    border:1.5px solid var(--brand); border-radius:6px; padding:0.25rem 0.35rem;
+    white-space:nowrap;
+  }
+  .brand-text{ min-width:0; }
+  .brand-text h1{ font-size:clamp(1.05rem,2.2vw,1.35rem); text-transform:uppercase; }
+  .brand-text p{ margin:0.1rem 0 0; color:var(--ink-muted); font-size:0.78rem; max-width:64ch; }
+  .header-actions{ display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+  .header-actions label{ font-size:0.74rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+
+  .workspace{
+    display:grid;
+    grid-template-columns:minmax(270px,320px) minmax(0,1fr);
+    gap:0.75rem;
+    align-items:start;
+  }
+  @media (max-width:880px){ .workspace{ grid-template-columns:minmax(0,1fr); } }
+  .sidebar{ display:flex; flex-direction:column; gap:0.6rem; min-width:0; }
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:0.6rem 0.7rem 0.65rem;
+    min-width:0;
+  }
+  .panel h2{
+    font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em;
+    margin-bottom:0.45rem;
+  }
+  .hint{ font-size:0.74rem; color:var(--ink-muted); margin:0.45rem 0 0; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .seg{ display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; flex-wrap:wrap; }
+  .seg button{
+    flex:1 1 auto; border:none; background:var(--paper); font-size:0.74rem; font-weight:600;
+    padding:0.38rem 0.45rem; cursor:pointer; color:var(--ink-muted);
+  }
+  .seg button + button{ border-left:1px solid var(--border); }
+  .seg button[aria-pressed="true"]{ background:var(--brand); color:var(--brand-ink); }
+
+  .checks{ display:flex; flex-direction:column; gap:0.25rem; margin-top:0.5rem; }
+  .checks label{ display:flex; gap:0.4rem; align-items:center; font-size:0.78rem; cursor:pointer; }
+  .checks input{ accent-color:var(--brand); }
+
+  .slider{ display:grid; grid-template-columns:4.6rem minmax(0,1fr) 3.6rem; align-items:center; gap:0.4rem; margin-top:0.35rem; }
+  .slider > span:first-child{ font-size:0.74rem; color:var(--ink-muted); font-weight:600; }
+  .slider input[type=range]{ width:100%; accent-color:var(--brand); min-width:0; }
+  .slider output{ font-family:var(--font-mono); font-size:0.76rem; text-align:right; font-variant-numeric:tabular-nums; }
+
+  .ghost-btn{
+    background:transparent; border:1px solid var(--border); color:var(--ink-muted);
+    font-size:0.76rem; padding:0.32rem 0.55rem; border-radius:6px; cursor:pointer;
+  }
+  .ghost-btn:hover{ border-color:var(--ink-muted); color:var(--ink); }
+  select.ghost-btn{ background:var(--paper-raised); color:var(--ink); max-width:100%; }
+  .btn-row{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-top:0.45rem; }
+
+  .formula-box{
+    margin-top:0.5rem;
+    font-family:var(--font-mono);
+    font-size:0.74rem; line-height:1.6;
+    background:var(--paper-sunken);
+    border-radius:6px; padding:0.45rem 0.6rem;
+    overflow-x:auto; overflow-wrap:anywhere;
+  }
+  .formula-box > div{ padding-left:1.2em; text-indent:-1.2em; }
+  .formula-box .main{ color:var(--brand); font-weight:600; }
+  .formula-box .sub{ color:var(--ink-muted); }
+
+  .board-col{ display:flex; flex-direction:column; gap:0.5rem; min-width:0; }
+  .board{
+    position:relative;
+    background:var(--paper-sunken);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+    height:min(70svh,700px);
+    min-height:340px;
+  }
+  .board canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  .board canvas.grab{ cursor:grab; }
+  .board canvas.grabbing{ cursor:grabbing; }
+  .board-tag{
+    position:absolute; left:0.5rem; top:0.45rem; pointer-events:none;
+    font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;
+    color:var(--ink-muted); background:var(--paper-raised); border:1px solid var(--border);
+    border-radius:4px; padding:0.1rem 0.35rem;
+  }
+
+  .readout{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:0.4rem;
+  }
+  .ro{
+    background:var(--paper-raised); border:1px solid var(--border); border-radius:7px;
+    padding:0.35rem 0.55rem; min-width:0;
+  }
+  .ro .k{ font-size:0.72rem; letter-spacing:0.01em; font-weight:600; color:var(--ink-muted); }
+  .ro .v{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:0.9rem; font-weight:600; overflow-wrap:anywhere; }
+  .pill{ display:inline-block; font-size:0.74rem; font-weight:700; padding:0.05rem 0.45rem; border-radius:999px; border:1.5px solid currentColor; font-family:var(--font-body); }
+  .note{
+    font-size:0.78rem; color:var(--ink); background:var(--paper-raised);
+    border:1px solid var(--border); border-left:4px solid var(--c-warning);
+    border-radius:0 7px 7px 0; padding:0.4rem 0.6rem;
+  }
+  .note.ok{ border-left-color:var(--c-success); }
+  .footer-note{ font-size:0.74rem; color:var(--ink-muted); margin:0; max-width:110ch; }
+  .footer-note a{ color:var(--brand); }
+  .tbl-wrap{ overflow-x:auto; }
+  table.tbl{ border-collapse:collapse; font-family:var(--font-mono); font-size:0.74rem; font-variant-numeric:tabular-nums; width:100%; }
+  table.tbl th, table.tbl td{ padding:0.18rem 0.4rem; text-align:right; border-bottom:1px solid var(--line-minor); white-space:nowrap; }
+  table.tbl th{ color:var(--ink-muted); font-weight:600; font-family:var(--font-body); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.03em; }
+  table.tbl tfoot td{ font-weight:700; border-bottom:none; border-top:1.5px solid var(--line-major); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+  :root{
+    --c-curva:#2955C8;
+    --c-foco:#B8791A;
+    --c-diretriz:#6E4FC2;
+    --c-r1:#157F6E;
+    --c-r2:#C23B78;
+    --c-papel:#C9D6EA;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --c-curva:#6C93FF; --c-foco:#F0A94E; --c-diretriz:#A78BFA; --c-r1:#4FD8BE; --c-r2:#E86FA6; --c-papel:#24396A;
+    }
+  }
+  :root[data-theme="dark"]{
+    --c-curva:#6C93FF; --c-foco:#F0A94E; --c-diretriz:#A78BFA; --c-r1:#4FD8BE; --c-r2:#E86FA6; --c-papel:#24396A;
+  }
+  .pill.elipse{ color:var(--c-r1); }
+  .pill.parabola{ color:var(--c-foco); }
+  .pill.hiperbole{ color:var(--c-r2); }
+  .pill.tangente{ color:var(--c-success); }
+  .pill.neutra{ color:var(--ink-muted); }
+  .tasks{ margin:0; padding-left:1.15rem; font-size:0.78rem; display:flex; flex-direction:column; gap:0.3rem; }
+  .tasks li::marker{ color:var(--brand); font-weight:700; }
+</style>
+
+<div class="app">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">e=c/a</span>
+      <div class="brand-text">
+        <h1>Mesa de Cônicas</h1>
+        <p>Parábola, elipse e hipérbole como lugares geométricos: foco e diretriz, dois focos, e o encontro de uma reta com uma cônica, como no Capítulo 4 de <em>Geometria Analítica com Aplicações</em>.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="ghost-btn" id="resetView">Recentrar vista</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>Modo</h2>
+        <div class="seg" id="modeSeg" role="group" aria-label="Modo">
+          <button type="button" data-v="diretriz" aria-pressed="true">Foco e diretriz</button>
+          <button type="button" data-v="focos" aria-pressed="false">Dois focos</button>
+          <button type="button" data-v="reta" aria-pressed="false">Reta e cônica</button>
+        </div>
+      </div>
+
+      <!-- foco e diretriz -->
+      <div class="panel mode-only m-diretriz">
+        <h2>Foco, diretriz e excentricidade</h2>
+        <label class="slider"><span>e</span><input type="range" id="eSl" min="0.05" max="3" step="0.01" value="0.6"><output id="eSlOut"></output></label>
+        <label class="slider"><span>diretriz d</span><input type="range" id="dSl" min="0.5" max="6" step="0.05" value="3"><output id="dSlOut"></output></label>
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" data-e="0.3">e = 0.3</button>
+          <button type="button" class="ghost-btn" data-e="1">e = 1</button>
+          <button type="button" class="ghost-btn" data-e="2">e = 2</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="chkPapel"> Papel de cônicas (círculos e paralelas)</label>
+          <label><input type="checkbox" id="chkSegundo" checked> Segundo foco e segunda diretriz</label>
+          <label><input type="checkbox" id="chkPolar"> Raio polar ρ e ângulo θ</label>
+        </div>
+        <div class="formula-box" id="fbDiretriz"></div>
+      </div>
+
+      <!-- dois focos -->
+      <div class="panel mode-only m-focos">
+        <h2>Lugar geométrico</h2>
+        <div class="seg" id="tipoSeg" role="group" aria-label="Tipo">
+          <button type="button" data-v="elipse" aria-pressed="true">Elipse: d₁+d₂=2a</button>
+          <button type="button" data-v="hiperbole" aria-pressed="false">Hipérbole: |d₁−d₂|=2a</button>
+        </div>
+        <label class="slider"><span>2a</span><input type="range" id="aSl" min="0.2" max="14" step="0.05" value="7"><output id="aSlOut"></output></label>
+        <div class="checks">
+          <label><input type="checkbox" id="chkEixos" checked> Eixos e assíntotas</label>
+          <label><input type="checkbox" id="chkRastro"> Rastro dos raios focais</label>
+        </div>
+        <div class="formula-box" id="fbFocos"></div>
+        <p class="hint">Arraste F₁, F₂ e P. A equação geral muda a cada movimento, mas continua sendo de segundo grau.</p>
+      </div>
+
+      <!-- reta e cônica -->
+      <div class="panel mode-only m-reta">
+        <h2>Cônica em posição padrão</h2>
+        <div class="seg" id="padraoSeg" role="group" aria-label="Cônica">
+          <button type="button" data-v="elipse" aria-pressed="true">Elipse</button>
+          <button type="button" data-v="parabola" aria-pressed="false">Parábola</button>
+          <button type="button" data-v="hiperbole" aria-pressed="false">Hipérbole</button>
+        </div>
+        <label class="slider s-ab"><span>a</span><input type="range" id="paSl" min="0.5" max="6" step="0.05" value="4"><output id="paSlOut"></output></label>
+        <label class="slider s-ab"><span>b</span><input type="range" id="pbSl" min="0.5" max="6" step="0.05" value="2.5"><output id="pbSlOut"></output></label>
+        <label class="slider s-p"><span>p</span><input type="range" id="ppSl" min="0.2" max="3" step="0.05" value="1"><output id="ppSlOut"></output></label>
+        <div class="checks">
+          <label><input type="checkbox" id="chkLock"> Prender a reta à tangente em Q</label>
+          <label><input type="checkbox" id="chkSinal" checked> Colorir a reta pelo sinal de f</label>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" id="btnEixo">Paralela ao eixo / assíntota</button>
+        </div>
+        <div class="formula-box" id="fbReta"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Para investigar</h2>
+        <ol class="tasks mode-only m-diretriz">
+          <li>Leve <em>e</em> de 0.3 a 2 devagar. Em que valor a curva deixa de ser fechada? O que acontece com o segundo foco nesse momento?</li>
+          <li>Com o papel de cônicas ligado, confira que os pontos marcados estão a distância <em>k</em> de F e <em>k/e</em> de r.</li>
+          <li>Mantenha <em>e</em> fixo e mude <em>d</em>. A forma muda ou só o tamanho? (Exercício 3 da Seção 4.4.)</li>
+          <li>Ligue o raio polar e confira ρ = ℓ/(1 + e cos θ) com θ = π/2: quanto vale ρ? (Seção 4.7.)</li>
+        </ol>
+        <ol class="tasks mode-only m-focos">
+          <li>Na elipse, aproxime F₁ de F₂. O que a curva vira quando os focos coincidem?</li>
+          <li>Aumente d(F₁,F₂) até passar de 2a. Por que a elipse deixa de existir? E a hipérbole, quando existe?</li>
+          <li>Gire o segmento F₁F₂ e observe o termo em <em>xy</em> da equação geral. Quando ele some?</li>
+          <li>Confira o sinal de B² − 4AC para cada tipo. Ele muda quando você move os focos?</li>
+        </ol>
+        <ol class="tasks mode-only m-reta">
+          <li>Arraste A e B até a reta encostar na cônica. O que acontece com Δ e com as raízes de φ?</li>
+          <li>Na parábola, faça a reta ficar horizontal. Ela corta a curva em um só ponto, e não é tangente: por quê? (Repare em α.)</li>
+          <li>Prenda a reta à tangente em Q e confira que f &gt; 0 fora de Q na elipse e na parábola, e f &lt; 0 na hipérbole (Proposição 4.5).</li>
+          <li>Compare a equação da tangente mostrada com x₀x/a² + y₀y/b² = 1.</li>
+        </ol>
+      </div>
+    </aside>
+
+    <div class="board-col">
+      <div class="board" id="board">
+        <canvas id="cv" role="img" aria-label="Plano cartesiano com a cônica, seus focos e diretrizes; arraste as alças para modificar a construção."></canvas>
+      </div>
+      <div class="readout" id="readout"></div>
+      <div class="note" id="note" hidden></div>
+      <p class="footer-note">Arraste as alças (círculos e quadrados) para mudar a construção; arraste o fundo para mover a vista e use a roda do mouse para aproximar. Companheira do Capítulo 4 (“Cônicas e Óptica”), Seções 1 a 5 e 7, de <em>Geometria Analítica com Aplicações</em>, de Vinícius Mello e Claude.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+// ---------- utilitários comuns ----------
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fmt = (v, n = 2) => {
+  if (!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '−∞' : '—');
+  let s = (Math.abs(v) < 0.5 * Math.pow(10, -n) ? 0 : v).toFixed(n);
+  if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if (s === '-0') s = '0';
+  return s.replace('-', '−');
+};
+const sgn = (v, n = 2) => (v < 0 ? ' − ' : ' + ') + fmt(Math.abs(v), n);
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function onThemeChange(cb){
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', cb); } catch (_) {}
+  new MutationObserver(cb).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+}
+function bindSlider(id, cb, digits = 2){
+  const inp = document.getElementById(id), out = document.getElementById(id + 'Out');
+  const show = () => { if (out) out.textContent = fmt(+inp.value, digits); };
+  inp.addEventListener('input', () => { show(); cb(+inp.value); });
+  show();
+  return { get: () => +inp.value, set: v => { inp.value = v; show(); } };
+}
+function bindSeg(groupEl, cb){
+  const btns = [...groupEl.querySelectorAll('button')];
+  const set = v => btns.forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+  btns.forEach(b => b.addEventListener('click', () => { set(b.dataset.v); cb(b.dataset.v); }));
+  return { set };
+}
+function setReadout(el, items){
+  el.innerHTML = items.map(([k, v]) => `<div class="ro"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+// ---------- Plano: quadro cartesiano com alças arrastáveis ----------
+function Plano(canvas, opts = {}){
+  const ctx = canvas.getContext('2d');
+  const P = {
+    canvas, ctx, w: 0, h: 0, dpr: 1,
+    cx: opts.cx ?? 0, cy: opts.cy ?? 0, scale: opts.scale ?? 60, unitsAcross: opts.unitsAcross ?? null,
+    handles: [], drag: null, onDraw: () => {}, onBackground: null, onDragEnd: null, pan: opts.pan ?? true,
+  };
+  P.X = x => P.w / 2 + (x - P.cx) * P.scale;
+  P.Y = y => P.h / 2 - (y - P.cy) * P.scale;
+  P.wx = px => (px - P.w / 2) / P.scale + P.cx;
+  P.wy = py => -(py - P.h / 2) / P.scale + P.cy;
+  P.resize = () => {
+    const r = canvas.getBoundingClientRect();
+    P.dpr = window.devicePixelRatio || 1;
+    P.w = r.width; P.h = r.height;
+    canvas.width = Math.round(r.width * P.dpr); canvas.height = Math.round(r.height * P.dpr);
+    if (P.unitsAcross) P.scale = Math.min(P.w, P.h * 1.5) / P.unitsAcross;
+    P.draw();
+  };
+  P.view = () => ({ x0: P.wx(0), x1: P.wx(P.w), y0: P.wy(P.h), y1: P.wy(0) });
+  P.grid = () => {
+    const { x0, x1, y0, y1 } = P.view();
+    let step = 1; const target = 48 / P.scale;
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20];
+    for (const s of steps){ if (s >= target){ step = s; break; } }
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar('--line-minor');
+    ctx.beginPath();
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ const X = Math.round(P.X(x)) + 0.5; ctx.moveTo(X, 0); ctx.lineTo(X, P.h); }
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ const Y = Math.round(P.Y(y)) + 0.5; ctx.moveTo(0, Y); ctx.lineTo(P.w, Y); }
+    ctx.stroke();
+    ctx.strokeStyle = cssVar('--line-major'); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(P.X(0), 0); ctx.lineTo(P.X(0), P.h); ctx.moveTo(0, P.Y(0)); ctx.lineTo(P.w, P.Y(0)); ctx.stroke();
+    ctx.fillStyle = cssVar('--ink-muted'); ctx.font = `500 10px ${cssVar('--font-mono')}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const lab = v => fmt(v, step < 1 ? 1 : 0);
+    for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step){ if (Math.abs(x) < 1e-9) continue; ctx.fillText(lab(x), P.X(x), clamp(P.Y(0) + 3, 2, P.h - 13)); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step){ if (Math.abs(y) < 1e-9) continue; ctx.fillText(lab(y), clamp(P.X(0) - 4, 26, P.w - 2), P.Y(y)); }
+  };
+  P.line = (a, b, color, width = 1.5, dash = null) => {
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(P.X(a.x), P.Y(a.y)); ctx.lineTo(P.X(b.x), P.Y(b.y)); ctx.stroke(); ctx.restore();
+  };
+  P.infLine = (p, d, color, width = 1.5, dash = null) => {
+    const L = 4 * (P.w + P.h) / P.scale, n = Math.hypot(d.x, d.y) || 1;
+    P.line({ x: p.x - L * d.x / n, y: p.y - L * d.y / n }, { x: p.x + L * d.x / n, y: p.y + L * d.y / n }, color, width, dash);
+  };
+  P.path = (pts, color, width = 2, dash = null, close = false) => {
+    if (pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = 'round'; if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    let pen = false;
+    for (const p of pts){
+      if (!p || !isFinite(p.x) || !isFinite(p.y)){ pen = false; continue; }
+      const X = P.X(p.x), Y = P.Y(p.y);
+      if (Math.abs(X) > 1e5 || Math.abs(Y) > 1e5){ pen = false; continue; }
+      if (pen) ctx.lineTo(X, Y); else { ctx.moveTo(X, Y); pen = true; }
+    }
+    if (close) ctx.closePath();
+    ctx.stroke(); ctx.restore();
+  };
+  P.arrow = (a, b, color, width = 2) => {
+    const X1 = P.X(a.x), Y1 = P.Y(a.y), X2 = P.X(b.x), Y2 = P.Y(b.y);
+    const ang = Math.atan2(Y2 - Y1, X2 - X1), hl = 9;
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(X1, Y1); ctx.lineTo(X2 - 0.6 * hl * Math.cos(ang), Y2 - 0.6 * hl * Math.sin(ang)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X2, Y2);
+    ctx.lineTo(X2 - hl * Math.cos(ang - 0.4), Y2 - hl * Math.sin(ang - 0.4));
+    ctx.lineTo(X2 - hl * Math.cos(ang + 0.4), Y2 - hl * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  };
+  P.dot = (p, color, r = 4, label = null, where = 'ne') => {
+    ctx.save(); ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(P.X(p.x), P.Y(p.y), r, 0, 2 * Math.PI); ctx.fill();
+    if (label) P.label(p, label, color, where, r + 3);
+    ctx.restore();
+  };
+  P.label = (p, text, color, where = 'ne', off = 6) => {
+    ctx.save();
+    ctx.font = `600 12px ${cssVar('--font-body')}`; ctx.fillStyle = color;
+    const dx = where.includes('e') ? off : where.includes('w') ? -off : 0;
+    const dy = where.includes('n') ? -off : where.includes('s') ? off : 0;
+    ctx.textAlign = dx > 0 ? 'left' : dx < 0 ? 'right' : 'center';
+    ctx.textBaseline = dy < 0 ? 'bottom' : dy > 0 ? 'top' : 'middle';
+    const X = P.X(p.x) + dx, Y = P.Y(p.y) + dy;
+    ctx.lineWidth = 3; ctx.strokeStyle = cssVar('--paper-sunken'); ctx.strokeText(text, X, Y);
+    ctx.fillText(text, X, Y);
+    ctx.restore();
+  };
+  P.draw = () => {
+    ctx.setTransform(P.dpr, 0, 0, P.dpr, 0, 0);
+    ctx.clearRect(0, 0, P.w, P.h);
+    P.grid();
+    P.onDraw(ctx);
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), X = P.X(p.x), Y = P.Y(p.y);
+      ctx.save();
+      ctx.fillStyle = cssVar('--paper-raised'); ctx.strokeStyle = h.color(); ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      if (h.shape === 'square') ctx.rect(X - 5.5, Y - 5.5, 11, 11); else ctx.arc(X, Y, 6.5, 0, 2 * Math.PI);
+      ctx.fill(); ctx.stroke();
+      if (h.label) P.label(p, typeof h.label === 'function' ? h.label() : h.label, h.color(), h.where || 'ne', 9);
+      ctx.restore();
+    }
+  };
+  P.addHandle = h => { P.handles.push(h); return h; };
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
+  const pick = (px, py) => {
+    let best = null, bd = 16;
+    for (const h of P.handles){
+      if (h.hidden && h.hidden()) continue;
+      const p = h.get(), d = Math.hypot(P.X(p.x) - px, P.Y(p.y) - py);
+      if (d < bd){ bd = d; best = h; }
+    }
+    return best;
+  };
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = pos(e);
+    const h = pick(px, py);
+    canvas.setPointerCapture(e.pointerId);
+    if (h){ P.drag = { h }; canvas.classList.add('grabbing'); return; }
+    if (P.onBackground && P.onBackground(P.wx(px), P.wy(py), e) === true){ P.drag = { bg: true }; return; }
+    if (P.pan){ P.drag = { pan: true, px, py, cx: P.cx, cy: P.cy }; canvas.classList.add('grabbing'); }
+  });
+  canvas.addEventListener('pointermove', e => {
+    const { px, py } = pos(e);
+    if (!P.drag){ canvas.classList.toggle('grab', !!pick(px, py)); return; }
+    if (P.drag.h){ P.drag.h.set(P.wx(px), P.wy(py), e); P.changed && P.changed(); P.draw(); }
+    else if (P.drag.bg){ P.onBackground(P.wx(px), P.wy(py), e, true); }
+    else if (P.drag.pan){ P.cx = P.drag.cx - (px - P.drag.px) / P.scale; P.cy = P.drag.cy + (py - P.drag.py) / P.scale; P.draw(); }
+  });
+  const end = () => { if (P.drag && P.onDragEnd) P.onDragEnd(P.drag); P.drag = null; canvas.classList.remove('grabbing'); };
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const { px, py } = pos(e), wx = P.wx(px), wy = P.wy(py);
+    P.scale = clamp(P.scale * Math.exp(-e.deltaY * 0.0015), 8, 600);
+    P.cx = wx - (px - P.w / 2) / P.scale; P.cy = wy + (py - P.h / 2) / P.scale;
+    P.unitsAcross = null; P.draw();
+  }, { passive: false });
+  new ResizeObserver(() => P.resize()).observe(canvas);
+  onThemeChange(() => P.draw());
+  return P;
+}
+
+
+const P = Plano($('#cv'), { unitsAcross: 16, cx: 0, cy: 0 });
+const C = n => cssVar(n);
+const st = {
+  mode: 'diretriz',
+  // foco e diretriz
+  e: 0.6, d: 3, theta: 1.1, papel: false, segundo: true, polar: false,
+  // dois focos
+  tipo: 'elipse', F1: { x: -2.6, y: -0.6 }, F2: { x: 2.4, y: 0.8 }, twoA: 7, tP: 1.0, branch: 1, eixos: true, rastro: false,
+  // reta e cônica
+  padrao: 'elipse', a: 4, b: 2.5, p: 1, A: { x: -5, y: 3.6 }, B: { x: 2, y: 1.2 }, lock: false, sinal: true, qT: 0.9, qBranch: 1,
+};
+const modeCenters = { diretriz: { cx: -1, cy: 0, u: 16 }, focos: { cx: 0, cy: 0, u: 16 }, reta: { cx: 0, cy: 0, u: 16 } };
+
+// ===================== modo 1: foco e diretriz =====================
+const F0 = { x: 0, y: 0 };
+const ell = () => st.e * st.d;
+function nearValid(th){ return 1 + st.e * Math.cos(th) > 1e-6; }
+function nearPoint(th){ const rho = ell() / (1 + st.e * Math.cos(th)); return { x: rho * Math.cos(th), y: rho * Math.sin(th), rho }; }
+function reduced(){
+  const e = st.e, l = ell();
+  if (Math.abs(e - 1) < 1e-9) return { tipo: 'parabola', vx: st.d / 2, p: st.d / 2 };
+  if (e < 1){ const a = l / (1 - e * e), x0 = -l * e / (1 - e * e), b = l / Math.sqrt(1 - e * e); return { tipo: 'elipse', a, b, c: a * e, x0 }; }
+  const a = l / (e * e - 1), x0 = l * e / (e * e - 1), b = l / Math.sqrt(e * e - 1);
+  return { tipo: 'hiperbole', a, b, c: a * e, x0 };
+}
+const tipoNome = { elipse: 'elipse', parabola: 'parábola', hiperbole: 'hipérbole' };
+const pill = t => `<span class="pill ${t}">${tipoNome[t]}</span>`;
+
+function drawDiretriz(){
+  const e = st.e, d = st.d, l = ell(), R = reduced();
+  const cCurve = C('--c-curva'), cF = C('--c-foco'), cD = C('--c-diretriz');
+  // papel de cônicas
+  if (st.papel){
+    const step = 0.5, ctx = P.ctx;
+    for (let k = 1; k <= 30; k++){
+      const rad = k * step;
+      ctx.save(); ctx.strokeStyle = C('--c-papel'); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(P.X(0), P.Y(0), rad * P.scale, 0, 2 * Math.PI); ctx.stroke(); ctx.restore();
+      P.infLine({ x: d - rad / e, y: 0 }, { x: 0, y: 1 }, C('--c-papel'), 1);
+      P.infLine({ x: d + rad / e, y: 0 }, { x: 0, y: 1 }, C('--c-papel'), 1, [3, 4]);
+      for (const xl of [d - rad / e, d + rad / e]){
+        if (Math.abs(xl) <= rad){ const yy = Math.sqrt(rad * rad - xl * xl); P.dot({ x: xl, y: yy }, cCurve, 2.6); P.dot({ x: xl, y: -yy }, cCurve, 2.6); }
+      }
+    }
+  }
+  // segunda diretriz e segundo foco
+  if (st.segundo && R.tipo !== 'parabola'){
+    const F2 = { x: 2 * R.x0, y: 0 }, d2 = 2 * R.x0 - d;
+    P.infLine({ x: d2, y: 0 }, { x: 0, y: 1 }, cD, 1.3, [6, 5]);
+    P.dot(F2, cF, 4, "F'", 'sw');
+    P.label({ x: d2, y: P.wy(18) }, "r'", cD, 'e');
+    P.dot({ x: R.x0, y: 0 }, C('--ink-muted'), 2.5, 'centro', 's');
+  }
+  // diretriz
+  P.infLine({ x: d, y: 0 }, { x: 0, y: 1 }, cD, 2);
+  P.label({ x: d, y: P.wy(18) }, 'r', cD, 'e');
+  // ramo próximo
+  const pts = [];
+  const thMax = e < 1 ? Math.PI : (Math.abs(e - 1) < 1e-9 ? Math.PI - 1e-3 : Math.acos(-1 / e) - 1e-4);
+  for (let i = 0; i <= 1600; i++){
+    const th = -thMax + 2 * thMax * i / 1600;
+    if (!nearValid(th)){ pts.push(null); continue; }
+    const q = nearPoint(th); pts.push(q.rho < 400 ? q : null);
+  }
+  P.path(pts, cCurve, 2.6, null, e < 1);
+  // ramo do outro lado (e > 1)
+  if (e > 1 + 1e-9){
+    const tm = Math.acos(1 / e) - 1e-4, far = [];
+    for (let i = 0; i <= 1200; i++){
+      const th = -tm + 2 * tm * i / 1200, rho = l / (e * Math.cos(th) - 1);
+      far.push(rho > 0 && rho < 400 ? { x: rho * Math.cos(th), y: rho * Math.sin(th) } : null);
+    }
+    P.path(far, cCurve, 2, [7, 5]);
+    // assíntotas
+    const sl = R.b / R.a;
+    P.infLine({ x: R.x0, y: 0 }, { x: 1, y: sl }, C('--ink-muted'), 1, [2, 4]);
+    P.infLine({ x: R.x0, y: 0 }, { x: 1, y: -sl }, C('--ink-muted'), 1, [2, 4]);
+  }
+  // ponto P
+  if (!nearValid(st.theta)) st.theta = 0;
+  const Pp = nearPoint(st.theta), H = { x: d, y: Pp.y };
+  P.line(F0, Pp, C('--c-r1'), 2.4);
+  P.line(Pp, H, C('--c-r2'), 2.4, [5, 3]);
+  P.dot(H, C('--c-r2'), 3.5, 'H', 'e');
+  if (st.polar){
+    const ctx = P.ctx, rr = 26;
+    ctx.save(); ctx.strokeStyle = C('--ink-muted'); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(P.X(0), P.Y(0), rr, 0, -st.theta, st.theta > 0); ctx.stroke(); ctx.restore();
+    P.label({ x: (rr + 10) / P.scale * Math.cos(st.theta / 2), y: (rr + 10) / P.scale * Math.sin(st.theta / 2) }, 'θ', C('--ink-muted'), 'c', 0);
+    P.label({ x: Pp.x / 2, y: Pp.y / 2 }, 'ρ', C('--c-r1'), 'nw');
+  }
+  P.dot(F0, cF, 5, 'F', 'sw');
+  // leituras
+  const dPF = Math.hypot(Pp.x, Pp.y), dPr = Math.abs(d - Pp.x);
+  setReadout($('#readout'), [
+    ['Tipo', pill(R.tipo)],
+    ['e', fmt(e, 3)],
+    ['d(P,F)', fmt(dPF, 3)],
+    ['d(P,r)', fmt(dPr, 3)],
+    ['d(P,F) / d(P,r)', fmt(dPF / dPr, 3)],
+    ['ℓ = e·d', fmt(l, 3)],
+  ]);
+  let red;
+  if (R.tipo === 'parabola') red = `y² = −${fmt(4 * R.p, 3)}(x − ${fmt(R.vx, 3)})</div><div class="sub">vértice (${fmt(R.vx, 2)}, 0), p = ${fmt(R.p, 3)}`;
+  else if (R.tipo === 'elipse') red = `(x ${sgn(-R.x0, 3)})²/${fmt(R.a * R.a, 3)} + y²/${fmt(R.b * R.b, 3)} = 1</div><div class="sub">a = ${fmt(R.a, 3)}, b = ${fmt(R.b, 3)}, c = ${fmt(R.c, 3)}`;
+  else red = `(x ${sgn(-R.x0, 3)})²/${fmt(R.a * R.a, 3)} − y²/${fmt(R.b * R.b, 3)} = 1</div><div class="sub">a = ${fmt(R.a, 3)}, b = ${fmt(R.b, 3)}, c = ${fmt(R.c, 3)}`;
+  $('#fbDiretriz').innerHTML =
+    `<div class="main">${fmt(dPF, 3)} = ${fmt(e, 3)} · ${fmt(dPr, 3)}</div>` +
+    `<div>ρ = ℓ/(1 + e cos θ) = ${fmt(l, 3)}/(1 ${sgn(e * Math.cos(st.theta), 3)}) = ${fmt(Pp.rho, 3)}</div>` +
+    `<div>${red}</div>`;
+  const note = $('#note');
+  if (Math.abs(e - 1) < 1e-9){ note.hidden = false; note.className = 'note ok'; note.textContent = 'Com e = 1, a condição é d(P,F) = d(P,r): é a definição de parábola. O segundo foco e a segunda diretriz fugiram para o infinito.'; }
+  else if (e < 0.12){ note.hidden = false; note.className = 'note'; note.textContent = 'Com e próximo de 0, a curva fica quase circular, mas a diretriz precisa estar longe: com d fixo, o tamanho da elipse encolhe junto com ℓ = e·d.'; }
+  else note.hidden = true;
+}
+
+// ===================== modo 2: dois focos =====================
+function frame(){
+  const M = { x: (st.F1.x + st.F2.x) / 2, y: (st.F1.y + st.F2.y) / 2 };
+  const dx = st.F2.x - st.F1.x, dy = st.F2.y - st.F1.y, n = Math.hypot(dx, dy);
+  const u = n > 1e-9 ? { x: dx / n, y: dy / n } : { x: 1, y: 0 };
+  return { M, u, w: { x: -u.y, y: u.x }, c: n / 2 };
+}
+const at = (fr, s, t) => ({ x: fr.M.x + s * fr.u.x + t * fr.w.x, y: fr.M.y + s * fr.u.y + t * fr.w.y });
+function generalEq(fr, p, q, r){
+  // p s² + q t² + r = 0, com s = u·(X−M), t = w·(X−M)
+  const { u, w, M } = fr, um = u.x * M.x + u.y * M.y, wm = w.x * M.x + w.y * M.y;
+  return {
+    A: p * u.x * u.x + q * w.x * w.x, B: 2 * (p * u.x * u.y + q * w.x * w.y), Cc: p * u.y * u.y + q * w.y * w.y,
+    D: -2 * p * u.x * um - 2 * q * w.x * wm, E: -2 * p * u.y * um - 2 * q * w.y * wm, F: p * um * um + q * wm * wm + r,
+  };
+}
+function polyStr(terms, n = 3){
+  let s = '';
+  for (const [c, m] of terms){
+    if (Math.abs(c) < 5e-4) continue;
+    const body = (m && Math.abs(Math.abs(c) - 1) < 5e-4) ? m : fmt(Math.abs(c), n) + m;
+    s += s ? (c < 0 ? ' − ' : ' + ') + body : (c < 0 ? '−' : '') + body;
+  }
+  return s || '0';
+}
+const trail = [];
+function drawFocos(){
+  const fr = frame(), a = st.twoA / 2, c = fr.c;
+  const cCurve = C('--c-curva'), cF = C('--c-foco');
+  const ok = st.tipo === 'elipse' ? a > c + 1e-9 : (a < c - 1e-9 && a > 1e-9);
+  let b = 0, Pp = null;
+  if (ok){
+    b = st.tipo === 'elipse' ? Math.sqrt(a * a - c * c) : Math.sqrt(c * c - a * a);
+    if (st.eixos){
+      P.infLine(fr.M, fr.u, C('--ink-muted'), 1, [3, 4]);
+      P.infLine(fr.M, fr.w, C('--ink-muted'), 1, [3, 4]);
+      if (st.tipo === 'hiperbole'){
+        P.infLine(fr.M, { x: a * fr.u.x + b * fr.w.x, y: a * fr.u.y + b * fr.w.y }, C('--ink-muted'), 1.2, [6, 4]);
+        P.infLine(fr.M, { x: a * fr.u.x - b * fr.w.x, y: a * fr.u.y - b * fr.w.y }, C('--ink-muted'), 1.2, [6, 4]);
+      }
+    }
+    if (st.tipo === 'elipse'){
+      const pts = []; for (let i = 0; i <= 360; i++){ const t = i / 360 * 2 * Math.PI; pts.push(at(fr, a * Math.cos(t), b * Math.sin(t))); }
+      P.path(pts, cCurve, 2.6, null, true);
+      Pp = at(fr, a * Math.cos(st.tP), b * Math.sin(st.tP));
+    } else {
+      for (const sg of [1, -1]){ const pts = []; for (let i = -300; i <= 300; i++){ const t = i / 100; pts.push(at(fr, sg * a * Math.cosh(t), b * Math.sinh(t))); } P.path(pts, cCurve, 2.6); }
+      Pp = at(fr, st.branch * a * Math.cosh(st.tP), b * Math.sinh(st.tP));
+    }
+  } else if (st.tipo === 'elipse' && Math.abs(a - c) < 0.03){
+    P.line(st.F1, st.F2, cCurve, 3);
+  }
+  if (Pp){
+    if (st.rastro){
+      trail.push([{ ...Pp }]); if (trail.length > 400) trail.shift();
+      for (const [q] of trail){ P.line(st.F1, q, C('--c-papel'), 1); P.line(st.F2, q, C('--c-papel'), 1); }
+    }
+    P.line(st.F1, Pp, C('--c-r1'), 2.4); P.line(st.F2, Pp, C('--c-r2'), 2.4);
+    const m1 = { x: (st.F1.x + Pp.x) / 2, y: (st.F1.y + Pp.y) / 2 }, m2 = { x: (st.F2.x + Pp.x) / 2, y: (st.F2.y + Pp.y) / 2 };
+    P.label(m1, 'd₁', C('--c-r1'), 'nw'); P.label(m2, 'd₂', C('--c-r2'), 'ne');
+  }
+  P.dot(fr.M, C('--ink-muted'), 2.5);
+  const d1 = Pp ? Math.hypot(Pp.x - st.F1.x, Pp.y - st.F1.y) : NaN, d2 = Pp ? Math.hypot(Pp.x - st.F2.x, Pp.y - st.F2.y) : NaN;
+  setReadout($('#readout'), [
+    ['Tipo', ok ? pill(st.tipo) : '<span class="pill neutra">não existe</span>'],
+    ['d₁ = d(P,F₁)', fmt(d1, 3)], ['d₂ = d(P,F₂)', fmt(d2, 3)],
+    [st.tipo === 'elipse' ? 'd₁ + d₂' : '|d₁ − d₂|', fmt(st.tipo === 'elipse' ? d1 + d2 : Math.abs(d1 - d2), 3)],
+    ['2c = d(F₁,F₂)', fmt(2 * c, 3)], ['e = c/a', fmt(c / a, 3)],
+  ]);
+  const note = $('#note');
+  if (!ok){
+    note.hidden = false; note.className = 'note';
+    note.textContent = st.tipo === 'elipse'
+      ? (Math.abs(a - c) < 0.03 ? 'Com 2a = d(F₁,F₂), o lugar geométrico é o segmento F₁F₂: o caso-limite da elipse (Seção 4.2).' : 'Pela desigualdade triangular, d₁ + d₂ ≥ d(F₁,F₂). Com 2a < 2c nenhum ponto satisfaz d₁ + d₂ = 2a.')
+      : 'Pela desigualdade triangular, |d₁ − d₂| ≤ d(F₁,F₂). A hipérbole só existe se 0 < 2a < 2c.';
+    $('#fbFocos').innerHTML = '<div class="sub">sem curva para estes valores</div>';
+    return;
+  }
+  note.hidden = true;
+  const sgnH = st.tipo === 'elipse' ? 1 : -1;
+  let g = generalEq(fr, b * b, sgnH * a * a, -a * a * b * b);
+  const mx = Math.max(Math.abs(g.A), Math.abs(g.B), Math.abs(g.Cc));
+  for (const k in g) g[k] /= mx;
+  const disc = g.B * g.B - 4 * g.A * g.Cc;
+  $('#fbFocos').innerHTML =
+    `<div class="sub">no sistema dos eixos da cônica (s, t):</div>` +
+    `<div class="main">s²/${fmt(a * a, 3)} ${st.tipo === 'elipse' ? '+' : '−'} t²/${fmt(b * b, 3)} = 1</div>` +
+    `<div class="sub">no sistema (x, y) da mesa:</div>` +
+    `<div>${polyStr([[g.A, 'x²'], [g.B, 'xy'], [g.Cc, 'y²'], [g.D, 'x'], [g.E, 'y'], [g.F, '']])} = 0</div>` +
+    `<div class="sub">B² − 4AC = ${fmt(disc, 4)} ${disc < 0 ? '&lt; 0' : '&gt; 0'}</div>`;
+}
+
+// ===================== modo 3: reta e cônica =====================
+function conicCoefs(){
+  if (st.padrao === 'elipse') return { A: 1 / (st.a * st.a), Cc: 1 / (st.b * st.b), D: 0, F: -1 };
+  if (st.padrao === 'parabola') return { A: 0, Cc: 1, D: -4 * st.p, F: 0 };
+  return { A: 1 / (st.a * st.a), Cc: -1 / (st.b * st.b), D: 0, F: -1 };
+}
+const fval = (k, x, y) => k.A * x * x + k.Cc * y * y + k.D * x + k.F;
+function qPoint(){
+  if (st.padrao === 'elipse') return { x: st.a * Math.cos(st.qT), y: st.b * Math.sin(st.qT) };
+  if (st.padrao === 'parabola'){ const y = st.qT * 2.5; return { x: y * y / (4 * st.p), y }; }
+  return { x: st.qBranch * st.a * Math.cosh(st.qT), y: st.b * Math.sinh(st.qT) };
+}
+function setQFrom(x, y){
+  if (st.padrao === 'elipse') st.qT = Math.atan2(y / st.b, x / st.a);
+  else if (st.padrao === 'parabola') st.qT = clamp(y / 2.5, -3, 3);
+  else { st.qBranch = x >= 0 ? 1 : -1; st.qT = clamp(Math.asinh(y / st.b), -3, 3); }
+}
+function lockTangent(){
+  const Q = qPoint(), k = conicCoefs();
+  const gx = 2 * k.A * Q.x + k.D, gy = 2 * k.Cc * Q.y, n = Math.hypot(gx, gy) || 1;
+  const dir = { x: -gy / n, y: gx / n };
+  st.A = { x: Q.x - 2.5 * dir.x, y: Q.y - 2.5 * dir.y };
+  st.B = { x: Q.x + 2.5 * dir.x, y: Q.y + 2.5 * dir.y };
+}
+function tangentEq(Q){
+  if (st.padrao === 'elipse') return `${fmt(Q.x, 3)}·x/${fmt(st.a * st.a, 3)} + ${fmt(Q.y, 3)}·y/${fmt(st.b * st.b, 3)} = 1`;
+  if (st.padrao === 'parabola') return `${fmt(Q.y, 3)}·y = ${fmt(2 * st.p, 3)}(x + ${fmt(Q.x, 3)})`;
+  return `${fmt(Q.x, 3)}·x/${fmt(st.a * st.a, 3)} − ${fmt(Q.y, 3)}·y/${fmt(st.b * st.b, 3)} = 1`;
+}
+function drawReta(){
+  if (st.lock) lockTangent();
+  const k = conicCoefs(), cCurve = C('--c-curva');
+  // cônica
+  if (st.padrao === 'elipse'){ const pts = []; for (let i = 0; i <= 360; i++){ const t = i / 180 * Math.PI; pts.push({ x: st.a * Math.cos(t), y: st.b * Math.sin(t) }); } P.path(pts, cCurve, 2.6, null, true); const c = Math.sqrt(Math.abs(st.a * st.a - st.b * st.b)); const foc = st.a >= st.b ? [{ x: c, y: 0 }, { x: -c, y: 0 }] : [{ x: 0, y: c }, { x: 0, y: -c }]; foc.forEach(f => P.dot(f, C('--c-foco'), 3.5)); }
+  else if (st.padrao === 'parabola'){ const pts = []; for (let i = -400; i <= 400; i++){ const y = i / 25; pts.push({ x: y * y / (4 * st.p), y }); } P.path(pts, cCurve, 2.6); P.dot({ x: st.p, y: 0 }, C('--c-foco'), 3.5, 'F', 'se'); P.infLine({ x: -st.p, y: 0 }, { x: 0, y: 1 }, C('--c-diretriz'), 1.2, [6, 5]); }
+  else { for (const sg of [1, -1]){ const pts = []; for (let i = -300; i <= 300; i++){ const t = i / 100; pts.push({ x: sg * st.a * Math.cosh(t), y: st.b * Math.sinh(t) }); } P.path(pts, cCurve, 2.6); } P.infLine({ x: 0, y: 0 }, { x: st.a, y: st.b }, C('--ink-muted'), 1, [6, 4]); P.infLine({ x: 0, y: 0 }, { x: st.a, y: -st.b }, C('--ink-muted'), 1, [6, 4]); const c = Math.hypot(st.a, st.b); P.dot({ x: c, y: 0 }, C('--c-foco'), 3.5); P.dot({ x: -c, y: 0 }, C('--c-foco'), 3.5); }
+
+  // reta
+  const A = st.A, u = { x: st.B.x - A.x, y: st.B.y - A.y };
+  const al = k.A * u.x * u.x + k.Cc * u.y * u.y;
+  const be = 2 * k.A * A.x * u.x + 2 * k.Cc * A.y * u.y + k.D * u.x;
+  const ga = fval(k, A.x, A.y);
+  const scaleRef = Math.abs(al) + Math.abs(be) + Math.abs(ga) + 1e-12;
+  const alZero = Math.abs(al) < 1e-6 * scaleRef;
+  let Delta = be * be - 4 * al * ga;
+  let roots = [], kind;
+  const tangTol = 2e-3 * (be * be + Math.abs(4 * al * ga)) + 1e-10;
+  if (alZero){
+    if (Math.abs(be) > 1e-9){ roots = [-ga / be]; kind = 'um'; } else kind = Math.abs(ga) < 1e-9 ? 'contida' : 'zero';
+  } else if (st.lock || Math.abs(Delta) < tangTol){ roots = [-be / (2 * al)]; kind = 'tangente'; Delta = st.lock ? 0 : Delta; }
+  else if (Delta > 0){ const sq = Math.sqrt(Delta); roots = [(-be - sq) / (2 * al), (-be + sq) / (2 * al)].sort((p, q) => p - q); kind = 'secante'; }
+  else kind = 'zero';
+  // desenha a reta, colorida pelo sinal de f
+  if (st.sinal){
+    const L = 4 * (P.w + P.h) / P.scale / (Math.hypot(u.x, u.y) || 1);
+    const ts = [-L, ...roots, L], ctx = P.ctx;
+    for (let i = 0; i < ts.length - 1; i++){
+      const tm = (ts[i] + ts[i + 1]) / 2;
+      let fv = al * tm * tm + be * tm + ga;
+      if (kind === 'tangente' && Math.abs(fv) < 1e-12) fv = al;
+      const col = fv > 0 ? C('--c-r2') : C('--c-r1');
+      P.line({ x: A.x + ts[i] * u.x, y: A.y + ts[i] * u.y }, { x: A.x + ts[i + 1] * u.x, y: A.y + ts[i + 1] * u.y }, col, 2.2);
+    }
+  } else P.infLine(A, u, C('--ink'), 2);
+  const hitCol = kind === 'tangente' ? C('--c-success') : C('--ink');
+  roots.forEach((t, i) => P.dot({ x: A.x + t * u.x, y: A.y + t * u.y }, hitCol, 5, roots.length > 1 ? `X${i + 1}` : 'X', 'nw'));
+  // gráfico de φ(t)
+  drawPhi(al, be, ga, roots, kind);
+  const kindTxt = {
+    secante: '<span class="pill neutra">2 pontos: secante</span>',
+    tangente: '<span class="pill tangente">raiz dupla: tangente</span>',
+    um: '<span class="pill hiperbole">1 ponto, α = 0: não tangente</span>',
+    zero: '<span class="pill neutra">nenhum ponto</span>',
+    contida: '<span class="pill neutra">reta contida</span>',
+  }[kind];
+  setReadout($('#readout'), [
+    ['Interseção', kindTxt], ['α', fmt(al, 4)], ['β', fmt(be, 4)], ['γ = f(A)', fmt(ga, 4)], ['Δ = β² − 4αγ', fmt(Delta, 4)],
+  ]);
+  const fStr = st.padrao === 'elipse' ? `x²/${fmt(st.a * st.a, 3)} + y²/${fmt(st.b * st.b, 3)} − 1`
+    : st.padrao === 'parabola' ? `y² − ${fmt(4 * st.p, 3)}x` : `x²/${fmt(st.a * st.a, 3)} − y²/${fmt(st.b * st.b, 3)} − 1`;
+  let extra = '';
+  if (kind === 'tangente' && st.lock) extra = `<div class="sub">tangente em Q (Prop. das tangentes em posição padrão):</div><div class="main">${tangentEq(qPoint())}</div>`;
+  $('#fbReta').innerHTML =
+    `<div>f(x, y) = ${fStr}</div>` +
+    `<div class="main">φ(t) = f(A + t(B − A)) = ${polyStr([[al, 't²'], [be, 't'], [ga, '']], 3)}</div>` + extra;
+  const note = $('#note');
+  if (kind === 'um'){ note.hidden = false; note.className = 'note'; note.textContent = st.padrao === 'parabola' ? 'A reta é paralela ao eixo da parábola: α = 0, φ é de primeiro grau e há um único ponto comum. Mas a reta atravessa a curva, e por isso não a chamamos de tangente.' : 'A reta é paralela a uma assíntota: α = 0 e há um único ponto comum, sem tangência.'; }
+  else if (kind === 'tangente'){ note.hidden = false; note.className = 'note ok'; note.textContent = 'Δ = 0: a raiz de φ é dupla, a reta é tangente. Fora do ponto de contato, f tem sempre o mesmo sinal ao longo dela.'; }
+  else note.hidden = true;
+}
+function drawPhi(al, be, ga, roots, kind){
+  const ctx = P.ctx, W = Math.min(220, P.w * 0.42), H = 120, x0 = P.w - W - 10, y0 = P.h - H - 10;
+  ctx.save();
+  ctx.fillStyle = C('--paper-raised'); ctx.strokeStyle = C('--border'); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, W, H, 6) : ctx.rect(x0, y0, W, H); ctx.fill(); ctx.stroke();
+  const tc = roots.length ? roots.reduce((s, t) => s + t, 0) / roots.length : 0.5;
+  const span = Math.max(2, roots.length > 1 ? (roots[1] - roots[0]) * 1.4 : 2);
+  const t0 = tc - span, t1 = tc + span;
+  let fmax = 1e-9; const vals = [];
+  for (let i = 0; i <= 120; i++){ const t = t0 + (t1 - t0) * i / 120, v = al * t * t + be * t + ga; vals.push(v); fmax = Math.max(fmax, Math.abs(v)); }
+  const X = t => x0 + 8 + (t - t0) / (t1 - t0) * (W - 16), Y = v => y0 + H / 2 + 4 - v / fmax * (H / 2 - 16);
+  ctx.strokeStyle = C('--line-major'); ctx.beginPath(); ctx.moveTo(x0 + 6, Y(0)); ctx.lineTo(x0 + W - 6, Y(0)); ctx.stroke();
+  ctx.strokeStyle = C('--brand'); ctx.lineWidth = 2; ctx.beginPath();
+  vals.forEach((v, i) => { const t = t0 + (t1 - t0) * i / 120; i ? ctx.lineTo(X(t), Y(v)) : ctx.moveTo(X(t), Y(v)); }); ctx.stroke();
+  ctx.fillStyle = kind === 'tangente' ? C('--c-success') : C('--ink');
+  roots.forEach(t => { ctx.beginPath(); ctx.arc(X(t), Y(0), 3.5, 0, 2 * Math.PI); ctx.fill(); });
+  ctx.fillStyle = C('--ink-muted'); ctx.font = `600 10px ${C('--font-body')}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('φ(t) ao longo da reta', x0 + 8, y0 + 5);
+  ctx.restore();
+}
+
+// ===================== alças =====================
+const hP = P.addHandle({ get: () => nearPoint(st.theta), set: (x, y) => { const th = Math.atan2(y, x); if (nearValid(th)) st.theta = th; }, color: () => C('--ink'), label: 'P', hidden: () => st.mode !== 'diretriz' });
+P.addHandle({ get: () => ({ x: st.d, y: 0 }), set: x => { st.d = clamp(x, 0.3, 12); dSl.set(st.d); }, color: () => C('--c-diretriz'), shape: 'square', hidden: () => st.mode !== 'diretriz' });
+P.addHandle({ get: () => st.F1, set: (x, y) => { st.F1 = { x, y }; trail.length = 0; }, color: () => C('--c-foco'), label: 'F₁', where: 'sw', hidden: () => st.mode !== 'focos' });
+P.addHandle({ get: () => st.F2, set: (x, y) => { st.F2 = { x, y }; trail.length = 0; }, color: () => C('--c-foco'), label: 'F₂', where: 'se', hidden: () => st.mode !== 'focos' });
+P.addHandle({
+  get: () => { const fr = frame(), a = st.twoA / 2, c = fr.c; if (st.tipo === 'elipse'){ const b = Math.sqrt(Math.max(a * a - c * c, 0)); return at(fr, a * Math.cos(st.tP), b * Math.sin(st.tP)); } const b = Math.sqrt(Math.max(c * c - a * a, 0)); return at(fr, st.branch * a * Math.cosh(st.tP), b * Math.sinh(st.tP)); },
+  set: (x, y) => { const fr = frame(), a = st.twoA / 2, c = fr.c, s = (x - fr.M.x) * fr.u.x + (y - fr.M.y) * fr.u.y, t = (x - fr.M.x) * fr.w.x + (y - fr.M.y) * fr.w.y;
+    if (st.tipo === 'elipse'){ const b = Math.sqrt(Math.max(a * a - c * c, 1e-9)); st.tP = Math.atan2(t / b, s / a); }
+    else { const b = Math.sqrt(Math.max(c * c - a * a, 1e-9)); st.branch = s >= 0 ? 1 : -1; st.tP = clamp(Math.asinh(t / b), -3, 3); } },
+  color: () => C('--ink'), label: 'P',
+  hidden: () => { if (st.mode !== 'focos') return true; const a = st.twoA / 2, c = frame().c; return st.tipo === 'elipse' ? !(a > c) : !(a < c); },
+});
+P.addHandle({ get: () => st.A, set: (x, y) => { st.A = { x, y }; st.lock = false; $('#chkLock').checked = false; }, color: () => C('--ink'), label: 'A', where: 'nw', hidden: () => st.mode !== 'reta' });
+P.addHandle({ get: () => st.B, set: (x, y) => { st.B = { x, y }; st.lock = false; $('#chkLock').checked = false; }, color: () => C('--ink'), label: 'B', where: 'ne', hidden: () => st.mode !== 'reta' });
+P.addHandle({ get: qPoint, set: (x, y) => { setQFrom(x, y); }, color: () => C('--c-success'), label: 'Q', shape: 'square', where: 'se', hidden: () => st.mode !== 'reta' || !st.lock });
+
+P.onDraw = () => {
+  if (st.mode === 'diretriz') drawDiretriz();
+  else if (st.mode === 'focos') drawFocos();
+  else drawReta();
+};
+
+// ===================== controles =====================
+const eSl = bindSlider('eSl', v => { st.e = v; P.draw(); });
+const dSl = bindSlider('dSl', v => { st.d = v; P.draw(); });
+document.querySelectorAll('[data-e]').forEach(b => b.addEventListener('click', () => { st.e = +b.dataset.e; eSl.set(st.e); P.draw(); }));
+$('#chkPapel').addEventListener('change', e => { st.papel = e.target.checked; P.draw(); });
+$('#chkSegundo').addEventListener('change', e => { st.segundo = e.target.checked; P.draw(); });
+$('#chkPolar').addEventListener('change', e => { st.polar = e.target.checked; P.draw(); });
+bindSeg($('#tipoSeg'), v => { st.tipo = v; if (v === 'hiperbole' && st.twoA >= 2 * frame().c){ st.twoA = Math.max(0.4, 2 * frame().c * 0.55); aSl.set(st.twoA); } if (v === 'elipse' && st.twoA <= 2 * frame().c){ st.twoA = 2 * frame().c * 1.35; aSl.set(st.twoA); } trail.length = 0; P.draw(); });
+const aSl = bindSlider('aSl', v => { st.twoA = v; trail.length = 0; P.draw(); });
+$('#chkEixos').addEventListener('change', e => { st.eixos = e.target.checked; P.draw(); });
+$('#chkRastro').addEventListener('change', e => { st.rastro = e.target.checked; trail.length = 0; P.draw(); });
+function syncPadrao(){
+  document.querySelectorAll('.s-ab').forEach(el => el.hidden = st.padrao === 'parabola');
+  document.querySelectorAll('.s-p').forEach(el => el.hidden = st.padrao !== 'parabola');
+  $('#btnEixo').hidden = st.padrao === 'elipse';
+  $('#btnEixo').textContent = st.padrao === 'parabola' ? 'Paralela ao eixo' : 'Paralela à assíntota';
+}
+bindSeg($('#padraoSeg'), v => { st.padrao = v; syncPadrao(); P.draw(); });
+bindSlider('paSl', v => { st.a = v; P.draw(); });
+bindSlider('pbSl', v => { st.b = v; P.draw(); });
+bindSlider('ppSl', v => { st.p = v; P.draw(); });
+$('#chkLock').addEventListener('change', e => { st.lock = e.target.checked; P.draw(); });
+$('#chkSinal').addEventListener('change', e => { st.sinal = e.target.checked; P.draw(); });
+$('#btnEixo').addEventListener('click', () => {
+  st.lock = false; $('#chkLock').checked = false;
+  const dir = st.padrao === 'parabola' ? { x: 1, y: 0 } : { x: st.a, y: st.b };
+  const n = Math.hypot(dir.x, dir.y);
+  st.B = { x: st.A.x + 3 * dir.x / n, y: st.A.y + 3 * dir.y / n };
+  P.draw();
+});
+P.changed = () => {};
+function setMode(m){
+  st.mode = m;
+  document.querySelectorAll('.mode-only').forEach(el => { el.hidden = !el.classList.contains('m-' + m); });
+  const c = modeCenters[m]; P.cx = c.cx; P.cy = c.cy; P.unitsAcross = c.u; P.resize();
+}
+const modeSegCtl = bindSeg($('#modeSeg'), setMode);
+$('#resetView').addEventListener('click', () => setMode(st.mode));
+syncPadrao();
+modeSegCtl.set(['diretriz', 'focos', 'reta'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'diretriz');
+setMode(['diretriz', 'focos', 'reta'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'diretriz');
+window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (['diretriz', 'focos', 'reta'].includes(h)){ setMode(h); modeSegCtl.set(h); } });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => P.draw());
+})();
+</script>
