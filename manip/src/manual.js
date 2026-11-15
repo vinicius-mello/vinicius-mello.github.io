@@ -13,6 +13,7 @@ import { SYNTAX } from './syntax.js';
 import { COMMANDS, NAV_KEYS } from './keymap.js';
 import { parseAscii } from './parse-ascii.js';
 import { parseInput, parseDefinition } from './input.js';
+import { parseHypotheses, hypothesisTree } from './hypotheses.js';
 import { fn, sym } from './ast.js';
 
 const wanted = new URLSearchParams(location.search).get('lang');
@@ -144,8 +145,9 @@ function syntax() {
     tb.append(el('thead', null, el('tr', null, ...['syntax.what', 'syntax.ascii', 'syntax.latex', 'syntax.shows'].map((k) => el('th', null, t(k))))));
     const body = el('tbody');
     for (const [key, ascii, latex] of rows) {
-      const d = parseDefinition(ascii);
-      const tree = d ? fn('Equal', { ...sym(d.name), named: true, color: 0 }, d.def) : parseInput(ascii);
+      const h = parseHypotheses(ascii);
+      const d = !h && parseDefinition(ascii);
+      const tree = h ? hypothesisTree(h[0]) : d ? fn('Equal', { ...sym(d.name), named: true, color: 0 }, d.def) : parseInput(ascii);
       body.append(el('tr', null, el('td', null, t(key)), el('td', null, el('code', null, ascii)), el('td', null, el('code', null, latex)), el('td', null, formula(tree))));
     }
     tb.append(body);

@@ -31,6 +31,7 @@ import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } fr
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
+import { checkStep, isScalar } from '../types.js';
 import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, combineRows, rowSuggestion, twoRows } from './matrix.js';
 import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
 import { monomial as normalMonomial, sameMonomial, negateMonomial, squareRoot } from './monomial.js';
@@ -1458,6 +1459,7 @@ const BOTH_SIDES = {
   '+': (side, e) => (side.op === 'Add' ? withArgs(side, [...side.args, e]) : fn('Add', side, e)),
   '-': (side, e) => (side.op === 'Add' ? withArgs(side, [...side.args, fn('Negate', e)]) : fn('Add', side, fn('Negate', e))),
   '*': (side, e) => (side.op === 'Multiply' ? withArgs(side, [...side.args, e]) : fn('Multiply', side, e)),
+  '*<': (side, e) => (side.op === 'Multiply' ? withArgs(side, [e, ...side.args]) : fn('Multiply', e, side)),
   '/': (side, e) => fn('Divide', side, e),
   '^': (side, e) => fn('Power', side, e),
 };
@@ -1473,7 +1475,13 @@ function parseExpr(text) {
 }
 
 // Entrada no formato "<op> <expressão>", ex.: "+ 3", "* 2", "/ (x+1)", "^2".
+// "A^(-1) *" (operador no fim) multiplica à esquerda: com matrizes, o lado importa.
 export function parseSidesInput(text) {
+  const left = /^\s*([^-+*/^·×÷−].*?)\s*[*·×]\s*$/.exec(text ?? '');
+  if (left) {
+    const e = parseExpr(left[1]);
+    return e && { op: '*<', e };
+  }
   const m = /^\s*([-+*/^·×÷−])\s*(.+)$/.exec(text ?? '');
   if (!m) return null;
   const op = { '·': '*', '×': '*', '÷': '/', '−': '-' }[m[1]] ?? m[1];
@@ -1509,7 +1517,8 @@ function bothSides(ctx) {
   if (!parsed) return null;
   const { op, e } = parsed;
   let rel = { op: tree.op };
-  if (op === '*' || op === '/') rel = scaledRelation(tree.op, e);
+  if (op === '/' && !isScalar(e)) return { error: 'err.matrixDivide' };
+  if (op === '*' || op === '*<' || op === '/') rel = scaledRelation(tree.op, e);
   else if (op === '^' && tree.op !== 'Equal') rel = { error: 'err.powerIneq' };
   if (rel.error) return rel;
   const clones = {};
@@ -1518,7 +1527,7 @@ function bothSides(ctx) {
   const sym = { '*': '·', '/': '÷', '-': '−' }[op] ?? op;
   return {
     tree: { ...tree, op: rel.op, args: sides },
-    label: msg('step.sides', { op: sym, e: toAscii(e) }),
+    label: op === '*<' ? msg('step.sidesLeft', { e: toAscii(e) }) : msg('step.sides', { op: sym, e: toAscii(e) }),
     hints: rel.flipped ? { flip: tree.id } : undefined,
   };
 }
@@ -1980,6 +1989,28 @@ for (const r of RULES) if (!r.all) r.run = withNotes(r.run);
 // que juntam termos (ab + … + ac → a(b + … + c)) também o veem como um termo.
 const DOTS_INVERSE = new Set(['factor', 'join', 'powers', 'logs', 'derivs', 'integrals', 'limits']);
 for (const r of RULES) if (!r.input) wrapDots(r, DOTS_INVERSE.has(r.id));
+
+// Com matrizes, todo passo é conferido numericamente: uma regra feita para
+// números não pode trocar AB por BA nem juntar dimensões incompatíveis.
+function typed(ctx, r) {
+  if (!r?.tree) return r;
+  const e = checkStep(ctx.tree, r.tree);
+  return e ? { error: e } : r;
+}
+for (const r of RULES) {
+  if (r.all) {
+    const all = r.all;
+    r.all = (ctx) => {
+      const out = all(ctx).map((x) => typed(ctx, x));
+      const ok = out.filter((x) => x?.tree || x?.action);
+      return ok.length ? ok : out.filter(Boolean).slice(0, 1);
+    };
+    r.run = (ctx) => r.all(ctx)[0] ?? null;
+  } else {
+    const run = r.run;
+    r.run = (ctx) => typed(ctx, run(ctx));
+  }
+}
 
 export function applicable(ctx) {
   const out = [];

@@ -90,6 +90,7 @@ export const MANUAL = [
   ['ul', [
     L('uma **equação** (`2x + 3 = 7`) ou **inequação** (`x^2 - 1 < 0`, também `<=`, `>`, `>=`, `!=`);', 'an **equation** (`2x + 3 = 7`) or **inequality** (`x^2 - 1 < 0`, also `<=`, `>`, `>=`, `!=`);'),
     L('um **sistema**, com as equações separadas por `;` (`x + y = 3; x - y = 1`);', 'a **system**, with the equations separated by `;` (`x + y = 3; x - y = 1`);'),
+    L('uma **hipótese** (`A in M(2, 3)`, `v in R^3`, `n in N`, `seja x > 0`), que vale para todas as abas (capítulo 7);', 'an **assumption** (`A in M(2, 3)`, `v in R^3`, `n in N`, `let x > 0`), which holds in every tab (chapter 7);'),
     L('uma **matriz** (`[1, 2; 3, 4]`) ou um **determinante** (`|1, 2; 3, 4|`), soltos ou dentro de uma equação (capítulo 7);', 'a **matrix** (`[1, 2; 3, 4]`) or a **determinant** (`|1, 2; 3, 4|`), alone or inside an equation (chapter 7);'),
     L('uma **expressão solta** (`(a + b)^2`), para simplificar ou fatorar;', 'a **bare expression** (`(a + b)^2`), to simplify or factor;'),
     L('uma **definição auxiliar** (`K := x^2 + 1`), que abre uma aba para o nome (capítulo 10).', 'an **auxiliary definition** (`K := x^2 + 1`), which opens a tab for the name (chapter 10).'),
@@ -136,8 +137,8 @@ export const MANUAL = [
     L('um **lado inteiro** passa e deixa 0 no lugar.', 'a **whole side** goes across and leaves 0 behind.'),
   ]],
   ['p', L(
-    'Numa inequação, multiplicar ou dividir só é aceito por número diferente de zero; por um número negativo, o sentido da desigualdade inverte; por uma letra (de sinal desconhecido), o movimento é recusado com uma explicação. **Ctrl + ↑** tira o termo de dentro do grupo (parênteses) e o põe logo depois dele; **Ctrl + ↓** o coloca dentro do grupo vizinho.',
-    'In an inequality, multiplying or dividing is only accepted by a nonzero number; by a negative number, the inequality flips; by a letter (of unknown sign), the move is refused with an explanation. **Ctrl + ↑** takes the term out of its group (parentheses) and places it right after it; **Ctrl + ↓** puts it into the neighboring group.',
+    'Numa inequação, multiplicar ou dividir só é aceito por número diferente de zero; por um número negativo, o sentido da desigualdade inverte; por uma letra, só com uma hipótese que dê o sinal dela (`seja x > 0`, capítulo 7), e o passo mostra a hipótese usada; sem hipótese, o movimento é recusado com uma explicação. **Ctrl + ↑** tira o termo de dentro do grupo (parênteses) e o põe logo depois dele; **Ctrl + ↓** o coloca dentro do grupo vizinho.',
+    'In an inequality, multiplying or dividing is only accepted by a nonzero number; by a negative number, the inequality flips; by a letter, only with an assumption that gives its sign (`let x > 0`, chapter 7), and the step shows the assumption used; without one, the move is refused with an explanation. **Ctrl + ↑** takes the term out of its group (parentheses) and places it right after it; **Ctrl + ↓** puts it into the neighboring group.',
   )],
 
   ['h2', L('6. Operações', '6. Operations')],
@@ -203,6 +204,24 @@ export const MANUAL = [
   ['p', L(
     '**Sistemas:** digite as equações separadas por `;`. Os movimentos e operações agem dentro da equação em foco. Para combinar equações, selecione duas (Espaço) e use `+` (somar) ou `-` (subtrair): o resultado substitui a segunda. Com o foco numa equação da forma “variável = expressão”, `>` substitui a variável nas outras equações.',
     '**Systems:** type the equations separated by `;`. Moves and operations act inside the focused equation. To combine equations, select two (Space) and use `+` (add) or `-` (subtract): the result replaces the second one. With the focus on an equation of the form “variable = expression”, `>` substitutes the variable into the other equations.',
+  )],
+
+  ['h3', L('Hipóteses (seja …)', 'Assumptions (let …)')],
+  ['p', L(
+    'Uma hipótese diz o que uma letra é. Digite no campo de entrada `A in M(2, 3)` (A é uma matriz 2×3; `M(n)` é quadrada, e n pode ser uma letra), `A, B in M(2)`, `v in R^3` (vetor), `n in N` (também Z, Q, R e C), ou uma desigualdade com “seja”: `seja x > 0` (sem “seja”, `x > 0` é uma inequação para resolver). No LaTeX: `A \\in M_{2\\times 3}`, `v \\in \\mathbb{R}^3`. Várias de uma vez, com `;`.',
+    'An assumption says what a letter is. Type in the input field `A in M(2, 3)` (A is a 2×3 matrix; `M(n)` is square, and n may be a letter), `A, B in M(2)`, `v in R^3` (vector), `n in N` (also Z, Q, R and C), or an inequality with “let”: `let x > 0` (without “let”, `x > 0` is an inequality to solve). In LaTeX: `A \\in M_{2\\times 3}`, `v \\in \\mathbb{R}^3`. Several at once, with `;`.',
+  )],
+  ['p', L(
+    'As hipóteses ficam no painel **Nomes e hipóteses**, valem em todas as abas e continuam num problema novo; o × ao lado tira uma, e um clique a põe no campo para editar. **Reiniciar** apaga todas. Uma letra sem hipótese é um número; um nome definido como matriz (`A := [1, 2; 3, 4]`) já é uma matriz. Se o problema tem uma matriz escrita e uma letra maiúscula sem hipótese, o app pergunta uma vez se ela é uma matriz.',
+    'Assumptions sit in the **Names and assumptions** panel, hold in every tab and survive a new problem; the × next to one removes it, and a click puts it in the field for editing. **Reset** clears them all. A letter with no assumption is a number; a name defined as a matrix (`A := [1, 2; 3, 4]`) is already a matrix. If the problem has a written matrix and an uppercase letter with no assumption, the app asks once whether it is a matrix.',
+  )],
+  ['p', L(
+    '**Matrizes não comutam:** com A e B matrizes, AB ≠ BA. Ctrl + ← → não troca A com B (um número troca com uma matriz normalmente), e nenhuma operação muda a ordem: todo passo com matrizes é conferido calculando com matrizes sorteadas, e um passo que trocaria a ordem é recusado. Dimensões incompatíveis ([1, 2] + [1, 2, 3], AC com C 2×3 e A 3×3…) também são recusadas. Uma matriz não passa dividindo para o outro lado: em `=`, digite `A^(-1) *` para multiplicar os dois lados à esquerda pela inversa (`* A^(-1)` multiplica à direita).',
+    '**Matrices do not commute:** with A and B matrices, AB ≠ BA. Ctrl + ← → does not swap A with B (a number swaps with a matrix as usual), and no operation changes the order: every step with matrices is checked by computing with random matrices, and a step that would change the order is refused. Incompatible dimensions ([1, 2] + [1, 2, 3], AC with C 2×3 and A 3×3…) are refused too. A matrix does not move across by dividing: in `=`, type `A^(-1) *` to multiply both sides on the left by the inverse (`* A^(-1)` multiplies on the right).',
+  )],
+  ['p', L(
+    '**Sinais:** com `seja x > 0`, multiplicar ou dividir uma inequação por x (ou por 2x, x², −x…) é aceito, e o passo diz “usando x > 0”; √(x²) vira x em vez de |x| quando x ≥ 0 (também com x ∈ ℕ).',
+    '**Signs:** with `let x > 0`, multiplying or dividing an inequality by x (or by 2x, x², −x…) is accepted, and the step says “using x > 0”; √(x²) becomes x instead of |x| when x ≥ 0 (also with x ∈ ℕ).',
   )],
 
   ['h3', L('Matrizes e determinantes', 'Matrices and determinants')],

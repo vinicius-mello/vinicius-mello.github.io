@@ -257,6 +257,18 @@ export function render(n, parent = null, index = 0) {
         el('span', 'limit lower', null, kid(x, 0), op('=', n.id + '=', 'lim'), kid(a, 1))));
       break;
     }
+    case 'Element':
+      // Hipótese: A ∈ M₂ₓ₃, v ∈ ℝ³
+      e.append(kid(n.args[0], 0), op('∈', n.id + '∈', 'rel'), kid(n.args[1], 1));
+      break;
+    case 'SetName': {
+      // ℕ ℤ ℚ ℝ ℂ (em pé) e M (itálico), com subscrito ou expoente
+      const bb = { N: 'ℕ', Z: 'ℤ', Q: 'ℚ', R: 'ℝ', C: 'ℂ' }[n.name];
+      e.append(el('span', bb ? 'setname' : 'var', null, bb ?? n.name));
+      if (n.sub) e.append(el('span', 'subscript', null, n.sub));
+      if (n.sup) e.append(el('span', 'setexp', null, n.sup));
+      break;
+    }
     case 'Row':
       // Uma linha da matriz: as entradas ficam nas colunas da grade do pai.
       e.append(...n.args.map(kid));

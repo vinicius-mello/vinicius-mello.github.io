@@ -6,7 +6,9 @@
 // ser manipulada à parte. A definição atual de um nome é o outro lado dessa
 // equação. Um nome digitado em qualquer equação vale como o nome (chip).
 
-import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn, withArgs, walk, isGrid } from './ast.js';
+import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn, withArgs, walk, isGrid, gridSize } from './ast.js';
+import { parseHypotheses, mergeHypotheses, hypothesisTree, hypothesisAscii, hypothesisText } from './hypotheses.js';
+import { setEnvironment, kindOf, isError } from './types.js';
 import { parseInput, parseDefinition, primedName, ParseError } from './input.js';
 import { toAscii, toLatex } from './serialize.js';
 import { toMathJson } from './mathjson.js';
@@ -50,6 +52,8 @@ const longSelect = $('#long');
 
 let workspaces = [];
 let active = 0;
+// Hipóteses do professor (Seja A ∈ M(2, 3), x > 0): valem em todas as abas.
+let hypotheses = [];
 let selected = new Set();
 let anchorId = null; // início da seleção feita com Shift+setas
 let presenting = false;
@@ -112,6 +116,24 @@ function definitions() {
 }
 
 const chip = (name, color) => ({ ...sym(name), named: true, color });
+
+// Tipos e sinais (types.js) seguem as hipóteses e as definições atuais.
+const syncEnvironment = () => setEnvironment({ hyps: hypotheses, defs: definitions() });
+
+// Num problema com uma matriz escrita, uma letra maiúscula sem hipótese é
+// escalar para o app; avisa uma vez por nome que talvez falte declarar.
+const warned = new Set();
+function warnUndeclared(tree) {
+  let m = null;
+  let name = null;
+  walk(tree, (n) => {
+    if (!m && n.op === 'Matrix' && isGrid(n)) m = n;
+    if (!name && n.op === 'Symbol' && /^[A-Z]/.test(n.name) && !n.named && !warned.has(n.name) && kindOf(n).t === 'scalar') name = n.name;
+  });
+  if (!m || !name) return;
+  warned.add(name);
+  toast(t('toast.declare', { name, n: gridSize(m)[0] }));
+}
 
 function define({ name, def, chipId }, tree) {
   const color = tabSpaces().length % COLORS;
@@ -450,11 +472,35 @@ function drawTabs() {
   }));
 }
 
+// Hipótese no painel: "seja x > 0", com × para tirar; um clique a põe no
+// campo de entrada.
+function hypothesisItem(h, i) {
+  const li = document.createElement('li');
+  li.className = 'hyp';
+  li.append(Object.assign(document.createElement('span'), { className: 'hyp-seja', textContent: t('hyp.let') }), staticFormula(hypothesisTree(h)));
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'tab-close';
+  x.textContent = '×';
+  x.title = t('hyp.remove', { h: hypothesisText(h) });
+  x.setAttribute('aria-label', x.title);
+  x.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    hypotheses.splice(i, 1);
+    refresh(false);
+    stage.focus();
+  });
+  li.append(x);
+  li.title = t('hyp.edit');
+  li.addEventListener('click', () => { input.value = hypothesisAscii(h); input.focus(); });
+  return li;
+}
+
 function drawNames() {
   const defs = definitions();
   const ids = identities();
-  namesPanel.hidden = !tabSpaces().length;
-  namesList.replaceChildren(...tabSpaces().map((w) => {
+  namesPanel.hidden = !tabSpaces().length && !hypotheses.length;
+  namesList.replaceChildren(...hypotheses.map(hypothesisItem), ...tabSpaces().map((w) => {
     const li = document.createElement('li');
     if (w.identity) {
       // Q: A = B (o nome como rótulo, na cor da aba)
@@ -471,6 +517,7 @@ function drawNames() {
 }
 
 function refresh(animate = false, arcKey = null, hints = undefined) {
+  syncEnvironment();
   drawFormula({ animate, arcKey, hints });
   drawHistory();
   drawTabs();
@@ -532,6 +579,7 @@ function setFocus(path) {
 }
 
 function move(f, ...args) {
+  syncEnvironment();
   const r = f(state().tree, focusPath(), ...args);
   if (!r) return bump();
   if (r.error) {
@@ -639,13 +687,23 @@ function saveBlob(blob, name) {
 function load(text) {
   let tree;
   let definition;
+  let hyps;
   try {
-    definition = parseDefinition(text);
-    if (!definition) tree = parseInput(text);
+    hyps = parseHypotheses(text);
+    if (!hyps) definition = parseDefinition(text);
+    if (!hyps && !definition) tree = parseInput(text);
   } catch (err) {
     if (!(err instanceof ParseError)) throw err;
     inputError.textContent = t(err.key, err.params);
     input.setSelectionRange(err.pos, Math.min(err.pos + 1, text.length));
+    return false;
+  }
+  if (hyps) return addHypotheses(hyps);
+  syncEnvironment();
+  // Dimensões incompatíveis ([1, 2] + [1, 2, 3]) não começam um problema.
+  const kind = tree && kindOf(tree);
+  if (kind && isError(kind)) {
+    inputError.textContent = t(kind.key);
     return false;
   }
   inputError.textContent = '';
@@ -668,6 +726,24 @@ function load(text) {
     history().push({ tree, focusId: (tree.args?.[0] ?? tree).id, label: msg('step.input') });
   }
   refresh(false);
+  if (tree) warnUndeclared(tree);
+  return true;
+}
+
+// "Seja …": as hipóteses entram na lista (o tipo novo de um nome substitui
+// o antigo); a fórmula atual continua.
+function addHypotheses(hyps) {
+  const defs = definitions();
+  const taken = hyps.find((h) => h.kind !== 'rel' && defs[h.name]);
+  if (taken) {
+    inputError.textContent = t('err.hypDefined', { name: taken.name });
+    return false;
+  }
+  inputError.textContent = '';
+  hypotheses = mergeHypotheses(hypotheses, hyps);
+  input.value = toAscii(state().tree);
+  refresh(false);
+  toast(t('toast.hyp', { h: hyps.map(hypothesisText).join('; ') }));
   return true;
 }
 
@@ -689,6 +765,7 @@ function filterMenu() {
 }
 
 function ruleContext(text) {
+  syncEnvironment();
   const tree = withChips(state().tree);
   const focus = focusPath();
   const targets = [...selected]
@@ -955,6 +1032,7 @@ function serialize() {
     format: 'manip',
     version: 4,
     active,
+    hypotheses: hypotheses.length ? hypotheses : undefined,
     workspaces: workspaces.map((w) => ({
       id: w.id,
       title: w.title,
@@ -983,6 +1061,7 @@ function deserialize(data) {
     return { id: w.id, title: w.title, color: w.color, def, identity: !!w.identity, history: h };
   });
   active = Math.min(data.active ?? 0, workspaces.length - 1);
+  hypotheses = Array.isArray(data.hypotheses) ? data.hypotheses : [];
   selected.clear();
 }
 
@@ -1252,6 +1331,8 @@ function shortcutsPane() {
 
 // Exemplo da sintaxe; uma definição aparece como a equação da sua aba.
 function exampleTree(text) {
+  const h = parseHypotheses(text);
+  if (h) return h.length === 1 ? hypothesisTree(h[0]) : fn('System', ...h.map(hypothesisTree));
   const d = parseDefinition(text);
   return d ? fn('Equal', chip(d.name, 0), d.def) : parseInput(text);
 }
@@ -1439,6 +1520,7 @@ resetBtn.addEventListener('click', () => {
   closeMenu();
   workspaces = [];
   active = 0;
+  hypotheses = [];
   input.value = EXAMPLE;
   load(EXAMPLE);
   toast(t('toast.reset'));

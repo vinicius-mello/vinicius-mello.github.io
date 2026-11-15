@@ -12,6 +12,8 @@ import { evaluate } from './rules/arith.js';
 import { keepsEnds } from './rules/dots.js';
 import { isRelation, isInequality, FLIP, relationAt } from './relations.js';
 import { swapLines } from './rules/matrix.js';
+import { signOf, isScalar, commute, checkStep } from './types.js';
+import { note, noted, attempt } from './rules/normal.js';
 
 const terms = (n) => (n.op === 'Add' ? n.args : [n]);
 const factors = (n) => (n.op === 'Multiply' ? n.args : [n]);
@@ -35,6 +37,8 @@ function swap(tree, path, dir) {
   const i = path[path.length - 1];
   const j = i + dir;
   if (j < 0 || j >= parent.args.length) return null;
+  // AB ≠ BA: duas matrizes não trocam de lugar.
+  if (parent.op === 'Multiply' && !commute(parent.args[i], parent.args[j])) return { error: 'err.noncommute' };
   const args = parent.args.slice();
   [args[i], args[j]] = [args[j], args[i]];
   return { tree: replaceAt(tree, pp, withArgs(parent, args)), label: msg('step.reorder'), arc: null };
@@ -45,10 +49,14 @@ function swap(tree, path, dir) {
 // Devolve a relação resultante, ou { error } explicando por que não pode.
 export function scaledRelation(op, q) {
   if (!isInequality(op)) return { op };
+  // O sinal vem do número ou das hipóteses (x > 0), anotadas no rótulo.
+  const used = [];
   const v = evaluate(q);
-  if (!v) return { error: 'err.signUnknown', params: { e: toAscii(q) } };
-  if (v.n === 0n) return { error: 'err.zero' };
-  return { op: v.n < 0n ? FLIP[op] : op, flipped: v.n < 0n };
+  const s = v ? (v.n > 0n ? 1 : v.n < 0n ? -1 : 0) : signOf(q, used);
+  if (s === null) return { error: 'err.signUnknown', params: { e: toAscii(q) } };
+  if (s === 0) return { error: 'err.zero' };
+  used.forEach(note);
+  return { op: s < 0 ? FLIP[op] : op, flipped: s < 0 };
 }
 
 // Passa um termo, fator ou denominador para o outro lado da equação (num
@@ -63,6 +71,7 @@ function transpose(tree, path, dir) {
 
 function transposeIn(tree, path, dir) {
   if (!isRelation(tree.op) || path.length === 0 || path.length > 2) return null;
+  attempt();
   const s = path[0];
   const o = 1 - s;
   if (dir !== (s === 0 ? +1 : -1)) return null;
@@ -78,7 +87,7 @@ function transposeIn(tree, path, dir) {
     const args = [];
     args[s] = newSide;
     args[o] = newOther;
-    return { tree: { ...tree, op: rel, args }, label, arc, focus, flipped: rel !== tree.op };
+    return { tree: { ...tree, op: rel, args }, label: noted(label), arc, focus, flipped: rel !== tree.op };
   };
 
   if (path.length === 1) {
@@ -95,6 +104,8 @@ function transposeIn(tree, path, dir) {
       return build(rebuild('Add', rest, side), insertTerm(moved), msg('step.transposeTerm'), core(node).id, moved.id);
     }
     case 'Multiply': {
+      // Não se divide por matriz: multiplica-se pela inversa, de um lado só.
+      if (!isScalar(node)) return { error: 'err.matrixMove' };
       const rel = scaledRelation(tree.op, node);
       if (rel.error) return rel;
       const rest = side.args.filter((_, k) => k !== i);
@@ -118,7 +129,14 @@ const guarded = (tree, r) => (r?.tree && !keepsEnds(tree, r.tree) ? { error: 'er
 export function shiftSideways(tree, path, dir) {
   const g = swapLines(tree, path, dir, 'col');
   if (g) return g;
-  return guarded(tree, swap(tree, path, dir) ?? transpose(tree, path, dir));
+  return typed(tree, guarded(tree, swap(tree, path, dir) ?? transpose(tree, path, dir)));
+}
+
+// Com matrizes, o passo é conferido numericamente (a ordem dos fatores).
+function typed(tree, r) {
+  if (!r?.tree) return r;
+  const e = checkStep(tree, r.tree);
+  return e ? { error: e } : r;
 }
 
 // Um grupo do mesmo tipo do pai: Add dentro de Add, ou (Add) entre parênteses.
@@ -130,7 +148,7 @@ function groupOf(node, op) {
 
 // Shift+↑: tira o nó de dentro do grupo e o coloca logo depois dele.
 // Numa linha de um determinante, Ctrl+↑↓ trocam a linha com a vizinha.
-export const shiftOut = (tree, path) => swapLines(tree, path, -1, 'row') ?? guarded(tree, shiftOutRaw(tree, path));
+export const shiftOut = (tree, path) => swapLines(tree, path, -1, 'row') ?? typed(tree, guarded(tree, shiftOutRaw(tree, path)));
 
 function shiftOutRaw(tree, path) {
   if (path.length < 2) return null;
@@ -157,7 +175,7 @@ function shiftOutRaw(tree, path) {
 }
 
 // Shift+↓: coloca o nó dentro do grupo vizinho (preferindo o da direita).
-export const shiftIn = (tree, path) => swapLines(tree, path, +1, 'row') ?? guarded(tree, shiftInRaw(tree, path));
+export const shiftIn = (tree, path) => swapLines(tree, path, +1, 'row') ?? typed(tree, guarded(tree, shiftInRaw(tree, path)));
 
 function shiftInRaw(tree, path) {
   if (path.length === 0) return null;

@@ -3,7 +3,8 @@
 // dois sentidos e são reunidas por tecla com either() (rules/index.js).
 
 import { getAt, replaceAt, withArgs, fn, num, sym } from '../ast.js';
-import { matches as same } from './normal.js';
+import { matches as same, note } from './normal.js';
+import { nonNegative } from '../types.js';
 import { msg } from '../i18n.js';
 import { evaluate } from './arith.js';
 import { numeric } from './calculus.js';
@@ -517,7 +518,12 @@ function sqrtSquare(ctx) {
       const a = unparen(n.args[0]);
       if (a.op === 'Power' && isNum(a.args[1], 2)) {
         const b = a.args[0];
-        node = b.op === 'Number' ? b : fn('Abs', unparen(b));
+        // √(x²) = x quando x ≥ 0 (número ou hipótese: x > 0, x ∈ ℕ).
+        const used = [];
+        if (b.op === 'Number' || nonNegative(unparen(b), used)) {
+          node = unparen(b);
+          used.forEach(note);
+        } else node = fn('Abs', unparen(b));
       } else if (a.op === 'Number') {
         const r = evaluate(a);
         const root = r && r.d === 1n && r.n >= 0n ? isqrt(r.n) : null;

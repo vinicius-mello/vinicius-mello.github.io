@@ -12,6 +12,7 @@ import { toAscii, looseSame } from '../serialize.js';
 import { msg } from '../i18n.js';
 import { tagOf } from '../ast.js';
 import { evaluate } from './arith.js';
+import { isScalar, kindOf, onEnvironmentChange } from '../types.js';
 
 const MAX_TERMS = 200;
 const MAX_POWER = 12;
@@ -76,8 +77,26 @@ function polyOf(n) {
     case 'Delimiter': return polyOf(n.args[0]);
     case 'Negate': return scale(polyOf(n.args[0]), rat(-1n));
     case 'Add': return sum(n.args.map(polyOf));
-    case 'Multiply': return n.args.map(polyOf).reduce(product);
+    case 'Multiply': {
+      // Matrizes não comutam: os fatores não escalares, na ordem, formam
+      // um átomo só (AB e BA são diferentes; 2AB e A·2·B, iguais).
+      const ns = n.args.filter((c) => !isScalar(c));
+      if (ns.length < 2 || ns.every((c) => kindOf(c).t === 'vector')) return n.args.map(polyOf).reduce(product);
+      // A(2B) = 2AB: os produtos de dentro se abrem; −A entra como −1·A.
+      const fs = [];
+      const open = (x) => {
+        while (x.op === 'Delimiter') x = x.args[0];
+        if (x.op === 'Multiply') x.args.forEach(open);
+        else if (x.op === 'Negate' && !isScalar(x.args[0])) { fs.push({ op: 'Number', value: '-1' }); open(x.args[0]); }
+        else fs.push(x);
+      };
+      n.args.forEach(open);
+      const sc = fs.filter((c) => isScalar(c)).map((c) => (c.value === '-1' && !c.args ? constant(rat(-1n)) : polyOf(c)));
+      const words = fs.filter((c) => !isScalar(c)).map(keyOf);
+      return [...sc, atom(`⟨${words.join('·')}⟩`)].reduce(product, constant(rat(1n)));
+    }
     case 'Power': {
+      if (!isScalar(n.args[0])) break;
       const e = evaluate(n.args[1]);
       if (e && e.d === 1n && e.n >= 0n && e.n <= BigInt(MAX_POWER)) {
         const base = polyOf(n.args[0]);
@@ -103,7 +122,9 @@ const polyKey = (p) => [...p.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ?
 
 // Chave da forma normal; se a expansão crescer demais, a própria escrita.
 // A árvore é imutável, então a chave de cada nó é guardada.
-const keys = new WeakMap();
+// As hipóteses mudam o que é escalar: a memória recomeça.
+let keys = new WeakMap();
+onEnvironmentChange(() => { keys = new WeakMap(); });
 export function keyOf(n) {
   if (keys.has(n)) return keys.get(n);
   let k;
@@ -153,6 +174,12 @@ export function matches(a, b) {
   const [x, y] = [show(a), show(b)];
   if (!notes.includes(`${x} = ${y}`) && !notes.includes(`${y} = ${x}`)) notes.push(`${x} = ${y}`);
   return true;
+}
+
+// Anota um fato usado pelo passo que não é uma igualdade (uma hipótese:
+// "x > 0"); aparece no rótulo como as igualdades.
+export function note(text) {
+  if (!notes.includes(text)) notes.push(text);
 }
 
 // Começa uma tentativa: esquece anotações de tentativas que não deram certo.

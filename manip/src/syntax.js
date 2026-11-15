@@ -2,7 +2,7 @@
 // [chave do texto em i18n.js, exemplo em ASCII, o mesmo em LaTeX]. O painel
 // mostra também o exemplo desenhado, lido com o parser de verdade (um teste
 // confere que todos os exemplos são aceitos). Uma definição (K := ...)
-// aparece como a equação da aba que ela abre.
+// aparece como a equação da aba que ela abre; uma hipótese, como ela mesma.
 
 export const SYNTAX = [
   ['syntax.basic', [
@@ -38,6 +38,12 @@ export const SYNTAX = [
   ['syntax.matrices', [
     ['syntax.matrix', '[1, 2; 3, 4]', '\\begin{bmatrix} 1 & 2 \\\\ 3 & 4 \\end{bmatrix}'],
     ['syntax.det', '|a, b; c, d| + det A', '\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix} + \\det A'],
+  ]],
+  ['syntax.hyps', [
+    ['syntax.hypMatrix', 'A, B in M(2, 3)', 'A, B \\in M_{2\\times 3}'],
+    ['syntax.hypVector', 'v in R^3', 'v \\in \\mathbb{R}^3'],
+    ['syntax.hypSet', 'n in N', 'n \\in \\mathbb{N}'],
+    ['syntax.hypSign', 'seja x > 0', 'seja x > 0'],
   ]],
   ['syntax.calculus', [
     ['syntax.limit', 'lim_(x->0) sin(x)/x', '\\lim_{x \\to 0} \\frac{\\sin x}{x}'],

@@ -1228,3 +1228,10 @@ body.presenting #stage:focus-visible::after { display: none; }
   justify-items: center;
 }
 .grid .grid { font-size: .9em; }
+
+/* Hipóteses: ℝ³, M₂ₓ₃ */
+.setname { font-style: normal; }
+.setexp { font-size: .7em; vertical-align: .6em; margin-left: .03em; }
+#names li.hyp { display: flex; align-items: center; gap: .4em; }
+#names li.hyp .hyp-seja { opacity: .7; font-size: .85em; }
+#names li.hyp .tab-close { margin-left: auto; }
