@@ -67,6 +67,7 @@ export function symbolContent(name) {
   if (name === IMAGINARY) return [el('span', 'imag', null, 'i')];
   if (name === INFINITY) return [el('span', 'infty', null, '∞')];
   if (name === DOTS) return [el('span', 'dots', null, '⋯')];
+  if (name === 'IdentityMatrix') return [el('span', 'setname', null, 'I')];
   // X', X_1'': os apóstrofos de um nome viram linhas depois do subscrito.
   const ticks = /'*$/.exec(name)[0].length;
   const [base, sub] = name.slice(0, name.length - ticks).split('_');
@@ -288,10 +289,11 @@ export function render(n, parent = null, index = 0) {
         const [rows, cols] = gridSize(n);
         body.style.gridTemplateColumns = `repeat(${cols}, auto)`;
         // Matriz aumentada [A | b]: um traço antes da última coluna.
-        if (n.aug && cols > 1) {
+        const k = n.aug === true ? 1 : n.aug || 0;
+        if (k && cols > k) {
           [...body.children].forEach((r, i) => { r.style.gridRow = String(i + 1); });
           const line = el('span', 'augline', n.id + '|');
-          line.style.gridColumn = String(cols);
+          line.style.gridColumn = String(cols - k + 1);
           line.style.gridRow = `1 / ${rows + 1}`;
           body.append(line);
         }

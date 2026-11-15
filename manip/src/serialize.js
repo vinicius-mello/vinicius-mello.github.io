@@ -64,7 +64,7 @@ export function toAscii(n) {
   const group = (c) => (asciiAtomic(c) ? toAscii(c) : `(${toAscii(c)})`);
   switch (n.op) {
     case 'Number': return n.value;
-    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name === DOTS ? '...' : asciiName(n.name);
+    case 'Symbol': return n.name === IMAGINARY ? 'i' : n.name === INFINITY ? 'oo' : n.name === DOTS ? '...' : n.name === 'IdentityMatrix' ? 'Id' : asciiName(n.name);
     case 'Call': return n.name + primes(n) + (n.args.length ? `(${n.args.map(toAscii).join(', ')})` : '');
     case 'Limit': {
       const [x, a, f] = n.args;
@@ -122,6 +122,7 @@ function latexSymbol(name) {
   if (name === IMAGINARY) return '\\mathrm{i}';
   if (name === INFINITY) return '\\infty';
   if (name === DOTS) return '\\cdots';
+  if (name === 'IdentityMatrix') return '\\mathrm{I}';
   const ticks = /'*$/.exec(name)[0];
   const [base, sub] = name.slice(0, name.length - ticks.length).split('_');
   const b = GREEK.includes(base) ? `\\${base}` : base;
@@ -193,7 +194,8 @@ export function toLatex(n) {
       // Matriz aumentada: array com a barra antes da última coluna.
       if (n.aug) {
         const c = n.args[0].args.length;
-        return `\\left[\\begin{array}{${'c'.repeat(c - 1)}|c} ${n.args.map((r) => r.args.map(toLatex).join(' & ')).join(' \\\\ ')} \\end{array}\\right]`;
+        const k = n.aug === true ? 1 : n.aug;
+        return `\\left[\\begin{array}{${'c'.repeat(c - k)}|${'c'.repeat(k)}} ${n.args.map((r) => r.args.map(toLatex).join(' & ')).join(' \\\\ ')} \\end{array}\\right]`;
       }
       const env = n.op === 'Matrix' ? 'bmatrix' : 'vmatrix';
       return `\\begin{${env}} ${n.args.map((r) => r.args.map(toLatex).join(' & ')).join(' \\\\ ')} \\end{${env}}`;

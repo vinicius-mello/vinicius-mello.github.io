@@ -71,6 +71,11 @@ const CALCULUS = ['lim', 'int', 'infinity', 'inf', 'oo'];
 // um subscrito final (x_1) fica preso à última letra.
 function splitWord(word, pos, toks) {
   let [base, sub] = word.split('_');
+  // Id: a matriz identidade (aparece como I)
+  if (base === 'Id' && sub === undefined) {
+    toks.push({ t: 'id', v: 'IdentityMatrix', pos, end: pos + 2 });
+    return;
+  }
   let i = 0;
   while (i < base.length) {
     const rest = base.slice(i);

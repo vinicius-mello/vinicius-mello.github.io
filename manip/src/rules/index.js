@@ -32,6 +32,7 @@ import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
 import { checkStep, isScalar } from '../types.js';
+import { INVERSE, INVERSE_CANCEL, IDENTITY_NEUTRAL } from './matrix.js';
 import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, MATRIX_CALC, MATRIX_SUM, MATRIX_PRODUCT, AUGMENTED, combineRows, rowSuggestion, twoRows, scaleRow, scaleSuggestion, rowOfMatrix } from './matrix.js';
 import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
 import { monomial as normalMonomial, sameMonomial, negateMonomial, squareRoot } from './monomial.js';
@@ -1952,6 +1953,9 @@ export const RULES = [
   { id: 'mproduct', key: '#', group: 'matrix', ...either(...MATRIX_PRODUCT) },
   { id: 'transpose', key: '#', group: 'matrix', ...either(...MATRIX_FORMS) },
   { id: 'augmented', key: '#', group: 'matrix', ...either(...AUGMENTED) },
+  { id: 'inverse', key: '#', group: 'matrix', ...either(...INVERSE) },
+  { id: 'minverse', key: 'x', group: 'matrix', ...either(...INVERSE_CANCEL) },
+  { id: 'mneutral', key: '0', group: 'matrix', ...either(...IDENTITY_NEUTRAL) },
   // equação e inequação
   {
     id: 'sides', key: '=', group: 'relation', run: onRelation(bothSides),
@@ -1997,8 +2001,10 @@ for (const r of RULES) if (!r.input) wrapDots(r, DOTS_INVERSE.has(r.id));
 
 // Com matrizes, todo passo é conferido numericamente: uma regra feita para
 // números não pode trocar AB por BA nem juntar dimensões incompatíveis.
+// Uma mudança de representação (A⁻¹ → [A | I]) não é uma igualdade: a
+// regra marca o resultado com `unchecked`.
 function typed(ctx, r) {
-  if (!r?.tree) return r;
+  if (!r?.tree || r.unchecked) return r;
   const e = checkStep(ctx.tree, r.tree);
   return e ? { error: e } : r;
 }

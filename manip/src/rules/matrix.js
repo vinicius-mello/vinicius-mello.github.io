@@ -10,6 +10,7 @@ import { parseInput } from '../input.js';
 import { isRelation } from '../relations.js';
 import { evaluate, evaluateComplex, complexToNode } from './arith.js';
 import { matches } from './normal.js';
+import { isScalar as isScalarish } from '../types.js';
 import { factors, terms, cloneFrom, parentOf, parentPath, lastIndex, place, rebuild } from './util.js';
 
 // ------------------------------------------------------------ onde estamos
@@ -645,14 +646,14 @@ function systemToMatrix(ctx) {
     }
     rows.push([...cols.map(sumOrZero), sumOrZero(b)]);
   }
-  const node = { ...grid('Matrix', rows), aug: true, vars };
+  const node = { ...grid('Matrix', rows), aug: 1, vars };
   return { tree: node, label: msg('step.toMatrix'), focus: node.id, hints: { clones } };
 }
 
 // Matriz aumentada → sistema (com as incógnitas de antes).
 function matrixToSystem(ctx) {
   const f = gridFrom(ctx.tree, ctx.focus, 'Matrix');
-  if (!f || f.rest.length || !f.g.aug || !chainable(ctx.tree, f.gp)) return null;
+  if (!f || f.rest.length || augCols(f.g) !== 1 || !f.g.vars || !chainable(ctx.tree, f.gp)) return null;
   const { g } = f;
   const vars = g.vars;
   if (gridSize(g)[1] !== vars.length + 1) return null;
@@ -677,3 +678,108 @@ function matrixToSystem(ctx) {
 
 export const MATRIX_PRODUCT = [multiplyMatrices, transposeMatrix];
 export const AUGMENTED = [systemToMatrix, matrixToSystem];
+
+// ------------------------------------------------------------- inversa
+
+export const IDENTITY = 'IdentityMatrix';
+const isMinusOne = (e) => (e.op === 'Negate' && e.args[0].op === 'Number' && e.args[0].value === '1') || (e.op === 'Number' && e.value === '-1');
+const isInverse = (n) => n.op === 'Power' && isMinusOne(n.args[1]);
+const gridInverse = (n) => isInverse(n) && n.args[0].op === 'Matrix' && isGrid(n.args[0]) && gridSize(n.args[0])[0] === gridSize(n.args[0])[1];
+// Colunas à direita do traço de uma matriz aumentada (true: uma).
+export const augCols = (g) => (g.aug === true ? 1 : g.aug || 0);
+
+// [a, b; c, d]^(-1) → (1/|a, b; c, d|)·[d, −b; −c, a]
+function inverse2(ctx) {
+  for (const p of [ctx.focus, parentPath(ctx.focus)]) {
+    if (!p) continue;
+    const n = getAt(ctx.tree, p);
+    if (!gridInverse(n) || gridSize(n.args[0])[0] !== 2) continue;
+    const M = n.args[0];
+    const det = evaluate(fn('Determinant', ...M.args));
+    if (det && det.n === 0n) return { error: 'err.singular' };
+    const clones = {};
+    const c = (i, j) => cloneFrom(entry(M, i, j), clones);
+    const node = fn('Multiply',
+      fn('Divide', num(1), grid('Determinant', [[c(0, 0), c(0, 1)], [c(1, 0), c(1, 1)]])),
+      grid('Matrix', [[c(1, 1), negated(c(0, 1))], [negated(c(1, 0)), c(0, 0)]]));
+    return { tree: replaceAt(ctx.tree, p, node), label: msg('step.inverse2'), focus: node.id, hints: { clones } };
+  }
+  return null;
+}
+
+// A^(-1) sozinha → [A | I], para escalonar (Gauss-Jordan).
+function gaussJordan(ctx) {
+  const { tree } = ctx;
+  if (!gridInverse(tree)) return null;
+  const M = tree.args[0];
+  const n = gridSize(M)[0];
+  const clones = {};
+  const rows = M.args.map((r, i) => [...r.args.map((e) => cloneFrom(e, clones)), ...Array.from({ length: n }, (_, j) => num(i === j ? 1 : 0))]);
+  const node = { ...grid('Matrix', rows), aug: n };
+  return { tree: node, label: msg('step.gaussJordan'), focus: node.id, hints: { clones }, unchecked: true };
+}
+
+// [I | B] (a última da cadeia) → B: a inversa é o bloco da direita.
+function extractInverse(ctx) {
+  const f = gridFrom(ctx.tree, ctx.focus, 'Matrix');
+  if (!f || f.rest.length || !chainable(ctx.tree, f.gp)) return null;
+  const { g } = f;
+  const [n, m] = gridSize(g);
+  if (augCols(g) !== n || m !== 2 * n) return null;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const v = evaluate(entry(g, i, j));
+      if (!v || v.d !== 1n || v.n !== (i === j ? 1n : 0n)) return null;
+    }
+  }
+  const node = withArgs(g, g.args.map((r) => withArgs(r, r.args.slice(n))));
+  delete node.aug;
+  return { tree: node, label: msg('step.inverseFound'), focus: node.id };
+}
+
+export const INVERSE = [inverse2, gaussJordan, extractInverse];
+
+// x: A·A⁻¹ e A⁻¹·A → I (A matriz).
+function cancelInverse(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus), parentPath(parentPath(focus))]) {
+    if (!p) continue;
+    const P = getAt(tree, p);
+    if (P.op !== 'Multiply') continue;
+    for (let i = 0; i + 1 < P.args.length; i++) {
+      const [x, y] = [P.args[i], P.args[i + 1]];
+      const pair = (isInverse(y) && matches(y.args[0], x) && x) || (isInverse(x) && matches(x.args[0], y) && y);
+      if (!pair || isScalarish(pair)) continue;
+      const I = sym(IDENTITY);
+      const args = P.args.slice();
+      args.splice(i, 2, I);
+      return {
+        tree: replaceAt(tree, p, rebuild('Multiply', args, P)),
+        label: msg('step.inverseCancel'),
+        focus: I.id,
+        hints: { merge: { to: I.id, from: [x.id, y.id] } },
+      };
+    }
+  }
+  return null;
+}
+
+// 0: I·X → X (com X matriz ou vetor).
+function identityNeutral(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus)]) {
+    if (!p) continue;
+    const P = getAt(tree, p);
+    if (P.op !== 'Multiply') continue;
+    const i = P.args.findIndex((x) => x.op === 'Symbol' && x.name === IDENTITY);
+    if (i < 0) continue;
+    const rest = P.args.filter((_, k) => k !== i);
+    if (!rest.some((x) => !isScalarish(x))) continue;
+    const node = rebuild('Multiply', rest, P);
+    return { tree: replaceAt(tree, p, node), label: msg('step.identityNeutral'), focus: node.id, hints: { strike: [P.args[i].id] } };
+  }
+  return null;
+}
+
+export const INVERSE_CANCEL = [cancelInverse];
+export const IDENTITY_NEUTRAL = [identityNeutral];

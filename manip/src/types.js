@@ -60,6 +60,8 @@ function mulKind(a, b) {
   if (isError(b)) return b;
   if (a.t === 'scalar') return b;
   if (b.t === 'scalar') return a;
+  if (a.id) return b;
+  if (b.id) return a;
   // vetor · vetor: produto escalar
   if (a.t === 'vector' && b.t === 'vector') return sameDim(a.n, b.n) ? SCALAR : err('err.dims');
   // o vetor é uma coluna n×1
@@ -76,6 +78,8 @@ export function kindOf(n) {
   switch (n.op) {
     case 'Number': return SCALAR;
     case 'Symbol': {
+      // I (a identidade, vinda de A·A⁻¹): quadrada, do tamanho que precisar.
+      if (n.name === 'IdentityMatrix') return { t: 'matrix', r: 'n', c: 'n', id: true };
       const h = hypsOf(n.name).find((x) => x.kind === 'matrix' || x.kind === 'vector');
       if (h) return h.kind === 'matrix' ? { t: 'matrix', r: h.rows, c: h.cols } : { t: 'vector', n: h.dim };
       const d = env.defs[n.name];
@@ -287,7 +291,7 @@ function sample(tree, seed) {
   const rand = rng(seed);
   const vals = {};
   walk(tree, (n) => {
-    if (n.op !== 'Symbol' || n.name in vals) return;
+    if (n.op !== 'Symbol' || n.name in vals || n.name === 'IdentityMatrix') return;
     const k = kindOf(n);
     const r = () => Math.round((rand() * 4 - 2) * 100) / 100 + 0.37;
     if (k.t === 'matrix') vals[n.name] = { m: Array.from({ length: dimValue(k.r) }, () => Array.from({ length: dimValue(k.c) }, r)) };

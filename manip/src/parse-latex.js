@@ -53,6 +53,8 @@ function tokenize(src) {
       i += m[0].length;
       continue;
     }
+    // \mathrm{I}: a matriz identidade
+    if ((m = /^\\(mathrm|operatorname)\s*\{\s*(I|Id)\s*\}/.exec(rest))) { toks.push({ t: 'id', v: 'IdentityMatrix', pos: i, end: i + m[0].length }); i += m[0].length; continue; }
     if ((m = /^\\(mathrm|operatorname)\s*\{\s*d\s*\}/.exec(rest))) { toks.push({ t: 'id', v: 'd', pos: i, end: i + m[0].length }); i += m[0].length; continue; }
     if ((m = /^(\^\s*\{\s*((\\prime\s*)+)\}|')/.exec(rest)) && toks[toks.length - 1]?.t === 'id') {
       const last = toks[toks.length - 1];

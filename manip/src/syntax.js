@@ -37,6 +37,7 @@ export const SYNTAX = [
   ]],
   ['syntax.matrices', [
     ['syntax.matrix', '[1, 2; 3, 4]', '\\begin{bmatrix} 1 & 2 \\\\ 3 & 4 \\end{bmatrix}'],
+    ['syntax.inverse', '[1, 2; 3, 4]^(-1) + Id', '\\begin{bmatrix} 1 & 2 \\\\ 3 & 4 \\end{bmatrix}^{-1} + \\mathrm{I}'],
     ['syntax.det', '|a, b; c, d| + det A', '\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix} + \\det A'],
   ]],
   ['syntax.hyps', [

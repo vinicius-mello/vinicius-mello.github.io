@@ -55,6 +55,9 @@ export const EXAMPLES = {
   mcalc: { src: '[1, 2; 3 - 3*1, 4 - 3*2]', focus: [1] },
   msum: { src: 'M = [1, 2] + [a, b]', focus: [1] },
   mproduct: { src: 'M = [1, 2; 3, 4][x; y]', focus: [1] },
+  inverse: { src: 'M = [1, 2; 3, 4]^(-1)', focus: [1] },
+  minverse: { src: 'M = [1, 2; 3, 4]^(-1) [1, 2; 3, 4]', focus: [1] },
+  mneutral: { src: 'Id [x; y] = [1; 2]', focus: [0] },
   augmented: { src: 'x + 2y = 5; 3x - y = 1', focus: [] },
   name: { src: '2(x + 1) = y', focus: [0, 1], input: 'K' },
   // expand, fold, open e identity dependem de um nome já definido: sem exemplo.

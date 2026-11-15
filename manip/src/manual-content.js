@@ -257,6 +257,11 @@ export const MANUAL = [
     '**System ↔ augmented matrix:** in a linear system, `#` writes the augmented matrix [A | b] (unknowns in alphabetical order, constants moved to the last column). After row reducing, `#` on the right matrix goes back to the system, with the same unknowns.',
   )],
   ['ex', { rule: 'augmented', src: 'x + 2y = 5; 3x - y = 1' }],
+  ['p', L(
+    '**Inversa:** `A^(-1)`. Com `#`, uma 2×2 escrita vira (1/det)·[d, −b; −c, a] (recusada se o determinante é 0). Uma inversa sozinha no problema, com `#` repetido, vira [A | I] para o escalonamento de Gauss-Jordan; quando a da esquerda chega a [I | B], `#` dá B, a inversa. Para resolver AX = B (com `A, B, X in M(n)`): `=` com `A^(-1) *` multiplica à esquerda, `x` cancela A⁻¹A = I e `0` faz IX = X. A identidade se digita `Id` (aparece como I; no LaTeX, `\\mathrm{I}`).',
+    '**Inverse:** `A^(-1)`. With `#`, a written 2×2 becomes (1/det)·[d, −b; −c, a] (refused when the determinant is 0). An inverse on its own in the problem, pressing `#` again, becomes [A | I] for Gauss-Jordan row reduction; once the left block reaches [I | B], `#` gives B, the inverse. To solve AX = B (with `A, B, X in M(n)`): `=` with `A^(-1) *` multiplies on the left, `x` cancels A⁻¹A = I and `0` does IX = X. The identity is typed `Id` (shown as I; in LaTeX, `\\mathrm{I}`).',
+  )],
+  ['ex', { rule: 'inverse', src: 'M = [1, 2; 3, 4]^(-1)', focus: [1] }],
 
   ['h2', L('8. Cálculo', '8. Calculus')],
   ['p', L(
