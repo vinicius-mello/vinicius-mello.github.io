@@ -236,11 +236,27 @@ export const MANUAL = [
   ['ex', { rule: 'laplace', src: 'D = |a, b, c; d, e, f; g, h, k|', focus: [1, 1],
     note: L('foco na segunda linha', 'focus on the second row') }],
   ['p', L(
-    '**Propriedades do determinante:** `e` põe em evidência um fator comum de uma linha (foco nela) ou de uma coluna (selecionada); selecionando duas linhas (Espaço), `+` e `-` pedem k e trocam a de baixo por Lⱼ + k·Lᵢ ou Lⱼ − k·Lᵢ, e o campo sugere o k que zera a primeira entrada; Ctrl+↑↓ numa linha (ou Ctrl+← → numa entrada, para colunas) troca com a vizinha e o determinante troca de sinal; `#` transpõe (det A = det Aᵀ). Numa matriz, `d` multiplica cada entrada pelo número da frente e `e` põe em evidência o fator comum de todas as entradas. Trocar linhas de uma matriz é recusado: daria outra matriz.',
-    '**Determinant properties:** `e` factors out a common factor of a row (focus on it) or of a column (selected); with two rows selected (Space), `+` and `-` ask for k and replace the lower one with Rⱼ + k·Rᵢ or Rⱼ − k·Rᵢ, and the field suggests the k that zeroes the first entry; Ctrl+↑↓ on a row (or Ctrl+← → on an entry, for columns) swaps it with its neighbor and the determinant changes sign; `#` transposes (det A = det Aᵀ). In a matrix, `d` multiplies each entry by the number in front and `e` factors out a factor common to all entries. Swapping rows of a matrix is refused: it would give another matrix.',
+    '**Propriedades do determinante:** `e` põe em evidência um fator comum de uma linha (foco nela) ou de uma coluna (selecionada); selecionando duas linhas (Espaço), `+` e `-` pedem k e trocam a de baixo por Lⱼ + k·Lᵢ ou Lⱼ − k·Lᵢ, e o campo sugere o k que zera a primeira entrada; Ctrl+↑↓ numa linha (ou Ctrl+← → numa entrada, para colunas) troca com a vizinha e o determinante troca de sinal; `#` transpõe (det A = det Aᵀ). Numa matriz, `d` multiplica cada entrada pelo número da frente e `e` põe em evidência o fator comum de todas as entradas.',
+    '**Determinant properties:** `e` factors out a common factor of a row (focus on it) or of a column (selected); with two rows selected (Space), `+` and `-` ask for k and replace the lower one with Rⱼ + k·Rᵢ or Rⱼ − k·Rᵢ, and the field suggests the k that zeroes the first entry; Ctrl+↑↓ on a row (or Ctrl+← → on an entry, for columns) swaps it with its neighbor and the determinant changes sign; `#` transposes (det A = det Aᵀ). In a matrix, `d` multiplies each entry by the number in front and `e` factors out a factor common to all entries.',
   )],
   ['ex', { rule: 'rowadd', src: 'D = |1, 2; 3, 4|', focus: [1, 1], sel: [[1, 0], [1, 1]], input: '-3',
     note: L('as duas linhas selecionadas, digitado “-3”', 'both rows selected, typed “-3”') }],
+  ['p', L(
+    '**Contas com matrizes:** `j` soma matrizes entrada a entrada (A + B, A − B) e, ao contrário, separa uma matriz cujas entradas são somas; `#` multiplica linha por coluna (cada entrada vira a soma dos produtos, sem as contas) e transpõe `[…]^T`; `d` e `e` levam um número para dentro e para fora da matriz; `c` numa linha calcula as entradas dela, e na matriz, todas.',
+    '**Arithmetic with matrices:** `j` adds matrices entry by entry (A + B, A − B) and, the other way, splits a matrix whose entries are sums; `#` multiplies row by column (each entry becomes the sum of products, without the arithmetic) and transposes `[…]^T`; `d` and `e` move a number into and out of the matrix; `c` on a row computes its entries, and on the matrix, all of them.',
+  )],
+  ['ex', { rule: 'mproduct', src: 'M = [1, 2; 3, 4][x; y]', focus: [1] }],
+  ['p', L(
+    '**Escalonamento (A ∼ A′):** numa matriz sozinha, as operações elementares mudam a matriz, então o passo não é uma igualdade: ele mostra A ∼ A′, com a anterior à esquerda e a nova à direita, e as operações seguintes agem na da direita. Com duas linhas selecionadas, `+` e `-` fazem Lⱼ ← Lⱼ ± k·Lᵢ (e sugerem o k que zera a primeira entrada); com o foco numa linha, `*` pede k ≠ 0 e faz Lᵢ ← k·Lᵢ (sugere 1/pivô); Ctrl + ↑ ↓ troca a linha com a vizinha. Dentro de uma equação, uma matriz não muda assim.',
+    '**Row reduction (A ∼ A′):** in a matrix on its own, elementary operations change the matrix, so the step is not an equality: it shows A ∼ A′, with the previous one on the left and the new one on the right, and the next operations act on the right one. With two rows selected, `+` and `-` do Rⱼ ← Rⱼ ± k·Rᵢ (and suggest the k that zeroes the first entry); with the focus on a row, `*` asks for k ≠ 0 and does Rᵢ ← k·Rᵢ (suggesting 1/pivot); Ctrl + ↑ ↓ swaps the row with its neighbor. Inside an equation, a matrix does not change this way.',
+  )],
+  ['ex', { rule: 'rowadd', src: '[1, 2; 3, 4]', focus: [1], sel: [[0], [1]], input: '-3',
+    note: L('as duas linhas selecionadas, digitado “-3”', 'both rows selected, typed “-3”') }],
+  ['p', L(
+    '**Sistema ↔ matriz aumentada:** num sistema linear, `#` escreve a matriz aumentada [A | b] (as incógnitas em ordem alfabética, as constantes passadas para a última coluna). Depois de escalonar, `#` na matriz da direita volta ao sistema, com as mesmas incógnitas.',
+    '**System ↔ augmented matrix:** in a linear system, `#` writes the augmented matrix [A | b] (unknowns in alphabetical order, constants moved to the last column). After row reducing, `#` on the right matrix goes back to the system, with the same unknowns.',
+  )],
+  ['ex', { rule: 'augmented', src: 'x + 2y = 5; 3x - y = 1' }],
 
   ['h2', L('8. Cálculo', '8. Calculus')],
   ['p', L(

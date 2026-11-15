@@ -257,6 +257,13 @@ export function render(n, parent = null, index = 0) {
         el('span', 'limit lower', null, kid(x, 0), op('=', n.id + '=', 'lim'), kid(a, 1))));
       break;
     }
+    case 'RowEquivalent':
+      // A ∼ A′ (operações de linha)
+      n.args.forEach((c, i) => {
+        if (i > 0) e.append(op('∼', `${n.id}~${i}`, 'rel'));
+        e.append(kid(c, i));
+      });
+      break;
     case 'Element':
       // Hipótese: A ∈ M₂ₓ₃, v ∈ ℝ³
       e.append(kid(n.args[0], 0), op('∈', n.id + '∈', 'rel'), kid(n.args[1], 1));
@@ -278,7 +285,16 @@ export function render(n, parent = null, index = 0) {
       // (determinante). det A, sem a matriz escrita, é uma função comum.
       if (isGrid(n)) {
         const body = el('span', 'grid', null, ...n.args.map(kid));
-        body.style.gridTemplateColumns = `repeat(${gridSize(n)[1]}, auto)`;
+        const [rows, cols] = gridSize(n);
+        body.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+        // Matriz aumentada [A | b]: um traço antes da última coluna.
+        if (n.aug && cols > 1) {
+          [...body.children].forEach((r, i) => { r.style.gridRow = String(i + 1); });
+          const line = el('span', 'augline', n.id + '|');
+          line.style.gridColumn = String(cols);
+          line.style.gridRow = `1 / ${rows + 1}`;
+          body.append(line);
+        }
         const [l, r, cls] = n.op === 'Matrix' ? [LBRACK, RBRACK, 'brack'] : [VBAR, VBAR, 'vbar'];
         e.append(el('span', 'delim griddelim', null,
           svgShape(`paren l ${cls}`, n.id + '[', l),

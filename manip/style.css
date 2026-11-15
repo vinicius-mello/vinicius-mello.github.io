@@ -1235,3 +1235,9 @@ body.presenting #stage:focus-visible::after { display: none; }
 #names li.hyp { display: flex; align-items: center; gap: .4em; }
 #names li.hyp .hyp-seja { opacity: .7; font-size: .85em; }
 #names li.hyp .tab-close { margin-left: auto; }
+.augline {
+  justify-self: start;
+  margin-left: -.4em;
+  border-left: max(1px, .05em) solid currentColor;
+  pointer-events: none;
+}

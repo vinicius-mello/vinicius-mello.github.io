@@ -32,7 +32,7 @@ import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
 import { checkStep, isScalar } from '../types.js';
-import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, combineRows, rowSuggestion, twoRows } from './matrix.js';
+import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, MATRIX_CALC, MATRIX_SUM, MATRIX_PRODUCT, AUGMENTED, combineRows, rowSuggestion, twoRows, scaleRow, scaleSuggestion, rowOfMatrix } from './matrix.js';
 import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
 import { monomial as normalMonomial, sameMonomial, negateMonomial, squareRoot } from './monomial.js';
 import {
@@ -1946,7 +1946,12 @@ export const RULES = [
   { id: 'mfactor', key: 'e', group: 'matrix', ...either(...MATRIX_FACTOR) },
   { id: 'rowadd', key: '+', group: 'matrix', run: combineRows(+1), input: true, suggest: rowSuggestion(+1), available: (ctx) => !!twoRows(ctx) },
   { id: 'rowsub', key: '-', group: 'matrix', run: combineRows(-1), input: true, suggest: rowSuggestion(-1), available: (ctx) => !!twoRows(ctx) },
+  { id: 'rowscale', key: '*', group: 'matrix', run: scaleRow, input: true, suggest: scaleSuggestion, available: (ctx) => !!rowOfMatrix(ctx) },
+  { id: 'mcalc', key: 'c', group: 'matrix', ...either(...MATRIX_CALC) },
+  { id: 'msum', key: 'j', group: 'matrix', ...either(...MATRIX_SUM) },
+  { id: 'mproduct', key: '#', group: 'matrix', ...either(...MATRIX_PRODUCT) },
   { id: 'transpose', key: '#', group: 'matrix', ...either(...MATRIX_FORMS) },
+  { id: 'augmented', key: '#', group: 'matrix', ...either(...AUGMENTED) },
   // equação e inequação
   {
     id: 'sides', key: '=', group: 'relation', run: onRelation(bothSides),

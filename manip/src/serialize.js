@@ -110,6 +110,7 @@ export function toAscii(n) {
     }
     case 'System': return n.args.map(toAscii).join('; ');
     case 'Matrix': if (isGrid(n)) return `[${asciiRows(n)}]`; break;
+    case 'RowEquivalent': return n.args.map(toAscii).join(' ~ ');
     case 'Determinant': if (isGrid(n)) return `|${asciiRows(n)}|`; break;
     case 'Root': return `root(${toAscii(n.args[0])}, ${toAscii(n.args[1])})`;
     default: break;
@@ -189,9 +190,15 @@ export function toLatex(n) {
     case 'Conjugate': return `\\overline{${toLatex(n.args[0])}}`;
     case 'Matrix': case 'Determinant': {
       if (!isGrid(n)) break;
+      // Matriz aumentada: array com a barra antes da última coluna.
+      if (n.aug) {
+        const c = n.args[0].args.length;
+        return `\\left[\\begin{array}{${'c'.repeat(c - 1)}|c} ${n.args.map((r) => r.args.map(toLatex).join(' & ')).join(' \\\\ ')} \\end{array}\\right]`;
+      }
       const env = n.op === 'Matrix' ? 'bmatrix' : 'vmatrix';
       return `\\begin{${env}} ${n.args.map((r) => r.args.map(toLatex).join(' & ')).join(' \\\\ ')} \\end{${env}}`;
     }
+    case 'RowEquivalent': return n.args.map(toLatex).join(' \\sim ');
     case 'System': return `\\begin{cases} ${n.args.map(toLatex).join(' \\\\ ')} \\end{cases}`;
     case 'Real': return `\\operatorname{Re}\\left(${toLatex(n.args[0])}\\right)`;
     case 'Imaginary': return `\\operatorname{Im}\\left(${toLatex(n.args[0])}\\right)`;

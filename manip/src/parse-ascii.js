@@ -32,6 +32,10 @@ function tokenize(src) {
       last.primes = (last.primes ?? 0) + 1;
       last.end = i + 1;
       m = [c];
+    } else if (c === '~' || c === '∼') {
+      // A ∼ B: equivalência por linhas
+      toks.push({ t: 'rel', v: 'RowEquivalent', pos: i });
+      m = [c];
     } else if (c === '∞' || c === '∫' || c === '[' || c === ']') {
       toks.push(c === '∞' ? { t: 'id', v: INFINITY, pos: i, end: i + 1 } : { t: { '∫': 'int', '[': 'evopen', ']': 'evclose' }[c], pos: i });
       m = [c];

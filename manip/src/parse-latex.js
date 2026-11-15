@@ -18,7 +18,7 @@ const FUNCTION_COMMANDS = { overline: 'Conjugate', bar: 'Conjugate', Re: 'Real',
 const RELATION_COMMANDS = {
   le: 'LessEqual', leq: 'LessEqual', leqslant: 'LessEqual',
   ge: 'GreaterEqual', geq: 'GreaterEqual', geqslant: 'GreaterEqual',
-  lt: 'Less', gt: 'Greater', ne: 'NotEqual', neq: 'NotEqual',
+  lt: 'Less', gt: 'Greater', ne: 'NotEqual', neq: 'NotEqual', sim: 'RowEquivalent',
 };
 // Ambientes de matriz: vmatrix é o determinante.
 const MATRIX_ENVS = {

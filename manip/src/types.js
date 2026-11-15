@@ -123,6 +123,13 @@ export function kindOf(n) {
       return b.t === 'scalar' ? a : err('err.matrixDivide');
     }
     case 'Power': {
+      // Aᵀ (escrito A^T)
+      if (n.args[1].op === 'Symbol' && n.args[1].name === 'T') {
+        const a = kindOf(n.args[0]);
+        if (a.t === 'matrix') return { t: 'matrix', r: a.c, c: a.r };
+        if (a.t === 'vector') return { t: 'matrix', r: '1', c: a.n };
+        if (a.t !== 'scalar') return a;
+      }
       const [a, b] = n.args.map(kindOf);
       if (isError(a)) return a;
       if (isError(b)) return b;
@@ -388,6 +395,10 @@ export function numericValue(n, vals) {
       return a === null || b === null || isM(b) || b === 0 ? null : mulV(a, 1 / b);
     }
     case 'Power': {
+      if (n.args[1].op === 'Symbol' && n.args[1].name === 'T') {
+        const a = ev(n.args[0]);
+        return isM(a) ? { m: a.m[0].map((_, j) => a.m.map((r) => r[j])) } : a;
+      }
       const a = ev(n.args[0]);
       const b = ev(n.args[1]);
       if (a === null || b === null || isM(b)) return null;

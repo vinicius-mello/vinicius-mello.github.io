@@ -51,6 +51,11 @@ export const EXAMPLES = {
   rowadd: { src: 'D = |1, 2; 3, 4|', focus: [1, 1], sel: [[1, 0], [1, 1]], input: '-3' },
   rowsub: { src: 'D = |1, 2; 3, 4|', focus: [1, 1], sel: [[1, 0], [1, 1]], input: '3' },
   transpose: { src: 'D = |a, b; c, d|', focus: [1] },
+  rowscale: { src: '[2, 4; 1, 3]', focus: [0], input: '1/2' },
+  mcalc: { src: '[1, 2; 3 - 3*1, 4 - 3*2]', focus: [1] },
+  msum: { src: 'M = [1, 2] + [a, b]', focus: [1] },
+  mproduct: { src: 'M = [1, 2; 3, 4][x; y]', focus: [1] },
+  augmented: { src: 'x + 2y = 5; 3x - y = 1', focus: [] },
   name: { src: '2(x + 1) = y', focus: [0, 1], input: 'K' },
   // expand, fold, open e identity dependem de um nome já definido: sem exemplo.
 };

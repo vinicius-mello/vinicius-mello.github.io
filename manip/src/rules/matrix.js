@@ -3,12 +3,12 @@
 // Sarrus, pôr um fator de uma linha em evidência, somar a uma linha um
 // múltiplo de outra, transpor. As contas nas entradas ficam para o usuário.
 
-import { getAt, replaceAt, withArgs, fn, num, isGrid, gridSize, grid, row, walk } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym, isGrid, gridSize, grid, row, walk, IMAGINARY, INFINITY } from '../ast.js';
 import { msg } from '../i18n.js';
 import { toAscii } from '../serialize.js';
 import { parseInput } from '../input.js';
 import { isRelation } from '../relations.js';
-import { evaluate } from './arith.js';
+import { evaluate, evaluateComplex, complexToNode } from './arith.js';
 import { matches } from './normal.js';
 import { factors, terms, cloneFrom, parentOf, parentPath, lastIndex, place, rebuild } from './util.js';
 
@@ -263,12 +263,40 @@ export const MATRIX_FACTOR = [factorForms];
 
 // ------------------------------------------------- operações com linhas
 
-// As duas linhas selecionadas de um mesmo determinante (a de baixo muda).
+// ------------------------------------------------------ cadeia A ∼ A′
+//
+// Uma operação de linha muda a matriz: o resultado não é igual, é
+// equivalente por linhas. Ela vale numa matriz sozinha (ou na última de uma
+// cadeia A ∼ A′), e o passo mostra A ∼ A′: a anterior fica, como cópia, e a
+// nova entra à direita.
+export const EQUIV = 'RowEquivalent';
+
+export function chainable(tree, gp) {
+  if (!gp.length) return true;
+  const parent = getAt(tree, gp.slice(0, -1));
+  return gp.length === 1 && parent.op === EQUIV && lastIndex(gp) === parent.args.length - 1;
+}
+
+function chained(tree, gp, node) {
+  const clones = {};
+  return { tree: fn(EQUIV, cloneFrom(getAt(tree, gp), clones), node), clones };
+}
+
+// Troca a grade em gp pela nova: num determinante (ou numa conta que não
+// muda a matriz), no lugar; numa matriz, na cadeia A ∼ A′.
+function rowResult(tree, g, gp, node) {
+  if (g.op !== 'Matrix') return { tree: replaceAt(tree, gp, node), clones: {} };
+  return chainable(tree, gp) ? chained(tree, gp, node) : null;
+}
+
+// As duas linhas selecionadas de um mesmo determinante, ou de uma matriz
+// que pode mudar (a de baixo muda).
 export function twoRows(ctx) {
   const { tree, targets } = ctx;
   if (targets.length !== 2) return null;
-  const f = targets.map((p) => gridFrom(tree, p, 'Determinant'));
+  const f = targets.map((p) => gridFrom(tree, p));
   if (f.some((x) => !x || x.rest.length !== 1) || f[0].gp.join() !== f[1].gp.join()) return null;
+  if (f[0].g.op === 'Matrix' && !chainable(tree, f[0].gp)) return null;
   const [i, j] = f.map((x) => x.rest[0]).sort((a, b) => a - b);
   return i === j ? null : { ...f[0], i, j };
 }
@@ -320,11 +348,13 @@ export function combineRows(sign) {
     const rows = r.g.args.slice();
     rows[r.j] = newRow;
     const ks = one ? '' : toAscii(k.op === 'Add' || k.op === 'Negate' ? fn('Delimiter', k) : k);
+    const out = rowResult(ctx.tree, r.g, r.gp, withArgs(r.g, rows));
+    const params = { j: subscript(r.j + 1), i: subscript(r.i + 1), s: sign > 0 ? '+' : '−', k: ks };
     return {
-      tree: replaceAt(ctx.tree, r.gp, withArgs(r.g, rows)),
-      label: msg('step.rowAdd', { j: subscript(r.j + 1), i: subscript(r.i + 1), s: sign > 0 ? '+' : '−', k: ks }),
+      tree: out.tree,
+      label: msg(r.g.op === 'Matrix' ? 'step.rowAddM' : 'step.rowAdd', params),
       focus: newRow.id,
-      hints: { clones },
+      hints: { clones: { ...clones, ...out.clones } },
     };
   };
 }
@@ -333,13 +363,13 @@ export function combineRows(sign) {
 
 // Ctrl+↑↓ numa linha (ou Ctrl+←→ numa entrada, para colunas) de um
 // determinante: troca com a vizinha e o determinante troca de sinal. Numa
-// matriz não vale: daria outra matriz.
+// matriz, trocar linhas é uma operação elementar (A ∼ A′); colunas, não.
 export function swapLines(tree, path, dir, axis) {
   const f = gridFrom(tree, path);
   if (!f) return null;
   const { g, gp, rest } = f;
   if (axis === 'row' ? rest.length !== 1 : rest.length !== 2) return null;
-  if (g.op === 'Matrix') return { error: 'err.matrixSwap' };
+  if (g.op === 'Matrix' && (axis !== 'row' || !chainable(tree, gp))) return { error: 'err.matrixSwap' };
   const [n, m] = gridSize(g);
   const i = axis === 'row' ? rest[0] : rest[1];
   const j = i + dir;
@@ -356,9 +386,12 @@ export function swapLines(tree, path, dir, axis) {
     });
   }
   const node = withArgs(g, rows);
+  const [a, b] = [i, j].sort((x, y) => x - y).map((x) => subscript(x + 1));
+  if (g.op === 'Matrix') {
+    return { tree: chained(tree, gp, node).tree, label: msg('step.rowSwapM', { i: a, j: b }), arc: null, focus: getAt(tree, path).id };
+  }
   const parent = parentOf(tree, gp);
   const t = parent?.op === 'Negate' ? replaceAt(tree, parentPath(gp), node) : replaceAt(tree, gp, fn('Negate', node));
-  const [a, b] = [i, j].sort((x, y) => x - y).map((x) => subscript(x + 1));
   return {
     tree: t,
     label: msg(axis === 'row' ? 'step.rowSwap' : 'step.colSwap', { i: a, j: b }),
@@ -379,3 +412,268 @@ function transposeDet(ctx) {
 }
 
 export const MATRIX_FORMS = [transposeDet];
+
+// Lᵢ ← k·Lᵢ (k ≠ 0) numa matriz: A ∼ A′. Sugere 1/pivô.
+export function rowOfMatrix(ctx) {
+  const f = gridFrom(ctx.tree, ctx.focus, 'Matrix');
+  if (!f || f.rest.length !== 1 || ctx.targets.length > 1 || !chainable(ctx.tree, f.gp)) return null;
+  return { ...f, i: f.rest[0] };
+}
+
+export function scaleSuggestion(ctx) {
+  const r = rowOfMatrix(ctx);
+  if (!r) return '';
+  for (const e of r.g.args[r.i].args) {
+    const v = evaluate(e);
+    if (v && v.n !== 0n) {
+      let [nn, dd] = [v.d, v.n];
+      if (dd < 0n) { nn = -nn; dd = -dd; }
+      return dd === 1n ? String(nn) : `${nn}/${dd}`;
+    }
+  }
+  return '';
+}
+
+export function scaleRow(ctx) {
+  const r = rowOfMatrix(ctx);
+  if (!r) return null;
+  let k;
+  try {
+    k = parseInput(ctx.input ?? '');
+  } catch {
+    return null;
+  }
+  if (isRelation(k.op) || !scalarish(k, ctx.definitions)) return null;
+  const v = evaluate(k);
+  if (v && v.n === 0n) return { error: 'err.rowZero' };
+  const target = r.g.args[r.i];
+  const kf = (x) => (x.op === 'Negate' || x.op === 'Add' ? [fn('Delimiter', x)] : factors(x));
+  const newRow = withArgs(target, target.args.map((e) => product([...kf(cloneFrom(k, {})), ...asFactors(e, {})])));
+  const rows = r.g.args.slice();
+  rows[r.i] = newRow;
+  const out = chained(ctx.tree, r.gp, withArgs(r.g, rows));
+  return {
+    tree: out.tree,
+    label: msg('step.rowScale', { i: subscript(r.i + 1), k: toAscii(product(kf(k))) }),
+    focus: newRow.id,
+    hints: { clones: out.clones },
+  };
+}
+
+// ------------------------------------------------ c: contas nas entradas
+
+// Calcula as entradas numéricas de uma linha ou da matriz inteira.
+function calcEntries(ctx) {
+  const l = lineOf(ctx);
+  if (!l || l.col !== undefined) return null;
+  const { g, gp } = l;
+  let changed = false;
+  const from = [];
+  const rows = g.args.map((r, i) => (l.row !== undefined && i !== l.row ? r : withArgs(r, r.args.map((e) => {
+    if (e.op === 'Number' || e.op === 'Symbol' || (e.op === 'Negate' && e.args[0].op === 'Number')) return e;
+    const v = evaluateComplex(e);
+    if (!v) return e;
+    const node = complexToNode(v);
+    changed = true;
+    from.push(e.id);
+    return node;
+  }))));
+  if (!changed) return null;
+  const node = withArgs(g, rows);
+  return {
+    tree: replaceAt(ctx.tree, gp, node),
+    label: msg(l.row !== undefined ? 'step.mcalcRow' : 'step.mcalc', { i: (l.row ?? 0) + 1 }),
+    focus: (l.row !== undefined ? rows[l.row] : node).id,
+  };
+}
+
+export const MATRIX_CALC = [calcEntries];
+
+// ------------------------------------------------- j: soma de matrizes
+
+const asGrid = (t) => {
+  if (t.op === 'Matrix' && isGrid(t)) return { g: t, neg: false };
+  if (t.op === 'Negate' && t.args[0].op === 'Matrix' && isGrid(t.args[0])) return { g: t.args[0], neg: true };
+  return null;
+};
+
+// A + B (e A − B): entrada a entrada, sem fazer as contas.
+function sumMatrices(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus), parentPath(parentPath(focus))]) {
+    if (!p) continue;
+    const S = getAt(tree, p);
+    if (S.op !== 'Add') continue;
+    const items = S.args.map((t, i) => ({ i, ...asGrid(t) })).filter((x) => x.g);
+    if (items.length < 2) continue;
+    const [n, m] = gridSize(items[0].g);
+    if (items.some(({ g }) => gridSize(g)[0] !== n || gridSize(g)[1] !== m)) return { error: 'err.dims' };
+    const first = items[0].g;
+    const rows = first.args.map((r, i) => withArgs(r, r.args.map((_, j) => fn('Add', ...items.flatMap(({ g, neg }) => {
+      const e = entry(g, i, j);
+      return neg ? [fn('Negate', e)] : terms(e);
+    })))));
+    const node = withArgs(first, rows);
+    // A soma toma o lugar da primeira matriz; as outras saem.
+    const args = [];
+    S.args.forEach((t, i) => {
+      if (i === items[0].i) args.push(node);
+      else if (!items.some((x) => x.i === i)) args.push(t);
+    });
+    return { tree: replaceAt(tree, p, rebuild('Add', args, S)), label: msg('step.msum'), focus: node.id };
+  }
+  return null;
+}
+
+// [a + c, b + d] → [a, b] + [c, d]: todas as entradas com o mesmo número de termos.
+function splitMatrix(ctx) {
+  const f = gridFrom(ctx.tree, ctx.focus, 'Matrix');
+  if (!f || f.rest.length) return null;
+  const { g, gp } = f;
+  const all = g.args.flatMap((r) => r.args);
+  const k = all[0].op === 'Add' ? all[0].args.length : 0;
+  if (k < 2 || all.some((e) => e.op !== 'Add' || e.args.length !== k)) return null;
+  const parts = Array.from({ length: k }, (_, t) => {
+    const rows = g.args.map((r) => r.args.map((e) => e.args[t]));
+    return t === 0 ? withArgs(g, g.args.map((r, i) => withArgs(r, rows[i]))) : grid('Matrix', rows);
+  });
+  const node = fn('Add', ...parts);
+  return { tree: place(ctx.tree, gp, node), label: msg('step.msplit'), focus: node.id };
+}
+
+export const MATRIX_SUM = [sumMatrices, splitMatrix];
+
+// --------------------------------------- #: produto, transposta, sistemas
+
+// A·B linha × coluna: cada entrada é a soma dos produtos, sem as contas.
+function multiplyMatrices(ctx) {
+  const { tree, focus } = ctx;
+  for (const p of [focus, parentPath(focus), parentPath(parentPath(focus))]) {
+    if (!p) continue;
+    const P = getAt(tree, p);
+    if (P.op !== 'Multiply') continue;
+    const isM = (x) => x?.op === 'Matrix' && isGrid(x);
+    const fi = focus.length > p.length ? focus[p.length] : -1;
+    const pairs = P.args.map((_, i) => i).filter((i) => isM(P.args[i]) && isM(P.args[i + 1]));
+    if (!pairs.length) continue;
+    const i = pairs.find((x) => x === fi || x + 1 === fi) ?? pairs[0];
+    const A = P.args[i];
+    const B = P.args[i + 1];
+    const [r, n] = gridSize(A);
+    const [n2, c] = gridSize(B);
+    if (n !== n2) return { error: 'err.dims' };
+    const clones = {};
+    const rows = Array.from({ length: r }, (_, a) => Array.from({ length: c }, (_, b) => {
+      const ts = Array.from({ length: n }, (_, k) => product([...asFactors(entry(A, a, k), clones), ...asFactors(entry(B, k, b), clones)]));
+      return ts.length === 1 ? ts[0] : fn('Add', ...ts);
+    }));
+    const node = grid('Matrix', rows);
+    const args = P.args.slice();
+    args.splice(i, 2, node);
+    return {
+      tree: replaceAt(tree, p, rebuild('Multiply', args, P)),
+      label: msg('step.mproduct'),
+      focus: node.id,
+      hints: { clones },
+    };
+  }
+  return null;
+}
+
+// [a, b; c, d]^T → [a, c; b, d]
+function transposeMatrix(ctx) {
+  for (const p of [ctx.focus, parentPath(ctx.focus)]) {
+    if (!p) continue;
+    const n = getAt(ctx.tree, p);
+    if (n.op !== 'Power' || n.args[0].op !== 'Matrix' || !isGrid(n.args[0]) || n.args[1].op !== 'Symbol' || n.args[1].name !== 'T') continue;
+    const M = n.args[0];
+    const node = withArgs(M, M.args[0].args.map((_, j) => row(...M.args.map((r) => r.args[j]))));
+    return { tree: replaceAt(ctx.tree, p, node), label: msg('step.mtranspose'), focus: node.id };
+  }
+  return null;
+}
+
+const CONSTANTS = new Set(['e', 'pi', IMAGINARY, INFINITY]);
+const isVar = (x) => x.op === 'Symbol' && !x.named && !CONSTANTS.has(x.name);
+const hasVar = (n, vars) => {
+  let found = false;
+  walk(n, (x) => { if (isVar(x) && vars.includes(x.name)) found = true; });
+  return found;
+};
+
+// Um termo de uma equação linear: { v, coef } (v nulo para constante), ou
+// null se não é linear.
+function linearTerm(t, vars) {
+  let neg = false;
+  while (t.op === 'Negate') { neg = !neg; t = t.args[0]; }
+  let out = null;
+  if (!hasVar(t, vars)) out = { v: null, coef: t };
+  else if (isVar(t)) out = { v: t.name, coef: num(1) };
+  else if (t.op === 'Multiply') {
+    const vs = t.args.filter((x) => hasVar(x, vars));
+    if (vs.length === 1 && isVar(vs[0])) out = { v: vs[0].name, coef: rebuild('Multiply', t.args.filter((x) => x !== vs[0])) };
+  }
+  return out && { ...out, neg };
+}
+
+const negated = (c) => (c.op === 'Negate' ? c.args[0] : fn('Negate', c));
+const sumOrZero = (cs) => (cs.length === 0 ? num(0) : cs.length === 1 ? cs[0] : fn('Add', ...cs));
+
+// Sistema linear → matriz aumentada [A | b] (as incógnitas ficam guardadas).
+function systemToMatrix(ctx) {
+  const { tree } = ctx;
+  if (tree.op !== 'System' || !tree.args.every((e) => e.op === 'Equal')) return null;
+  const vars = [];
+  walk(tree, (x) => { if (isVar(x) && !vars.includes(x.name)) vars.push(x.name); });
+  if (!vars.length) return null;
+  // Incógnitas em ordem alfabética (x, y, z; x₁, x₂…), como no quadro.
+  vars.sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+  const clones = {};
+  const rows = [];
+  for (const eq of tree.args) {
+    const cols = vars.map(() => []);
+    const b = [];
+    for (const [side, sign] of [[0, 1], [1, -1]]) {
+      for (const t of terms(eq.args[side])) {
+        const lt = linearTerm(t, vars);
+        if (!lt) return null;
+        const c = cloneFrom(lt.coef, clones);
+        const positive = (sign > 0) !== lt.neg;
+        if (lt.v) cols[vars.indexOf(lt.v)].push(positive ? c : negated(c));
+        else if (!(c.op === 'Number' && Number(c.value) === 0)) b.push(positive ? negated(c) : c);
+      }
+    }
+    rows.push([...cols.map(sumOrZero), sumOrZero(b)]);
+  }
+  const node = { ...grid('Matrix', rows), aug: true, vars };
+  return { tree: node, label: msg('step.toMatrix'), focus: node.id, hints: { clones } };
+}
+
+// Matriz aumentada → sistema (com as incógnitas de antes).
+function matrixToSystem(ctx) {
+  const f = gridFrom(ctx.tree, ctx.focus, 'Matrix');
+  if (!f || f.rest.length || !f.g.aug || !chainable(ctx.tree, f.gp)) return null;
+  const { g } = f;
+  const vars = g.vars;
+  if (gridSize(g)[1] !== vars.length + 1) return null;
+  const eqs = g.args.map((r) => {
+    const ts = [];
+    vars.forEach((v, j) => {
+      const c = r.args[j];
+      const x = sym(v);
+      if (c.op === 'Number' && Number(c.value) === 0) return;
+      if (c.op === 'Number' && c.value === '1') ts.push(x);
+      else if (c.op === 'Negate' && c.args[0].op === 'Number' && c.args[0].value === '1') ts.push(fn('Negate', x));
+      else if (c.op === 'Negate') ts.push(fn('Negate', product([...factors(c.args[0]), x])));
+      else if (c.op === 'Add') ts.push(product([fn('Delimiter', c), x]));
+      else ts.push(product([...factors(c), x]));
+    });
+    const lhs = ts.length === 0 ? num(0) : ts.length === 1 ? ts[0] : fn('Add', ...ts);
+    return fn('Equal', lhs, r.args[vars.length]);
+  });
+  const node = eqs.length === 1 ? eqs[0] : fn('System', ...eqs);
+  return { tree: node, label: msg('step.toSystem'), focus: node.id };
+}
+
+export const MATRIX_PRODUCT = [multiplyMatrices, transposeMatrix];
+export const AUGMENTED = [systemToMatrix, matrixToSystem];
