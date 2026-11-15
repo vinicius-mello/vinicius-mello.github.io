@@ -90,6 +90,7 @@ export const MANUAL = [
   ['ul', [
     L('uma **equação** (`2x + 3 = 7`) ou **inequação** (`x^2 - 1 < 0`, também `<=`, `>`, `>=`, `!=`);', 'an **equation** (`2x + 3 = 7`) or **inequality** (`x^2 - 1 < 0`, also `<=`, `>`, `>=`, `!=`);'),
     L('um **sistema**, com as equações separadas por `;` (`x + y = 3; x - y = 1`);', 'a **system**, with the equations separated by `;` (`x + y = 3; x - y = 1`);'),
+    L('uma **matriz** (`[1, 2; 3, 4]`) ou um **determinante** (`|1, 2; 3, 4|`), soltos ou dentro de uma equação (capítulo 7);', 'a **matrix** (`[1, 2; 3, 4]`) or a **determinant** (`|1, 2; 3, 4|`), alone or inside an equation (chapter 7);'),
     L('uma **expressão solta** (`(a + b)^2`), para simplificar ou fatorar;', 'a **bare expression** (`(a + b)^2`), to simplify or factor;'),
     L('uma **definição auxiliar** (`K := x^2 + 1`), que abre uma aba para o nome (capítulo 10).', 'an **auxiliary definition** (`K := x^2 + 1`), which opens a tab for the name (chapter 10).'),
   ]],
@@ -114,6 +115,7 @@ export const MANUAL = [
     ['↑ ↓', L('sobe para o nó que contém o foco / desce para dentro dele', 'goes up to the node containing the focus / down into it')],
     [L('clique', 'click'), L('põe o foco no que foi clicado', 'puts the focus on what was clicked')],
     ['Shift + ← →', L('estende a seleção aos vizinhos (como num editor de texto)', 'extends the selection to the neighbors (as in a text editor)')],
+    ['Shift + ↑ ↓', L('numa entrada de matriz ou determinante, estende a seleção pela coluna', 'on a matrix or determinant entry, extends the selection down the column')],
     [L('Espaço', 'Space'), L('marca ou desmarca o foco na seleção (seleção salteada)', 'adds the focus to or removes it from the selection (non-contiguous selection)')],
     ['Esc', L('limpa a seleção (na apresentação, sai dela)', 'clears the selection (in presentation mode, leaves it)')],
   ]],
@@ -180,6 +182,7 @@ export const MANUAL = [
   ['ops', 'sums', L('Fatorial, número binomial, somatórios e produtórios, reticências (capítulo 9).', 'Factorial, binomial coefficient, sums and products, ellipses (chapter 9).')],
   ['ops', 'calculus', L('Derivadas, derivada parcial, limites e integrais (capítulo 8).', 'Derivatives, partial derivative, limits and integrals (chapter 8).')],
   ['ops', 'complex', L('Números complexos: a aritmética com i é exata, e há operações para o conjugado e o módulo.', 'Complex numbers: arithmetic with i is exact, and there are operations for the conjugate and the modulus.')],
+  ['ops', 'matrix', L('Matrizes e determinantes (capítulo 7).', 'Matrices and determinants (chapter 7).')],
   ['ops', 'relation', L('Operações sobre a equação ou inequação inteira (capítulo 7).', 'Operations on the whole equation or inequality (chapter 7).')],
   ['ops', 'system', L('Sistemas de equações (capítulo 7).', 'Systems of equations (chapter 7).')],
   ['ops', 'names', L('Nomes e áreas de trabalho (capítulo 10). Expandir e a busca reversa dependem de um nome já definido.', 'Names and workspaces (chapter 10). Expanding and reverse lookup need a name that is already defined.')],
@@ -201,6 +204,24 @@ export const MANUAL = [
     '**Sistemas:** digite as equações separadas por `;`. Os movimentos e operações agem dentro da equação em foco. Para combinar equações, selecione duas (Espaço) e use `+` (somar) ou `-` (subtrair): o resultado substitui a segunda. Com o foco numa equação da forma “variável = expressão”, `>` substitui a variável nas outras equações.',
     '**Systems:** type the equations separated by `;`. Moves and operations act inside the focused equation. To combine equations, select two (Space) and use `+` (add) or `-` (subtract): the result replaces the second one. With the focus on an equation of the form “variable = expression”, `>` substitutes the variable into the other equations.',
   )],
+
+  ['h3', L('Matrizes e determinantes', 'Matrices and determinants')],
+  ['p', L(
+    'Uma matriz é digitada entre colchetes, com `,` entre as colunas e `;` entre as linhas: `[1, 2; 3, 4]` (também `[[1, 2], [3, 4]]`, ou `\\begin{pmatrix}` no LaTeX). O determinante escrito vai entre barras, `|1, 2; 3, 4|` (ou `det [1, 2; 3, 4]`, `\\begin{vmatrix}`); `det A` fica como função. Na fórmula, cada linha é um nó: ↓ entra na linha, ← → andam pelas entradas, e Shift+↑↓ seleciona uma coluna.',
+    'A matrix is typed in brackets, with `,` between columns and `;` between rows: `[1, 2; 3, 4]` (also `[[1, 2], [3, 4]]`, or `\\begin{pmatrix}` in LaTeX). A written determinant goes between bars, `|1, 2; 3, 4|` (or `det [1, 2; 3, 4]`, `\\begin{vmatrix}`); `det A` stays as a function. In the formula, each row is a node: ↓ enters the row, ← → walk through the entries, and Shift+↑↓ selects a column.',
+  )],
+  ['p', L(
+    '**`d` desenvolver:** com o foco numa linha, desenvolve o determinante por ela (Laplace, com os sinais já postos); com uma coluna selecionada, pela coluna; com o foco no determinante, um 2×2 vira ad − bc e um 3×3 é desenvolvido pela primeira linha (repetindo `d`, pela regra de Sarrus). As entradas e os menores entram como cópias, e as contas ficam para `c`, que também calcula de uma vez um determinante só com números.',
+    '**`d` expand:** with the focus on a row, expands the determinant along it (Laplace, with the signs in place); with a column selected, along the column; with the focus on the determinant, a 2×2 becomes ad − bc and a 3×3 is expanded along the first row (pressing `d` again, by the rule of Sarrus). Entries and minors come in as copies, and the arithmetic is left to `c`, which also computes a numbers-only determinant in one go.',
+  )],
+  ['ex', { rule: 'laplace', src: 'D = |a, b, c; d, e, f; g, h, k|', focus: [1, 1],
+    note: L('foco na segunda linha', 'focus on the second row') }],
+  ['p', L(
+    '**Propriedades do determinante:** `e` põe em evidência um fator comum de uma linha (foco nela) ou de uma coluna (selecionada); selecionando duas linhas (Espaço), `+` e `-` pedem k e trocam a de baixo por Lⱼ + k·Lᵢ ou Lⱼ − k·Lᵢ, e o campo sugere o k que zera a primeira entrada; Ctrl+↑↓ numa linha (ou Ctrl+← → numa entrada, para colunas) troca com a vizinha e o determinante troca de sinal; `#` transpõe (det A = det Aᵀ). Numa matriz, `d` multiplica cada entrada pelo número da frente e `e` põe em evidência o fator comum de todas as entradas. Trocar linhas de uma matriz é recusado: daria outra matriz.',
+    '**Determinant properties:** `e` factors out a common factor of a row (focus on it) or of a column (selected); with two rows selected (Space), `+` and `-` ask for k and replace the lower one with Rⱼ + k·Rᵢ or Rⱼ − k·Rᵢ, and the field suggests the k that zeroes the first entry; Ctrl+↑↓ on a row (or Ctrl+← → on an entry, for columns) swaps it with its neighbor and the determinant changes sign; `#` transposes (det A = det Aᵀ). In a matrix, `d` multiplies each entry by the number in front and `e` factors out a factor common to all entries. Swapping rows of a matrix is refused: it would give another matrix.',
+  )],
+  ['ex', { rule: 'rowadd', src: 'D = |1, 2; 3, 4|', focus: [1, 1], sel: [[1, 0], [1, 1]], input: '-3',
+    note: L('as duas linhas selecionadas, digitado “-3”', 'both rows selected, typed “-3”') }],
 
   ['h2', L('8. Cálculo', '8. Calculus')],
   ['p', L(

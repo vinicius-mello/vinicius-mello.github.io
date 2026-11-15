@@ -35,6 +35,10 @@ export const SYNTAX = [
     ['syntax.prod', 'prod_(k=1)^n k', '\\prod_{k=1}^{n} k'],
     ['syntax.dots', 'a(b_1 + ... + b_n)', 'a\\left(b_{1} + \\cdots + b_{n}\\right)'],
   ]],
+  ['syntax.matrices', [
+    ['syntax.matrix', '[1, 2; 3, 4]', '\\begin{bmatrix} 1 & 2 \\\\ 3 & 4 \\end{bmatrix}'],
+    ['syntax.det', '|a, b; c, d| + det A', '\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix} + \\det A'],
+  ]],
   ['syntax.calculus', [
     ['syntax.limit', 'lim_(x->0) sin(x)/x', '\\lim_{x \\to 0} \\frac{\\sin x}{x}'],
     ['syntax.side', 'lim_(x->0^+) 1/x', '\\lim_{x \\to 0^{+}} \\frac{1}{x}'],

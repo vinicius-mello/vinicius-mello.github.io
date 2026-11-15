@@ -1,7 +1,7 @@
 // Regras de notação compartilhadas pelo renderizador e pelos serializadores:
 // quando um filho precisa de parênteses implícitos e como juntar fatores.
 
-import { isLeaf, FUNCTION_NAMES, isBigOp, isDots } from './ast.js';
+import { isLeaf, FUNCTION_NAMES, isBigOp, isDots, isGrid } from './ast.js';
 
 // lim, d/dx e Σ engolem os fatores à direita: no meio de um produto vão entre parênteses.
 const greedy = (n) => isBigOp(n) || n.op === 'Limit' || n.op === 'D';
@@ -27,6 +27,10 @@ export const simpleBase = (b) => b.op === 'Number' || (b.op === 'Symbol' && !b.n
 // corretamente (ex.: Multiply(2, Add(x, 1)) → 2(x + 1)).
 export function needsParens(child, parent, index) {
   const c = child.op;
+  // Entradas de uma matriz não precisam de parênteses; a matriz (ou o
+  // determinante escrito) já é um bloco fechado.
+  if (parent.op === 'Row' || isGrid(parent)) return false;
+  if (isGrid(child) && parent.op !== 'Factorial') return false;
   switch (parent.op) {
     case 'Add':
       return c === 'Add';

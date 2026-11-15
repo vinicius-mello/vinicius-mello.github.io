@@ -31,6 +31,7 @@ import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } fr
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
+import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, combineRows, rowSuggestion, twoRows } from './matrix.js';
 import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
 import { monomial as normalMonomial, sameMonomial, negateMonomial, squareRoot } from './monomial.js';
 import {
@@ -1853,7 +1854,7 @@ function openName(ctx) {
 // "group.<nome>"). Cada operação tem uma tecla (minúscula, dígito ou
 // símbolo) que vale tanto direto na fórmula quanto com o menu aberto; as
 // maiúsculas ficam para os comandos da interface (app.js).
-export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'functions', 'sums', 'calculus', 'complex', 'relation', 'system', 'names'];
+export const GROUPS = ['arith', 'structure', 'fractions', 'powers', 'functions', 'sums', 'calculus', 'complex', 'matrix', 'relation', 'system', 'names'];
 
 export const RULES = [
   // aritmética
@@ -1929,6 +1930,14 @@ export const RULES = [
   { id: 'intsubst', key: 'u', group: 'calculus', run: substitution, input: true, available: (ctx) => !!integralAt(ctx) },
   { id: 'intparts', key: 'u', group: 'calculus', run: byParts, input: true, available: (ctx) => !!integralAt(ctx) },
   { id: 'intdef', key: 'u', group: 'calculus', ...either(definiteForms) },
+  // matrizes e determinantes: d desenvolve, e põe em evidência, + e −
+  // combinam linhas, # transpõe
+  { id: 'laplace', key: 'd', group: 'matrix', ...either(...LAPLACE_FORMS) },
+  { id: 'mscalar', key: 'd', group: 'matrix', ...either(...MATRIX_DIST) },
+  { id: 'mfactor', key: 'e', group: 'matrix', ...either(...MATRIX_FACTOR) },
+  { id: 'rowadd', key: '+', group: 'matrix', run: combineRows(+1), input: true, suggest: rowSuggestion(+1), available: (ctx) => !!twoRows(ctx) },
+  { id: 'rowsub', key: '-', group: 'matrix', run: combineRows(-1), input: true, suggest: rowSuggestion(-1), available: (ctx) => !!twoRows(ctx) },
+  { id: 'transpose', key: '#', group: 'matrix', ...either(...MATRIX_FORMS) },
   // equação e inequação
   {
     id: 'sides', key: '=', group: 'relation', run: onRelation(bothSides),

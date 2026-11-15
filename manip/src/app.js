@@ -6,7 +6,7 @@
 // ser manipulada à parte. A definição atual de um nome é o outro lado dessa
 // equação. Um nome digitado em qualquer equação vale como o nome (chip).
 
-import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn, withArgs, walk } from './ast.js';
+import { getAt, replaceAt, findPath, cloneFresh, reserveIds, sym, fn, withArgs, walk, isGrid } from './ast.js';
 import { parseInput, parseDefinition, primedName, ParseError } from './input.js';
 import { toAscii, toLatex } from './serialize.js';
 import { toMathJson } from './mathjson.js';
@@ -559,6 +559,30 @@ function extendSelection(dir) {
   const [lo, hi] = a < j ? [a, j] : [j, a];
   selected = new Set(parent.args.slice(lo, hi + 1).map((c) => c.id));
   state().focusId = parent.args[j].id;
+  applyMarks();
+}
+
+// Shift+↑/↓ numa entrada de matriz ou determinante: seleciona a coluna,
+// da entrada âncora até a da linha de cima ou de baixo.
+function extendColumn(dir) {
+  const tree = state().tree;
+  const path = focusPath();
+  if (path.length < 2) return bump();
+  const gp = path.slice(0, -2);
+  const g = getAt(tree, gp);
+  if (!isGrid(g) || getAt(tree, path.slice(0, -1)).op !== 'Row') return bump();
+  const [i, j] = path.slice(-2);
+  const t = i + dir;
+  if (t < 0 || t >= g.args.length) return bump();
+  const col = g.args.map((r) => r.args[j]);
+  let a = col.findIndex((c) => c.id === anchorId);
+  if (a < 0 || !selected.has(anchorId)) {
+    anchorId = state().focusId;
+    a = i;
+  }
+  const [lo, hi] = a < t ? [a, t] : [t, a];
+  selected = new Set(col.slice(lo, hi + 1).map((c) => c.id));
+  state().focusId = col[t].id;
   applyMarks();
 }
 
@@ -1341,6 +1365,7 @@ stage.addEventListener('keydown', (ev) => {
   else if (k === 'End') stepTo(history().steps.length - 1);
   else if (ev.shiftKey && k === 'ArrowLeft') extendSelection(-1);
   else if (ev.shiftKey && k === 'ArrowRight') extendSelection(+1);
+  else if (ev.shiftKey && (k === 'ArrowUp' || k === 'ArrowDown')) extendColumn(k === 'ArrowUp' ? -1 : +1);
   else if (nav[k] && !ev.shiftKey) {
     anchorId = null;
     setFocus(nav[k](state().tree, focusPath()));

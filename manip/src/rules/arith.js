@@ -161,6 +161,23 @@ export function evaluateComplex(n, env = {}) {
       }
       return acc;
     }
+    case 'Determinant': {
+      // Determinante escrito com entradas numéricas (Laplace pela 1ª linha).
+      if (!n.args.length || n.args.some((r) => r.op !== 'Row' || r.args.length !== n.args.length) || n.args.length > 6) return null;
+      const m = n.args.map((r) => r.args.map((x) => ev(x)));
+      if (m.some((r) => r.some((v) => !v))) return null;
+      const det = (a) => {
+        if (a.length === 1) return a[0][0];
+        let acc = cx(rat(0n));
+        a[0].forEach((v, j) => {
+          const sub = a.slice(1).map((r) => r.filter((_, c) => c !== j));
+          const t = cmul(v, det(sub));
+          acc = cadd(acc, j % 2 ? cneg(t) : t);
+        });
+        return acc;
+      };
+      return dec(det(m), ...m.flat());
+    }
     default: return null;
   }
 }

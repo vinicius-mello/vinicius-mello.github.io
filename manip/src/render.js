@@ -4,7 +4,7 @@
 // recebem data-key derivada do nó dono, para que animate.js consiga
 // acompanhar cada pedaço entre dois estados.
 
-import { GREEK, FUNCTION_NAMES, IMAGINARY, INFINITY, DOTS } from './ast.js';
+import { GREEK, FUNCTION_NAMES, IMAGINARY, INFINITY, DOTS, isGrid, gridSize } from './ast.js';
 import { needsParens, needsDot, isFunctionPower, simpleBase, compactPartial } from './notation.js';
 import { functionLabel } from './i18n.js';
 import { RELATIONS } from './relations.js';
@@ -50,6 +50,8 @@ const RADICAL = 'M0.4 60 L2.2 55 L5.2 96 L9.6 1 L10.4 1';
 // Colchetes de [F]ₐᵇ.
 const LBRACK = 'M3 0 L10 0 L10 2 L5 2 L5 98 L10 98 L10 100 L3 100 Z';
 const RBRACK = 'M0 0 L7 0 L7 100 L0 100 L0 98 L5 98 L5 2 L0 2 Z';
+// Barra vertical do determinante.
+const VBAR = 'M4 0 L6.2 0 L6.2 100 L4 100 Z';
 
 
 function wrapParens(content, key) {
@@ -255,6 +257,24 @@ export function render(n, parent = null, index = 0) {
         el('span', 'limit lower', null, kid(x, 0), op('=', n.id + '=', 'lim'), kid(a, 1))));
       break;
     }
+    case 'Row':
+      // Uma linha da matriz: as entradas ficam nas colunas da grade do pai.
+      e.append(...n.args.map(kid));
+      break;
+    case 'Matrix': case 'Determinant':
+      // Grade com as colunas alinhadas, entre colchetes (matriz) ou barras
+      // (determinante). det A, sem a matriz escrita, é uma função comum.
+      if (isGrid(n)) {
+        const body = el('span', 'grid', null, ...n.args.map(kid));
+        body.style.gridTemplateColumns = `repeat(${gridSize(n)[1]}, auto)`;
+        const [l, r, cls] = n.op === 'Matrix' ? [LBRACK, RBRACK, 'brack'] : [VBAR, VBAR, 'vbar'];
+        e.append(el('span', 'delim griddelim', null,
+          svgShape(`paren l ${cls}`, n.id + '[', l),
+          el('span', 'delim-body', null, body),
+          svgShape(`paren r ${cls}`, n.id + ']', r)));
+        break;
+      }
+    // falls through
     default: {
       const name = functionLabel(n.op, FUNCTION_NAMES[n.op] ?? n.op);
       e.classList.add('func');

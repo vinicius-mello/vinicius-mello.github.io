@@ -26,6 +26,7 @@ export const NAV_KEYS = [
   [['Ctrl', '← →'], 'keys.move'],
   [['Ctrl', '↑ ↓'], 'keys.group'],
   [['Shift', '← →'], 'keys.extend'],
+  [['Shift', '↑ ↓'], 'keys.column'],
   [['Space'], 'keys.select'],
   [['Esc'], 'keys.esc'],
   [['Enter'], 'keys.ops'],

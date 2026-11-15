@@ -2,7 +2,7 @@
 // Números viram números JSON quando representáveis sem perda; símbolos viram
 // strings; funções viram arrays [operador, ...args].
 
-import { num, sym, fn, call } from './ast.js';
+import { num, sym, fn, call, row, isGrid } from './ast.js';
 
 export function toMathJson(n) {
   switch (n.op) {
@@ -11,6 +11,13 @@ export function toMathJson(n) {
       return String(v) === n.value ? v : { num: n.value };
     }
     case 'Symbol': return n.name;
+    // Matriz: ["Matrix", ["List", ["List", a, b], ["List", c, d]]]; o
+    // determinante escrito é o de uma matriz.
+    case 'Matrix': case 'Determinant': {
+      if (!isGrid(n)) return [n.op, ...n.args.map(toMathJson)];
+      const m = ['Matrix', ['List', ...n.args.map((r) => ['List', ...r.args.map(toMathJson)])]];
+      return n.op === 'Matrix' ? m : ['Determinant', m];
+    }
     // Sistema de equações: conjunção das equações.
     case 'System': return ['And', ...n.args.map(toMathJson)];
     case 'Sum': case 'Product': {
@@ -59,6 +66,13 @@ export function fromMathJson(j) {
       const [body, x] = Array.isArray(f) && f[0] === 'Function' ? [f[1], f[2]] : [f, 'x'];
       const node = fn('Limit', fromMathJson(x), fromMathJson(a), fromMathJson(body));
       return dir === 'Right' || dir === 'Left' ? { ...node, dir: dir === 'Right' ? '+' : '-' } : node;
+    }
+    if (op === 'Matrix' && Array.isArray(args[0]) && args[0][0] === 'List') {
+      return fn('Matrix', ...args[0].slice(1).map((r) => row(...(Array.isArray(r) && r[0] === 'List' ? r.slice(1) : [r]).map(fromMathJson))));
+    }
+    if (op === 'Determinant') {
+      const m = fromMathJson(args[0]);
+      return isGrid(m) ? fn('Determinant', ...m.args) : fn('Determinant', m);
     }
     if (op === 'PartialDerivative') {
       const [f, x] = args;

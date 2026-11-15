@@ -1,6 +1,6 @@
 // Serialização da árvore para ASCII (reeditar no campo de entrada) e LaTeX.
 
-import { FUNCTION_NAMES, GREEK, IMAGINARY, INFINITY, DOTS, sameTag } from './ast.js';
+import { FUNCTION_NAMES, GREEK, IMAGINARY, INFINITY, DOTS, sameTag, isGrid } from './ast.js';
 import { needsParens, needsDot, isFunctionPower, simpleBase, compactPartial } from './notation.js';
 import { ASCII_RELATIONS, LATEX_RELATIONS, isRelation } from './relations.js';
 import { parseAscii } from './parse-ascii.js';
@@ -9,7 +9,9 @@ import { parseAscii } from './parse-ascii.js';
 const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate', 'Sum', 'Product', 'Limit', 'D', 'Integrate']);
 const asciiAtomic = (n) => !COMPOUND.has(n.op) && !isRelation(n.op);
 // Escrito como nome(…): sqrt(x), conj(z), sin(x)...
-const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial', 'EvalAt'].includes(n.op);
+const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial', 'EvalAt'].includes(n.op) && !isGrid(n);
+// Linhas de uma matriz: "a, b; c, d".
+const asciiRows = (n) => n.args.map((r) => r.args.map(toAscii).join(', ')).join('; ');
 const primes = (n) => "'".repeat(n.primes ?? 0);
 // Expoente de d²/dx² (vazio na primeira derivada).
 const orderOf = (n) => n.order ?? 1;
@@ -107,9 +109,12 @@ export function toAscii(n) {
       return `${n.op === 'Sum' ? 'sum' : 'prod'}_(${toAscii(k)}=${toAscii(a)})^${group(b)} ${sub(body, 3)}`;
     }
     case 'System': return n.args.map(toAscii).join('; ');
+    case 'Matrix': if (isGrid(n)) return `[${asciiRows(n)}]`; break;
+    case 'Determinant': if (isGrid(n)) return `|${asciiRows(n)}|`; break;
     case 'Root': return `root(${toAscii(n.args[0])}, ${toAscii(n.args[1])})`;
-    default: return `${FUNCTION_NAMES[n.op] ?? n.op}(${n.args.map(toAscii).join(', ')})`;
+    default: break;
   }
+  return `${FUNCTION_NAMES[n.op] ?? n.op}(${n.args.map(toAscii).join(', ')})`;
 }
 
 function latexSymbol(name) {
@@ -182,6 +187,11 @@ export function toLatex(n) {
     case 'Root': return `\\sqrt[${toLatex(n.args[1])}]{${toLatex(n.args[0])}}`;
     case 'Abs': return `\\left|${toLatex(n.args[0])}\\right|`;
     case 'Conjugate': return `\\overline{${toLatex(n.args[0])}}`;
+    case 'Matrix': case 'Determinant': {
+      if (!isGrid(n)) break;
+      const env = n.op === 'Matrix' ? 'bmatrix' : 'vmatrix';
+      return `\\begin{${env}} ${n.args.map((r) => r.args.map(toLatex).join(' & ')).join(' \\\\ ')} \\end{${env}}`;
+    }
     case 'System': return `\\begin{cases} ${n.args.map(toLatex).join(' \\\\ ')} \\end{cases}`;
     case 'Real': return `\\operatorname{Re}\\left(${toLatex(n.args[0])}\\right)`;
     case 'Imaginary': return `\\operatorname{Im}\\left(${toLatex(n.args[0])}\\right)`;
@@ -195,9 +205,7 @@ export function toLatex(n) {
     case 'Log':
       if (n.args.length === 2) return `\\log_{${toLatex(n.args[1])}}${sub2(n)}`;
       return `\\log${sub2(n)}`;
-    default: {
-      const name = FUNCTION_NAMES[n.op] ?? n.op;
-      return `\\${name}${sub2(n)}`;
-    }
+    default: break;
   }
+  return `\\${FUNCTION_NAMES[n.op] ?? n.op}${sub2(n)}`;
 }

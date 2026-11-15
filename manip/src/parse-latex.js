@@ -20,6 +20,11 @@ const RELATION_COMMANDS = {
   ge: 'GreaterEqual', geq: 'GreaterEqual', geqslant: 'GreaterEqual',
   lt: 'Less', gt: 'Greater', ne: 'NotEqual', neq: 'NotEqual',
 };
+// Ambientes de matriz: vmatrix é o determinante.
+const MATRIX_ENVS = {
+  matrix: 'Matrix', pmatrix: 'Matrix', bmatrix: 'Matrix', Bmatrix: 'Matrix',
+  vmatrix: 'Determinant',
+};
 const SPACING = new Set(['quad', 'qquad', 'left', 'right', 'displaystyle', 'mathrm', 'mathit']);
 const CHARS = { '·': '*', '×': '*', '÷': '/', '−': '-' };
 
@@ -28,11 +33,13 @@ function tokenize(src) {
   const brackets = []; // '[' de \sqrt[n] fecha com ']'; os demais viram parênteses
   const push = (t, pos, v) => toks.push(v === undefined ? { t, pos } : { t, v, pos });
   let evals = 0; // \left. abertos: o \right| correspondente fecha [F]_a^b
+  const envs = []; // ambientes abertos: dentro de uma matriz, & separa colunas
   let i = 0;
   while (i < src.length) {
     const c = src[i];
     const prev = toks[toks.length - 1]?.t;
     let m;
+    if (c === '&' && MATRIX_ENVS[envs[envs.length - 1]]) { push(',', i); i++; continue; }
     if (/\s|&/.test(c)) { i++; continue; }
 
     // \left. F \right|_a^b · \mathrm{d}x · f^{\prime}
@@ -84,7 +91,11 @@ function tokenize(src) {
         continue;
       } else if (name === 'begin' || name === 'end') {
         // \begin{cases} ... \end{cases} (e aligned, array...): só o conteúdo importa
-        const env = /^\{[A-Za-z*]+\}/.exec(src.slice(i + 1 + name.length));
+        const env = /^\{([A-Za-z*]+)\}/.exec(src.slice(i + 1 + name.length));
+        const kind = MATRIX_ENVS[env?.[1]];
+        if (name === 'begin') envs.push(env?.[1]);
+        else envs.pop();
+        if (kind) push(name === 'begin' ? 'mopen' : 'mclose', i, kind);
         i += 1 + name.length + (env ? env[0].length : 0);
         continue;
       } else if (!SPACING.has(name)) throw new ParseError('err.unknownCmd', i, { name });

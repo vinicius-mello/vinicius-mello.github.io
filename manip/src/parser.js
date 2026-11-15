@@ -12,10 +12,12 @@
 //   int                    ∫ termo dx, ∫_a^b termo dx (o termo vai até o d<x>)
 //   evopen, evclose        [F]_a^b (ou \left. F \right|_a^b)
 //   id com primes          f'(x), y'
+//   [a, b; c, d]           matriz (também [[a, b], [c, d]]); |a, b; c, d| é o determinante
+//   mopen, mclose          \begin{pmatrix} ... \end{pmatrix} (v = Matrix/Determinant)
 // Parênteses digitados viram Delimiter, exceto onde a notação já mostra o
 // agrupamento (numerador/denominador, expoente, argumento de função).
 
-import { num, sym, fn, call, walk, FUNCTION_LETTERS, INFINITY, IMAGINARY, DOTS, PARTIAL } from './ast.js';
+import { num, sym, fn, call, walk, grid, FUNCTION_LETTERS, INFINITY, IMAGINARY, DOTS, PARTIAL } from './ast.js';
 
 // A mensagem é uma chave de i18n.js (com parâmetros), traduzida na hora de
 // mostrar.
@@ -30,7 +32,7 @@ export class ParseError extends Error {
 
 const unwrap = (n) => (n.op === 'Delimiter' ? n.args[0] : n);
 const ARITY = { Root: 2, Binomial: 2 };
-const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|', 'big', 'binom', 'lim', 'deriv', 'int', 'evopen']);
+const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|', 'big', 'binom', 'lim', 'deriv', 'int', 'evopen', 'mopen']);
 
 // d/dx escrito como fração: \frac{d}{dx}, \frac{d^2}{dx^2}, \frac{\partial}{\partial x}.
 // Devolve a variável, a ordem e se é parcial.
@@ -160,6 +162,24 @@ export function parseTokens(toks) {
     return { index, lower, upper: unwrap(postfix()) };
   }
 
+  // Entradas de uma matriz: "," separa colunas e ";" separa linhas, até
+  // o token `close`. Todas as linhas precisam ter o mesmo tamanho.
+  function gridRows(close, first) {
+    const rows = [[first]];
+    for (;;) {
+      const t = peek().t;
+      if (t === ',') { next(); rows[rows.length - 1].push(expr()); }
+      else if (t === ';') {
+        next();
+        if (peek().t === close) break; // ";" no fim é tolerado
+        rows.push([expr()]);
+      } else break;
+    }
+    const end = expect(close);
+    if (rows.some((r) => r.length !== rows[0].length)) throw new ParseError('err.ragged', end.pos);
+    return rows.map((r) => r.map(unwrap));
+  }
+
   function atom() {
     const tok = next();
     switch (tok.t) {
@@ -211,8 +231,22 @@ export function parseTokens(toks) {
         return b ? fn('Integrate', x, b.lower, b.upper, unwrap(body)) : fn('Integrate', x, unwrap(body));
       }
       case 'evopen': {
-        // [F]_(x=a)^b · [F]_a^b
+        // [[a, b], [c, d]]: uma lista de linhas.
+        if (peek().t === 'evopen') {
+          const rows = [];
+          do {
+            next();
+            const r = gridRows('evclose', expr());
+            if (r.length !== 1) throw new ParseError('err.ragged', peek().pos);
+            rows.push(r[0]);
+          } while (peek().t === ',' && toks[k + 1]?.t === 'evopen' && next());
+          const end = expect('evclose');
+          if (rows.some((r) => r.length !== rows[0].length)) throw new ParseError('err.ragged', end.pos);
+          return grid('Matrix', rows);
+        }
+        // [F]_(x=a)^b · [F]_a^b; sem limites (ou com "," e ";"), é uma matriz.
         const F = expr();
+        if (peek().t !== 'evclose' || toks[k + 1]?.t !== '_') return grid('Matrix', gridRows('evclose', F));
         expect('evclose');
         const b = bounds(false);
         return fn('EvalAt', sym(b.index ?? guessVariable(F)), b.lower, b.upper, F);
@@ -238,6 +272,8 @@ export function parseTokens(toks) {
           if (!ok) throw new ParseError('err.arity', close.pos, { n: arity });
           f = fn(tok.v, ...args, ...base);
         }
+        // det [a, b; c, d] é o determinante escrito |a, b; c, d|.
+        if (f.op === 'Determinant' && f.args[0].op === 'Matrix') f = fn('Determinant', ...f.args[0].args);
         return exp ? fn('Power', f, exp) : f;
       }
       case '(': {
@@ -252,9 +288,19 @@ export function parseTokens(toks) {
       case '|': {
         absDepth++;
         const e = expr();
+        // |a, b; c, d|: determinante escrito.
+        if (peek().t === ',' || peek().t === ';') {
+          const rows = gridRows('|', e);
+          absDepth--;
+          return grid('Determinant', rows);
+        }
         absDepth--;
         expect('|');
         return fn('Abs', e);
+      }
+      case 'mopen': {
+        if (peek().t === 'mclose') throw new ParseError('err.incomplete', peek().pos);
+        return grid(tok.v, gridRows('mclose', expr()));
       }
       case 'big': {
         // sum_(k=1)^n termo  ·  \\sum_{k=1}^{n} termo

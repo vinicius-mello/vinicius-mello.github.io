@@ -1205,3 +1205,26 @@ body.presenting #stage:focus-visible::after { display: none; }
 }
 .board-why::before { content: "↓ "; font-style: normal; }
 .board > .board-why:last-child { color: var(--accent); }
+
+/* Matrizes e determinantes: grade com colunas alinhadas e centradas. Cada
+   linha é um nó (para o foco e a seleção) que usa as colunas do pai. */
+.griddelim { padding: 0 .32em; vertical-align: middle; }
+.griddelim > .paren { top: -.05em; height: calc(100% + .1em); }
+.paren.vbar { width: .14em; }
+.griddelim > .paren.vbar.l { left: .06em; }
+.griddelim > .paren.vbar.r { right: .06em; }
+.grid {
+  display: inline-grid;
+  column-gap: .8em;
+  row-gap: .3em;
+  vertical-align: middle;
+  padding: .12em .1em;
+}
+.grid > .Row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  justify-items: center;
+}
+.grid .grid { font-size: .9em; }

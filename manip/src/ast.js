@@ -137,3 +137,15 @@ export const GREEK = [
   'phi', 'chi', 'psi', 'omega', 'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi',
   'Sigma', 'Phi', 'Psi', 'Omega',
 ];
+
+// Matrizes e determinantes:
+//   Matrix(Row(a, b), Row(c, d))       [a b; c d], uma Row por linha
+//   Determinant(Row(...), ...)          |a b; c d|, o determinante escrito
+//   Determinant(A)                      det A (forma de função)
+// As linhas são nós de verdade: ↓ entra numa linha, ←→ anda pelas entradas.
+export const isGrid = (n) => (n.op === 'Matrix' || n.op === 'Determinant') && n.args.length > 0 && n.args.every((r) => r.op === 'Row');
+export const gridSize = (n) => [n.args.length, n.args[0].args.length];
+export const row = (...entries) => fn('Row', ...entries);
+export const grid = (op, rows) => fn(op, ...rows.map((r) => row(...r)));
+Object.assign(FUNCTIONS, { det: 'Determinant' });
+FUNCTION_NAMES.Determinant = 'det';

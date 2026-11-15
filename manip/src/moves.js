@@ -11,6 +11,7 @@ import { toAscii } from './serialize.js';
 import { evaluate } from './rules/arith.js';
 import { keepsEnds } from './rules/dots.js';
 import { isRelation, isInequality, FLIP, relationAt } from './relations.js';
+import { swapLines } from './rules/matrix.js';
 
 const terms = (n) => (n.op === 'Add' ? n.args : [n]);
 const factors = (n) => (n.op === 'Multiply' ? n.args : [n]);
@@ -115,6 +116,8 @@ function transposeIn(tree, path, dir) {
 const guarded = (tree, r) => (r?.tree && !keepsEnds(tree, r.tree) ? { error: 'err.dotsEnds' } : r);
 
 export function shiftSideways(tree, path, dir) {
+  const g = swapLines(tree, path, dir, 'col');
+  if (g) return g;
   return guarded(tree, swap(tree, path, dir) ?? transpose(tree, path, dir));
 }
 
@@ -126,7 +129,8 @@ function groupOf(node, op) {
 }
 
 // Shift+↑: tira o nó de dentro do grupo e o coloca logo depois dele.
-export const shiftOut = (tree, path) => guarded(tree, shiftOutRaw(tree, path));
+// Numa linha de um determinante, Ctrl+↑↓ trocam a linha com a vizinha.
+export const shiftOut = (tree, path) => swapLines(tree, path, -1, 'row') ?? guarded(tree, shiftOutRaw(tree, path));
 
 function shiftOutRaw(tree, path) {
   if (path.length < 2) return null;
@@ -153,7 +157,7 @@ function shiftOutRaw(tree, path) {
 }
 
 // Shift+↓: coloca o nó dentro do grupo vizinho (preferindo o da direita).
-export const shiftIn = (tree, path) => guarded(tree, shiftInRaw(tree, path));
+export const shiftIn = (tree, path) => swapLines(tree, path, +1, 'row') ?? guarded(tree, shiftInRaw(tree, path));
 
 function shiftInRaw(tree, path) {
   if (path.length === 0) return null;

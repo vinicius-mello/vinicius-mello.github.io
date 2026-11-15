@@ -45,6 +45,12 @@ export const EXAMPLES = {
   addeq: { src: 'x + y = 3; x - y = 1', focus: [1], sel: [[0], [1]] },
   subeq: { src: 'x + y = 3; x - y = 1', focus: [1], sel: [[0], [1]] },
   substsys: { src: 'y = 2x + 1; x + y = 7', focus: [0] },
+  laplace: { src: 'D = |a, b; c, d|', focus: [1] },
+  mscalar: { src: 'M = 2[1, x; 0, 3]', focus: [1] },
+  mfactor: { src: 'D = |2, 4; 1, 3|', focus: [1, 0] },
+  rowadd: { src: 'D = |1, 2; 3, 4|', focus: [1, 1], sel: [[1, 0], [1, 1]], input: '-3' },
+  rowsub: { src: 'D = |1, 2; 3, 4|', focus: [1, 1], sel: [[1, 0], [1, 1]], input: '3' },
+  transpose: { src: 'D = |a, b; c, d|', focus: [1] },
   name: { src: '2(x + 1) = y', focus: [0, 1], input: 'K' },
   // expand, fold, open e identity dependem de um nome já definido: sem exemplo.
 };
