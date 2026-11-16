@@ -2,7 +2,7 @@
 // Como as demais, cada uma é um passo explícito; as equivalências valem nos
 // dois sentidos e são reunidas por tecla com either() (rules/index.js).
 
-import { getAt, replaceAt, withArgs, fn, num, sym } from '../ast.js';
+import { getAt, replaceAt, withArgs, fn, num, sym, IMAGINARY } from '../ast.js';
 import { matches as same, note } from './normal.js';
 import { nonNegative } from '../types.js';
 import { msg } from '../i18n.js';
@@ -483,26 +483,45 @@ function sqrtCombine(ctx) {
   const M = getAt(tree, mp);
   if (idx.length < 2 || idx.some((i) => M.args[i].op !== 'Sqrt')) return null;
   const rs = idx.map((i) => M.args[i]);
+  // √a·√b = √(ab) com a ≥ 0 ou b ≥ 0: √(−2)·√(−3) = i√2·i√3 = −√6, não √6.
+  const used = [];
+  if (!radicandsOk(rs.map((r) => r.args[0]), used)) return { error: 'err.sqrtSigns' };
+  used.forEach(note);
   const node = withArgs(rs[0], [fn('Multiply', ...rs.map((r) => r.args[0]))]);
   const args = M.args.filter((_, i) => !idx.includes(i) || i === idx[0]);
   args[args.indexOf(rs[0])] = node;
   return { tree: replaceAt(tree, mp, rebuild('Multiply', args, M)), label: msg('step.sqrtProduct'), focus: node.id };
 }
 
+// √a·√b·… = √(ab…) quando no máximo um dos radicandos pode ser negativo.
+function radicandsOk(rads, used) {
+  const unknown = rads.filter((r) => !nonNegative(unparen(r), used));
+  return unknown.length <= 1;
+}
+
 // √(ab) → √a·√b · √(a/b) ↔ √a/√b
+// √(a/b) = √a/√b exige b > 0: √(1/(−1)) = i, mas √1/√(−1) = 1/i = −i.
 function sqrtSplit(ctx) {
   return atFocusOrParent(ctx, (p) => {
     const { tree } = ctx;
     const n = getAt(tree, p);
     let node = null;
+    const used = [];
     if (n.op === 'Sqrt') {
       const a = unparen(n.args[0]);
-      if (a.op === 'Multiply') node = fn('Multiply', ...a.args.map((f, i) => (i === 0 ? withArgs(n, [f]) : fn('Sqrt', f))));
-      else if (a.op === 'Divide') node = fn('Divide', withArgs(n, [a.args[0]]), fn('Sqrt', a.args[1]));
+      if (a.op === 'Multiply') {
+        if (!radicandsOk(a.args, used)) return { error: 'err.sqrtSigns' };
+        node = fn('Multiply', ...a.args.map((f, i) => (i === 0 ? withArgs(n, [f]) : fn('Sqrt', f))));
+      } else if (a.op === 'Divide') {
+        if (!nonNegative(unparen(a.args[1]), used)) return { error: 'err.sqrtDenominator' };
+        node = fn('Divide', withArgs(n, [a.args[0]]), fn('Sqrt', a.args[1]));
+      }
     } else if (n.op === 'Divide' && n.args.every((x) => x.op === 'Sqrt')) {
+      if (!nonNegative(unparen(n.args[1].args[0]), used)) return { error: 'err.sqrtDenominator' };
       node = withArgs(n.args[0], [fn('Divide', n.args[0].args[0], n.args[1].args[0])]);
     }
     if (!node) return null;
+    used.forEach(note);
     return { tree: replaceAt(tree, p, node), label: msg('step.sqrtSplit'), focus: node.id };
   });
 }
@@ -543,6 +562,26 @@ function isqrt(n) {
   return x;
 }
 
+// √(−a) → i√a com a ≥ 0 (√(−1) → i). Número negativo: √(−4) → i√4.
+function sqrtNegative(ctx) {
+  return atFocusOrParent(ctx, (p) => {
+    const { tree } = ctx;
+    const n = getAt(tree, p);
+    if (n.op !== 'Sqrt') return null;
+    const r = unparen(n.args[0]);
+    let a = null;
+    if (r.op === 'Negate') a = unparen(r.args[0]);
+    else if (r.op === 'Number' && r.value.startsWith('-')) a = num(r.value.slice(1));
+    if (!a) return null;
+    const used = [];
+    if (!nonNegative(a, used)) return { error: 'err.sqrtNegSign' };
+    used.forEach(note);
+    const i = sym(IMAGINARY);
+    const node = a.op === 'Number' && a.value === '1' ? i : fn('Multiply', i, withArgs(n, [a]));
+    return { tree: replaceAt(tree, p, node), label: msg('step.sqrtNegative'), focus: node.id };
+  });
+}
+
 // √x ↔ x^(1/2) · ⁿ√x ↔ x^(1/n)
 function sqrtAsPower(ctx) {
   return atFocusOrParent(ctx, (p) => {
@@ -560,7 +599,7 @@ function sqrtAsPower(ctx) {
   });
 }
 
-export const RADICAL_RULES = [sqrtSquare, sqrtCombine, sqrtSplit, sqrtAsPower];
+export const RADICAL_RULES = [sqrtNegative, sqrtSquare, sqrtCombine, sqrtSplit, sqrtAsPower];
 
 // Sugestão para racionalizar (tecla *): o radical do denominador, ou o
 // conjugado de a ± √b.
