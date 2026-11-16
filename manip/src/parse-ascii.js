@@ -51,6 +51,9 @@ function tokenize(src) {
       splitWord(m[0], i, toks);
     } else if ((m = /^(<=|>=|!=|[<>=≤≥≠])/.exec(rest))) {
       toks.push({ t: 'rel', v: RELATION_INPUT[m[0]], pos: i });
+    } else if ((m = /^(\+-|±)/.exec(rest))) {
+      // x = 2 +- sqrt(6): mais ou menos
+      toks.push({ t: 'pm', pos: i });
     } else if ('+-*/^(),|;·×÷−!_'.includes(c)) {
       const v = { '·': '*', '×': '*', '÷': '/', '−': '-' }[c] ?? c;
       toks.push(c === '×' ? { t: v, pos: i, cross: true } : { t: v, pos: i });

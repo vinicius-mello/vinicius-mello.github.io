@@ -9,7 +9,7 @@ import { RELATION_INPUT } from './relations.js';
 const COMMANDS = {
   frac: 'frac', dfrac: 'frac', tfrac: 'frac', sqrt: 'sqrt',
   binom: 'binom', dbinom: 'binom', tbinom: 'binom',
-  cdot: '*', times: '*', div: '/',
+  cdot: '*', times: '*', div: '/', pm: 'pm',
   lvert: '|', rvert: '|', vert: '|',
   lim: 'lim', int: 'int', to: 'to', rightarrow: 'to', longrightarrow: 'to',
 };
@@ -26,7 +26,7 @@ const MATRIX_ENVS = {
   vmatrix: 'Determinant',
 };
 const SPACING = new Set(['quad', 'qquad', 'left', 'right', 'displaystyle', 'mathrm', 'mathit']);
-const CHARS = { '·': '*', '×': '*', '÷': '/', '−': '-' };
+const CHARS = { '·': '*', '×': '*', '÷': '/', '−': '-', '±': 'pm' };
 
 function tokenize(src) {
   const toks = [];

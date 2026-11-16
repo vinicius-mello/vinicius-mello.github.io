@@ -41,6 +41,7 @@ export const EXAMPLES = {
   timesconj: { src: 'w = 1/(3 + 4i)', focus: [1] },
   sides: { src: '2x = 4', focus: [], input: '/ 2' },
   swap: { src: 'x < 4', focus: [] },
+  abseq: { src: 'abs(x - 2) = sqrt(6)', focus: [] },
   estimate: { src: 'y = x^2 + 1', focus: [], input: '>= 1' },
   addeq: { src: 'x + y = 3; x - y = 1', focus: [1], sel: [[0], [1]] },
   subeq: { src: 'x + y = 3; x - y = 1', focus: [1], sel: [[0], [1]] },

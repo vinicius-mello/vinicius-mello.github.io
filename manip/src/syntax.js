@@ -20,6 +20,7 @@ export const SYNTAX = [
   ['syntax.functions', [
     ['syntax.sqrt', 'sqrt(x) + root(x, 3)', '\\sqrt{x} + \\sqrt[3]{x}'],
     ['syntax.abs', '|x - 1|', '\\left|x - 1\\right|'],
+    ['syntax.pm', 'x = 2 +- sqrt(6)', 'x = 2 \\pm \\sqrt{6}'],
     ['syntax.trig', 'sen x + cos(2x) + tg x', '\\sin x + \\cos\\left(2x\\right) + \\tan x'],
     ['syntax.trigpow', 'sin^2 x', '\\sin^2 x'],
     ['syntax.arc', 'arcsin x + arctan x', '\\arcsin x + \\arctan x'],

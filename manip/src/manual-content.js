@@ -190,8 +190,12 @@ export const MANUAL = [
 
   ['h2', L('7. Equações, inequações e sistemas', '7. Equations, inequalities and systems')],
   ['p', L(
-    '**`=` operar nos dois lados:** digite um operador seguido de uma expressão: `+ 3`, `- x`, `* 2` (ou `· 2`), `/ (x + 1)`, `^ 2`. A operação é escrita nos dois lados, sem fazer as contas. Numa inequação, multiplicar ou dividir segue as regras do capítulo 5.',
-    '**`=` operate on both sides:** type an operator followed by an expression: `+ 3`, `- x`, `* 2` (or `· 2`), `/ (x + 1)`, `^ 2`. The operation is written on both sides, without doing the arithmetic. In an inequality, multiplying or dividing follows the rules of chapter 5.',
+    '**`=` operar nos dois lados:** digite um operador seguido de uma expressão: `+ 3`, `- x`, `* 2` (ou `· 2`), `/ (x + 1)`, `^ 2`, ou só `sqrt` (raiz quadrada dos dois lados, só numa igualdade). A operação é escrita nos dois lados, sem fazer as contas. Numa inequação, multiplicar ou dividir segue as regras do capítulo 5.',
+    '**`=` operate on both sides:** type an operator followed by an expression: `+ 3`, `- x`, `* 2` (or `· 2`), `/ (x + 1)`, `^ 2`, or just `sqrt` (square root of both sides, in an equality only). The operation is written on both sides, without doing the arithmetic. In an inequality, multiplying or dividing follows the rules of chapter 5.',
+  )],
+  ['p', L(
+    '**Raiz dos dois lados e ±:** em (x − 2)² = 6, `=` com `sqrt` dá √((x − 2)²) = √6; `^` no lado esquerdo dá |x − 2| (√(a²) = |a|, não a; com `seja x > 2` seria x − 2); e `|` dá x − 2 = ±√6 (|a| = b ⇔ a = ±b, que exige b ≥ 0: √6, um número positivo ou uma hipótese; com b < 0 não há solução). O ± se digita `+-`, `±` ou `\\pm`. Pelo mesmo motivo, ((x − 2)²)^(1/2) com `^` vira |x − 2|, e (xᵃ)ᵇ → xᵃᵇ só vale com b inteiro, a ímpar ou x ≥ 0.',
+    '**Square root of both sides and ±:** in (x − 2)² = 6, `=` with `sqrt` gives √((x − 2)²) = √6; `^` on the left side gives |x − 2| (√(a²) = |a|, not a; with `let x > 2` it would be x − 2); and `|` gives x − 2 = ±√6 (|a| = b ⇔ a = ±b, which needs b ≥ 0: √6, a positive number or a hypothesis; with b < 0 there is no solution). Type ± as `+-`, `±` or `\\pm`. For the same reason, ((x − 2)²)^(1/2) with `^` becomes |x − 2|, and (xᵃ)ᵇ → xᵃᵇ only holds with b an integer, a odd or x ≥ 0.',
   )],
   ['p', L(
     '**`t` trocar os lados:** A = B → B = A; numa inequação, o sentido acompanha (x < 4 → 4 > x).',

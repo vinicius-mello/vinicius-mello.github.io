@@ -22,7 +22,7 @@ import { dotsForms, dotsZip } from './dotsterm.js';
 import { needsParens } from '../notation.js';
 import { parseInput, NAME_RE } from '../input.js';
 import { toAscii } from '../serialize.js';
-import { matches as same, withNotes, attempt, noted, show } from './normal.js';
+import { matches as same, withNotes, attempt, noted, show, note } from './normal.js';
 import { msg } from '../i18n.js';
 import { rewrite, rewriteSuggestion } from './rewrite.js';
 import { applyIdentities } from './identity.js';
@@ -31,7 +31,7 @@ import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } fr
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
-import { checkStep, isScalar } from '../types.js';
+import { checkStep, isScalar, nonNegative, signOf } from '../types.js';
 import { INVERSE, INVERSE_CANCEL, IDENTITY_NEUTRAL, VECTOR_FORMS } from './matrix.js';
 import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, MATRIX_CALC, MATRIX_SUM, MATRIX_PRODUCT, AUGMENTED, combineRows, rowSuggestion, twoRows, scaleRow, scaleSuggestion, rowOfMatrix } from './matrix.js';
 import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
@@ -923,11 +923,21 @@ function powers(ctx) {
         hints: { merge: { to: baseOf(a).id, from: [baseOf(b).id] } },
       };
     }
-    // (x^a)^b → x^(a·b)
+    // (x^a)^b → x^(a·b): vale com b inteiro, a ímpar ou x ≥ 0. Com a par,
+    // (x²)^(1/2) = |x|, não x: (x^a)^b → |x|^(a·b).
     if (n.op === 'Power' && unparen(n.args[0]).op === 'Power') {
       const inner = unparen(n.args[0]);
-      const pw = powerWith(n, inner.args[0], fn('Multiply', inner.args[1], n.args[1]));
-      return { tree: replaceAt(tree, p, pw), label: msg('step.powPow'), focus: pw.id };
+      const integer = (e) => { const r = evaluate(e); return r && r.d === 1n ? r.n : null; };
+      const a = integer(inner.args[1]);
+      let base = inner.args[0];
+      const used = [];
+      if (integer(n.args[1]) === null && !(a !== null && a % 2n !== 0n)) {
+        if (a !== null && a % 2n === 0n && !nonNegative(unparen(base), used)) base = fn('Abs', unparen(base));
+        else if (!nonNegative(unparen(base), used)) return { error: 'err.powPowSign' };
+      }
+      used.forEach(note);
+      const pw = powerWith(n, base, fn('Multiply', inner.args[1], n.args[1]));
+      return { tree: replaceAt(tree, p, pw), label: msg(base.op === 'Abs' && base !== inner.args[0] ? 'step.powPowAbs' : 'step.powPow'), focus: pw.id };
     }
     return null;
   });
@@ -1463,6 +1473,7 @@ const BOTH_SIDES = {
   '*<': (side, e) => (side.op === 'Multiply' ? withArgs(side, [e, ...side.args]) : fn('Multiply', e, side)),
   '/': (side, e) => fn('Divide', side, e),
   '^': (side, e) => fn('Power', side, e),
+  sqrt: (side) => fn('Sqrt', side),
 };
 
 // Expressão digitada (ASCII ou LaTeX), sem relação (=, <, ≤...).
@@ -1478,6 +1489,7 @@ function parseExpr(text) {
 // Entrada no formato "<op> <expressão>", ex.: "+ 3", "* 2", "/ (x+1)", "^2".
 // "A^(-1) *" (operador no fim) multiplica à esquerda: com matrizes, o lado importa.
 export function parseSidesInput(text) {
+  if (/^\s*(sqrt|√|\\sqrt)\s*$/.test(text ?? '')) return { op: 'sqrt', e: num(1) };
   const left = /^\s*([^-+*/^·×÷−].*?)\s*[*·×]\s*$/.exec(text ?? '');
   if (left) {
     const e = parseExpr(left[1]);
@@ -1520,7 +1532,7 @@ function bothSides(ctx) {
   let rel = { op: tree.op };
   if (op === '/' && !isScalar(e)) return { error: 'err.matrixDivide' };
   if (op === '*' || op === '*<' || op === '/') rel = scaledRelation(tree.op, e);
-  else if (op === '^' && tree.op !== 'Equal') rel = { error: 'err.powerIneq' };
+  else if ((op === '^' || op === 'sqrt') && tree.op !== 'Equal') rel = { error: 'err.powerIneq' };
   if (rel.error) return rel;
   const clones = {};
   const e2 = cloneFrom(e, clones);
@@ -1528,9 +1540,27 @@ function bothSides(ctx) {
   const sym = { '*': '·', '/': '÷', '-': '−' }[op] ?? op;
   return {
     tree: { ...tree, op: rel.op, args: sides },
-    label: op === '*<' ? msg('step.sidesLeft', { e: toAscii(e) }) : msg('step.sides', { op: sym, e: toAscii(e) }),
+    label: op === '*<' ? msg('step.sidesLeft', { e: toAscii(e) }) : op === 'sqrt' ? msg('step.sidesSqrt') : msg('step.sides', { op: sym, e: toAscii(e) }),
     hints: rel.flipped ? { flip: tree.id } : undefined,
   };
+}
+
+// |a| = b → a = ±b, com b ≥ 0 (número, √…, ou hipótese). Com b < 0 não há
+// solução; sem saber o sinal de b, o passo não é honesto.
+function absEquation(ctx) {
+  const { tree } = ctx;
+  if (tree.op !== 'Equal') return null;
+  let i = [0, 1].find((k) => unparen(tree.args[k]).op === 'Abs');
+  if (i === undefined) return null;
+  const a = unparen(tree.args[i]).args[0];
+  const b = tree.args[1 - i];
+  const used = [];
+  if (signOf(unparen(b), used) === -1) return { error: 'err.absNegative' };
+  if (!nonNegative(unparen(b), used)) return { error: 'err.absSign' };
+  used.forEach(note);
+  const pm = fn('PlusMinus', b.op === 'Add' ? fn('Delimiter', b) : b);
+  const args = i === 0 ? [unparen(a), pm] : [pm, unparen(a)];
+  return { tree: { ...tree, args }, label: msg('step.absEq'), focus: pm.id };
 }
 
 // Trocar os lados de uma inequação inverte o símbolo: a < b ⇔ b > a.
@@ -1964,6 +1994,7 @@ export const RULES = [
     available: hasRelation,
   },
   { id: 'swap', key: 't', group: 'relation', run: onRelation(swapSides) },
+  { id: 'abseq', key: '|', group: 'relation', run: onRelation(absEquation) },
   {
     id: 'estimate', key: 'i', group: 'relation', run: onRelation(estimate),
     input: true,

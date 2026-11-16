@@ -103,7 +103,7 @@ export function render(n, parent = null, index = 0) {
       // expressão longa quebra de linha (o sinal começa a linha seguinte).
       n.args.forEach((c, i) => {
         const chunk = el('span', 'chunk');
-        if (i > 0 && c.op !== 'Negate') chunk.append(op('+', `${n.id}+${c.id}`));
+        if (i > 0 && c.op !== 'Negate' && c.op !== 'PlusMinus') chunk.append(op('+', `${n.id}+${c.id}`));
         chunk.append(kid(c, i));
         e.append(chunk);
       });
@@ -111,6 +111,11 @@ export function render(n, parent = null, index = 0) {
     case 'Negate': {
       const binary = parent?.op === 'Add' && index > 0;
       e.append(op('−', n.id + '-', binary ? 'bin' : 'unary'), kid(n.args[0], 0));
+      break;
+    }
+    case 'PlusMinus': {
+      const binary = parent?.op === 'Add' && index > 0;
+      e.append(op('±', n.id + '±', binary ? 'bin' : 'unary'), kid(n.args[0], 0));
       break;
     }
     case 'Multiply':

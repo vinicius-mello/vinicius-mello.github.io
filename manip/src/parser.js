@@ -87,10 +87,11 @@ export function parseTokens(toks) {
     const terms = [];
     let tok = peek();
     if (tok.t === '-') { next(); terms.push(fn('Negate', term())); }
+    else if (tok.t === 'pm') { next(); terms.push(fn('PlusMinus', term())); }
     else { if (tok.t === '+') next(); terms.push(term()); }
-    while ((tok = peek()).t === '+' || tok.t === '-') {
+    while ((tok = peek()).t === '+' || tok.t === '-' || tok.t === 'pm') {
       next();
-      terms.push(tok.t === '-' ? fn('Negate', term()) : term());
+      terms.push(tok.t === '-' ? fn('Negate', term()) : tok.t === 'pm' ? fn('PlusMinus', term()) : term());
     }
     return terms.length === 1 ? terms[0] : fn('Add', ...terms);
   }
@@ -118,6 +119,7 @@ export function parseTokens(toks) {
 
   function signedFactor() {
     if (peek().t === '-') { next(); return fn('Negate', signedFactor()); }
+    if (peek().t === 'pm') { next(); return fn('PlusMinus', signedFactor()); }
     return power();
   }
 

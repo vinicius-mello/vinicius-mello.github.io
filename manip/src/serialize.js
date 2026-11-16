@@ -6,7 +6,7 @@ import { ASCII_RELATIONS, LATEX_RELATIONS, isRelation } from './relations.js';
 import { parseAscii } from './parse-ascii.js';
 
 // Escrito como um bloco só: número, símbolo, (…) ou nome(…).
-const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate', 'Sum', 'Product', 'Limit', 'D', 'Integrate']);
+const COMPOUND = new Set(['Add', 'Multiply', 'Divide', 'Power', 'Negate', 'PlusMinus', 'Sum', 'Product', 'Limit', 'D', 'Integrate']);
 const asciiAtomic = (n) => !COMPOUND.has(n.op) && !isRelation(n.op);
 // Escrito como nome(…): sqrt(x), conj(z), sin(x)...
 const callStyle = (n) => asciiAtomic(n) && !['Number', 'Symbol', 'Delimiter', 'Factorial', 'EvalAt', 'Tuple'].includes(n.op) && !isGrid(n);
@@ -92,9 +92,11 @@ export function toAscii(n) {
     case 'Add':
       return n.args.map((c, i) => {
         if (i > 0 && c.op === 'Negate') return ' - ' + toAscii(c).slice(1);
+        if (i > 0 && c.op === 'PlusMinus') return ' +- ' + toAscii(c).slice(2);
         return (i > 0 ? ' + ' : '') + sub(c, i);
       }).join('');
     case 'Negate': return '-' + sub(n.args[0], 0);
+    case 'PlusMinus': return '+-' + sub(n.args[0], 0);
     // Fração dentro de produto vai entre parênteses: "x*1/2" seria (x·1)/2.
     case 'Multiply': return asciiProduct(n, sub);
     case 'Divide': return `${group(n.args[0])}/${group(n.args[1])}`;
@@ -172,9 +174,11 @@ export function toLatex(n) {
     case 'Add':
       return n.args.map((c, i) => {
         if (i > 0 && c.op === 'Negate') return ' - ' + toLatex(c).slice(1);
+        if (i > 0 && c.op === 'PlusMinus') return ' \\pm ' + toLatex(c).slice(4);
         return (i > 0 ? ' + ' : '') + sub(c, i);
       }).join('');
     case 'Negate': return '-' + sub(n.args[0], 0);
+    case 'PlusMinus': return '\\pm ' + sub(n.args[0], 0);
     case 'Multiply':
       return n.args.map((c, i) => {
         const fractions = n.args[i - 1]?.op === 'Divide' && c.op === 'Divide';
