@@ -11,7 +11,8 @@ import { isRelation } from '../relations.js';
 import { evaluate } from './arith.js';
 import { parseAscii } from '../parse-ascii.js';
 import { toAscii } from '../serialize.js';
-import { literal, matches as same, attempt, noted } from './normal.js';
+import { literal, matches as same, attempt, noted, note } from './normal.js';
+import { natural } from '../types.js';
 import { unparen, signed, parentPath, lastIndex, cloneFrom, rebuild, place, atFocusOrParent } from './util.js';
 
 const copy = (n) => cloneFrom(n, {});
@@ -504,6 +505,10 @@ export function binomialTheorem(ctx) {
     const s = unparen(P.args[0]);
     if (s.op !== 'Add' || s.args.length !== 2) return null;
     const n = P.args[1];
+    // (1 + 2/x)^x não é um binômio de Newton: o expoente tem que ser natural.
+    const used = [];
+    if (!natural(n, used)) return { error: 'err.binomialExp' };
+    used.forEach(note);
     const k = freshIndex(tree);
     const body = fn('Multiply',
       fn('Binomial', copy(n), sym(k)),

@@ -30,6 +30,7 @@ const negate = (t) => (t.op === 'Negate' ? t.args[0] : fn('Negate', t));
 const core = (t) => (t.op === 'Negate' ? t.args[0] : t);
 
 function swap(tree, path, dir) {
+  if (!path.length) return null;
   const pp = path.slice(0, -1);
   const parent = getAt(tree, pp);
   // Termos de soma, fatores de produto ou equações de um sistema.
@@ -106,10 +107,14 @@ function transposeIn(tree, path, dir) {
     case 'Multiply': {
       // Não se divide por matriz: multiplica-se pela inversa, de um lado só.
       if (!isScalar(node)) return { error: 'err.matrixMove' };
+      // y = 0·x → y/0 = x não existe; ax = b → x = b/a supõe a ≠ 0.
+      const s0 = signOf(node, []);
+      if (s0 === 0) return { error: 'err.zero' };
       const rel = scaledRelation(tree.op, node);
       if (rel.error) return rel;
       const rest = side.args.filter((_, k) => k !== i);
-      return build(rebuild('Multiply', rest, side), fn('Divide', other, node), msg('step.transposeFactor'), node.id, node.id, rel.op);
+      const label = s0 === null ? msg('step.transposeFactorNZ', { e: toAscii(node) }) : msg('step.transposeFactor');
+      return build(rebuild('Multiply', rest, side), fn('Divide', other, node), label, node.id, node.id, rel.op);
     }
     case 'Divide': {
       if (i !== 1) return null;

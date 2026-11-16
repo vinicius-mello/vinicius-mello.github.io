@@ -275,6 +275,33 @@ export function signOf(n, used = []) {
   }
 }
 
+// Inteiro ≥ 0 (expoente do binômio, limite de somatório): um número natural,
+// uma letra declarada em ℕ, ou n, m sem outra declaração (a convenção da
+// sala), também n ± inteiro.
+export function natural(n, used = []) {
+  if (n.op === 'Delimiter') return natural(n.args[0], used);
+  if (n.op === 'Number') return /^\d+$/.test(n.value);
+  if (n.op === 'Symbol') {
+    const hs = hypsOf(n.name).filter((h) => h.kind !== 'rel');
+    const h = hs.find((x) => x.kind === 'set' && x.set === 'N');
+    if (h) { used.push(hypothesisText(h)); return true; }
+    return !hs.length && (n.name === 'n' || n.name === 'm');
+  }
+  if (n.op === 'Add') {
+    const sym = n.args.filter((a) => !(a.op === 'Number' || (a.op === 'Negate' && a.args[0].op === 'Number')));
+    const ints = n.args.filter((a) => !sym.includes(a)).every((a) => /^\d+$/.test((a.op === 'Negate' ? a.args[0] : a).value));
+    return sym.length === 1 && ints && natural(sym[0], used);
+  }
+  return false;
+}
+
+// Expoente inteiro: número inteiro ou natural (acima).
+export function integerExponent(e, used = []) {
+  const v = evaluate(e);
+  if (v) return v.d === 1n;
+  return natural(e, used);
+}
+
 // x ≥ 0 pelas hipóteses (x > 0, x ≥ 0, x ∈ ℕ) ou pelo sinal.
 export function nonNegative(n, used = []) {
   if (n.op === 'Symbol') {

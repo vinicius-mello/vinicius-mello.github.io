@@ -53,28 +53,41 @@ function logLike(L, x, keep = false) {
 }
 
 // log(ab) → log a + log b · log(a/b) → log a − log b · log(aⁿ) → n·log a
+// Com sinais: ln(ab) = ln|a| + ln|b| vale sempre que ab > 0; ln a + ln b só
+// com a, b > 0 (ln((−1)(−2)) = ln 2, mas ln(−1) não existe). Um fator que se
+// sabe positivo fica sem módulo. ln(x²) = 2 ln|x|; potência ímpar: 3 ln x.
 function logExpand(ctx) {
   return atFocusOrParent(ctx, (p) => {
     const { tree } = ctx;
     const L = getAt(tree, p);
     if (!isLog(L)) return null;
     const a = unparen(L.args[0]);
+    const used = [];
+    let abs = false;
+    const mod = (f) => {
+      if (nonNegative(unparen(f), used)) return f;
+      abs = true;
+      return fn('Abs', unparen(f));
+    };
     let node;
     let label;
     if (a.op === 'Multiply') {
-      node = fn('Add', ...a.args.map((f, i) => logLike(L, f, i === 0)));
+      node = fn('Add', ...a.args.map((f, i) => logLike(L, mod(f), i === 0)));
       label = 'step.logProduct';
     } else if (a.op === 'Divide') {
-      node = fn('Add', logLike(L, a.args[0], true), fn('Negate', logLike(L, a.args[1])));
+      node = fn('Add', logLike(L, mod(a.args[0]), true), fn('Negate', logLike(L, mod(a.args[1]))));
       label = 'step.logQuotient';
     } else if (a.op === 'Power') {
-      node = fn('Multiply', a.args[1], logLike(L, a.args[0], true));
+      const k = evaluate(a.args[1]);
+      const odd = k && k.d === 1n && k.n % 2n !== 0n;
+      node = fn('Multiply', a.args[1], logLike(L, odd ? a.args[0] : mod(a.args[0]), true));
       label = 'step.logPower';
     } else if (a.op === 'Sqrt') {
       node = fn('Multiply', fn('Divide', num(1), num(2)), logLike(L, a.args[0], true));
       label = 'step.logPower';
     } else return null;
-    return { tree: place(tree, p, node), label: msg(label), focus: node.id };
+    used.forEach(note);
+    return { tree: place(tree, p, node), label: msg(abs ? `${label}Abs` : label), focus: node.id };
   });
 }
 

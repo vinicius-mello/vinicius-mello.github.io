@@ -227,6 +227,10 @@ export const MANUAL = [
     '**Sinais:** com `seja x > 0`, multiplicar ou dividir uma inequação por x (ou por 2x, x², −x…) é aceito, e o passo diz “usando x > 0”; √(x²) vira x em vez de |x| quando x ≥ 0 (também com x ∈ ℕ).',
     '**Signs:** with `let x > 0`, multiplying or dividing an inequality by x (or by 2x, x², −x…) is accepted, and the step says “using x > 0”; √(x²) becomes x instead of |x| when x ≥ 0 (also with x ∈ ℕ).',
   )],
+  ['p', L(
+    '**Sem hipótese, o passo vale para todo x real:** por isso algumas regras põem módulo ou pedem uma hipótese. ln(ab) → ln|a| + ln|b| e ln(x²) → 2 ln|x| (com `seja a > 0` o módulo some; potência ímpar, como ln(x³) → 3 ln x, não precisa); (ab)ᵉ ↔ aᵉbᵉ com e não inteiro só se no máximo uma das bases pode ser negativa (o mesmo para √a·√b), e (a/b)ᵉ ↔ aᵉ/bᵉ só com b > 0; x^(ab) → (xᵃ)ᵇ e (xᵃ)ᵇ → xᵃᵇ seguem a regra do capítulo 7; o binômio de Newton pede expoente natural (um número, n, m ou uma letra declarada com `seja k in N`), então (1 + 2/x)ˣ não vira somatório. Passar um fator dividindo para o outro lado (ax = b → x = b/a) avisa “supondo a ≠ 0” quando o sinal de a não é conhecido; um fator 0 não passa, e `=` recusa ×0, ÷0 e ^0.',
+    '**Without hypotheses, a step holds for every real x:** that is why some rules add absolute values or ask for a hypothesis. ln(ab) → ln|a| + ln|b| and ln(x²) → 2 ln|x| (with `let a > 0` the absolute value goes away; an odd power, like ln(x³) → 3 ln x, does not need it); (ab)ᵉ ↔ aᵉbᵉ with e not an integer only if at most one of the bases can be negative (the same for √a·√b), and (a/b)ᵉ ↔ aᵉ/bᵉ only with b > 0; x^(ab) → (xᵃ)ᵇ and (xᵃ)ᵇ → xᵃᵇ follow the rule in chapter 7; the binomial theorem needs a natural exponent (a number, n, m or a letter declared with `let k in N`), so (1 + 2/x)ˣ does not become a sum. Moving a factor across as a divisor (ax = b → x = b/a) says “assuming a ≠ 0” when the sign of a is unknown; a factor 0 does not move, and `=` refuses ×0, ÷0 and ^0.',
+  )],
 
   ['h3', L('Matrizes e determinantes', 'Matrices and determinants')],
   ['p', L(

@@ -31,7 +31,7 @@ import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } fr
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
-import { checkStep, isScalar, nonNegative, signOf } from '../types.js';
+import { checkStep, isScalar, nonNegative, signOf, integerExponent } from '../types.js';
 import { INVERSE, INVERSE_CANCEL, IDENTITY_NEUTRAL, VECTOR_FORMS } from './matrix.js';
 import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, MATRIX_CALC, MATRIX_SUM, MATRIX_PRODUCT, AUGMENTED, combineRows, rowSuggestion, twoRows, scaleRow, scaleSuggestion, rowOfMatrix } from './matrix.js';
 import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
@@ -589,6 +589,7 @@ function group(ctx) {
 // Acrescenta um nível de parênteses (Delimiter) em volta da seleção. Vários
 // irmãos vizinhos de uma soma/produto viram um grupo só; seleções soltas
 // ganham parênteses cada uma.
+const BINDERS = new Set(['Sum', 'Product', 'Integrate', 'D', 'Limit', 'EvalAt']);
 function wrapParens(ctx) {
   const { tree, targets } = ctx;
   const idx = siblingsOf(targets);
@@ -612,6 +613,8 @@ function wrapParens(ctx) {
   for (const p of [...targets].reverse()) {
     const n = getAt(t2, p);
     if (isRelation(n.op) || n.op === 'System') return null;
+    // A variável de Σ, ∏, ∫, d/dx, lim e [F]ₐᵇ é um nome, não uma expressão.
+    if (p.length && p[p.length - 1] === 0 && BINDERS.has(getAt(t2, p.slice(0, -1)).op)) return null;
     const d = fn('Delimiter', n);
     focus = d.id;
     t2 = replaceAt(t2, p, d);
@@ -943,6 +946,15 @@ function powers(ctx) {
   });
 }
 
+// (ab)ᵉ = aᵉbᵉ com e inteiro, ou se no máximo uma das bases pode ser
+// negativa: (−1·−1)^(1/2) = 1, mas (−1)^(1/2)·(−1)^(1/2) = i·i = −1.
+// Quociente: (a/b)ᵉ = aᵉ/bᵉ com e inteiro ou b ≥ 0.
+function splitPowerOk(bases, e, quotient, used) {
+  if (integerExponent(e, used)) return true;
+  if (quotient) return nonNegative(unparen(bases[1]), used);
+  return bases.filter((b) => !nonNegative(unparen(b), used)).length <= 1;
+}
+
 // aⁿbⁿ → (ab)ⁿ: fatores com o mesmo expoente (os selecionados, os que têm o
 // expoente do fator em foco ou o do primeiro) viram a potência do produto.
 // a^n/b^n → (a/b)^n.
@@ -952,6 +964,9 @@ function productOfPowers(ctx) {
     const D = getAt(tree, p);
     if (D.op !== 'Divide' || D.args.some((x) => x.op !== 'Power') || !same(D.args[0].args[1], D.args[1].args[1])) return null;
     const [a, b] = D.args;
+    const used = [];
+    if (!splitPowerOk([a.args[0], b.args[0]], a.args[1], true, used)) return { error: 'err.powSigns' };
+    used.forEach(note);
     const pw = withArgs(a, [withArgs(D, [a.args[0], b.args[0]]), a.args[1]]);
     return { tree: replaceAt(tree, p, pw), label: msg('step.prodPower'), focus: pw.id, hints: { merge: { to: a.args[1].id, from: [b.args[1].id] } } };
   });
@@ -976,6 +991,9 @@ function productOfPowers(ctx) {
   if (M?.op !== 'Multiply' || idx.length < 2) return null;
   const ps = idx.map((i) => M.args[i]);
   if (ps.some((x) => x.op !== 'Power' || !same(x.args[1], ps[0].args[1]))) return null;
+  const used = [];
+  if (!splitPowerOk(ps.map((x) => x.args[0]), ps[0].args[1], false, used)) return { error: 'err.powSigns' };
+  used.forEach(note);
   const pw = withArgs(ps[0], [fn('Multiply', ...ps.map((x) => x.args[0])), ps[0].args[1]]);
   const args = M.args.filter((_, i) => !idx.includes(i) || i === idx[0]);
   args[args.indexOf(ps[0])] = pw;
@@ -997,6 +1015,9 @@ function powerOfProduct(ctx) {
     if (b.op !== 'Multiply' && b.op !== 'Divide') return null;
     const clones = {};
     const e = P.args[1];
+    const used = [];
+    if (!splitPowerOk(b.args, e, b.op === 'Divide', used)) return { error: 'err.powSigns' };
+    used.forEach(note);
     const args = b.args.map((f, i) => (i === 0 ? withArgs(P, [f, e]) : fn('Power', f, cloneFrom(e, clones))));
     const node = withArgs(b, args);
     return { tree: replaceAt(tree, p, node), label: msg('step.powProduct'), focus: node.id, hints: { clones } };
@@ -1019,7 +1040,13 @@ function splitExponent(ctx) {
     }
     if (e.op === 'Multiply') {
       const inner = fn('Power', P.args[0], e.args[0]);
-      const pw = withArgs(P, [inner, rebuild('Multiply', e.args.slice(1), e)]);
+      const outer = rebuild('Multiply', e.args.slice(1), e);
+      // O mesmo cuidado de (xᵃ)ᵇ → xᵃᵇ: x¹ = (x²)^(1/2) seria |x|.
+      const a = evaluate(e.args[0]);
+      const used = [];
+      if (!integerExponent(outer, used) && !(a && a.d === 1n && a.n % 2n !== 0n) && !nonNegative(unparen(P.args[0]), used)) return { error: 'err.powPowSign' };
+      used.forEach(note);
+      const pw = withArgs(P, [inner, outer]);
       return { tree: replaceAt(tree, p, pw), label: msg('step.powPowInv'), focus: pw.id };
     }
     return null;
@@ -1531,6 +1558,9 @@ function bothSides(ctx) {
   const { op, e } = parsed;
   let rel = { op: tree.op };
   if (op === '/' && !isScalar(e)) return { error: 'err.matrixDivide' };
+  // ×0 dá 0 = 0 (a equação se perde), ÷0 não existe, ^0 dá 1 = 1.
+  const zero = evaluate(e);
+  if (zero && zero.n === 0n && (op === '*' || op === '*<' || op === '/' || op === '^')) return { error: op === '^' ? 'err.powZero' : 'err.zero' };
   if (op === '*' || op === '*<' || op === '/') rel = scaledRelation(tree.op, e);
   else if ((op === '^' || op === 'sqrt') && tree.op !== 'Equal') rel = { error: 'err.powerIneq' };
   if (rel.error) return rel;
@@ -2035,7 +2065,9 @@ for (const r of RULES) if (!r.input) wrapDots(r, DOTS_INVERSE.has(r.id));
 // números não pode trocar AB por BA nem juntar dimensões incompatíveis.
 // Uma mudança de representação (A⁻¹ → [A | I]) não é uma igualdade: a
 // regra marca o resultado com `unchecked`.
+const badBinder = (n) => (BINDERS.has(n.op) && n.args[0]?.op !== 'Symbol') || (n.args ?? []).some(badBinder);
 function typed(ctx, r) {
+  if (r?.tree && badBinder(r.tree) && !badBinder(ctx.tree)) return null;
   if (!r?.tree || r.unchecked) return r;
   const e = checkStep(ctx.tree, r.tree);
   return e ? { error: e } : r;
