@@ -291,15 +291,19 @@ function rowResult(tree, g, gp, node) {
 }
 
 // As duas linhas selecionadas de um mesmo determinante, ou de uma matriz
-// que pode mudar (a de baixo muda).
+// que pode mudar. Muda a linha com o foco (a última selecionada); sem o foco
+// numa delas, a de baixo.
 export function twoRows(ctx) {
   const { tree, targets } = ctx;
   if (targets.length !== 2) return null;
   const f = targets.map((p) => gridFrom(tree, p));
   if (f.some((x) => !x || x.rest.length !== 1) || f[0].gp.join() !== f[1].gp.join()) return null;
   if (f[0].g.op === 'Matrix' && !chainable(tree, f[0].gp)) return null;
-  const [i, j] = f.map((x) => x.rest[0]).sort((a, b) => a - b);
-  return i === j ? null : { ...f[0], i, j };
+  let [i, j] = f.map((x) => x.rest[0]).sort((a, b) => a - b);
+  if (i === j) return null;
+  const fg = gridFrom(tree, ctx.focus);
+  if (fg && fg.gp.join() === f[0].gp.join() && fg.rest.length >= 1 && fg.rest[0] === i) [i, j] = [j, i];
+  return { ...f[0], i, j };
 }
 
 // Sugestão de k: o valor que zera a primeira entrada numérica da linha que
