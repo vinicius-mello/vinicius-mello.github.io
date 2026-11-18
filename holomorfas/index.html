@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <title>Funções Holomorfas — Prof. Vinícius</title>
+  <meta name="description" content="Funções Holomorfas: uma introdução conceitual à análise complexa. O livro em PDF, as listas de exercícios e os Resumões de Números Complexos, Funções Holomorfas e Funções Analíticas.">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    html {
+      background:
+        radial-gradient(circle at 15% 0%, rgba(94, 214, 199, 0.16), transparent 45%),
+        linear-gradient(160deg, #0f5c55 0%, #0b413c 45%, #062724 100%);
+      min-height: 100%;
+    }
+
+    body {
+      font-family: 'Michroma', sans-serif;
+    }
+
+    .home-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.9rem;
+      letter-spacing: 0.04em;
+    }
+
+    .home-header a {
+      font-family: 'Michroma', sans-serif;
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.65);
+      letter-spacing: 0.02em;
+      text-decoration: none;
+    }
+
+    .home-header a:hover {
+      color: rgba(94, 214, 199, 0.9);
+    }
+
+    .tagline {
+      margin: 10px 0 0;
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.55);
+      letter-spacing: 0.01em;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.18);
+      margin: 22px 0 34px;
+    }
+
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 18px;
+    }
+
+    .app-card {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 96px;
+      padding: 18px;
+      text-align: center;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+      backdrop-filter: blur(6px);
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    .app-card,
+    .app-card:link,
+    .app-card:visited {
+      color: white;
+      font-weight: normal;
+      font-style: normal;
+      text-decoration: none;
+    }
+
+    .app-card:hover,
+    .app-card:active {
+      transform: translateY(-4px);
+      border-color: rgba(94, 214, 199, 0.7);
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(94, 214, 199, 0.25);
+      color: white;
+      font-style: normal;
+    }
+
+    .app-card span {
+      font-size: 0.92rem;
+      letter-spacing: 0.03em;
+      line-height: 1.4;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.05rem;
+      letter-spacing: 0.06em;
+      font-weight: normal;
+      color: rgba(94, 214, 199, 0.95);
+    }
+
+    .intro {
+      max-width: 62ch;
+      margin: 0 0 22px;
+      font-family: system-ui, sans-serif;
+      font-size: 0.92rem;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .livro {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 26px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .livro-capa {
+      flex: 0 0 auto;
+      display: block;
+      width: 150px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+      transition: transform 0.18s ease;
+    }
+
+    .livro-capa:hover { transform: translateY(-4px); }
+
+    .livro-capa img { display: block; width: 100%; height: auto; }
+
+    .livro-info { flex: 1 1 280px; min-width: 0; }
+
+    .pdf-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+    }
+
+    .pdf-list a,
+    .pdf-list a:link,
+    .pdf-list a:visited {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: white;
+      font-style: normal;
+      font-weight: normal;
+      text-decoration: none;
+      font-size: 0.82rem;
+      letter-spacing: 0.02em;
+      transition: border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .pdf-list a:hover {
+      border-color: rgba(94, 214, 199, 0.7);
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-style: normal;
+    }
+
+    .pdf-list small {
+      margin-left: auto;
+      font-family: system-ui, sans-serif;
+      font-size: 0.74rem;
+      color: rgba(255, 255, 255, 0.55);
+      white-space: nowrap;
+    }
+
+  
+    .pdf-list .grupo {
+      margin: 14px 0 2px;
+      font-family: system-ui, sans-serif;
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    .pdf-list .grupo:first-child { margin-top: 0; }
+    .partes { display: inline-flex; gap: 6px; vertical-align: middle; margin-left: 4px; }
+    .partes i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+  </style>
+</head>
+<body>
+<div class="home-header">
+  <h1>Funções Holomorfas</h1>
+  <a href="../index.html">Prof. Vinícius</a>
+</div>
+<p class="tagline">Livro, listas de exercícios e Resumões do curso de Variáveis Complexas.</p>
+<hr/>
+<section class="livro">
+  <a class="livro-capa" href="pdf/funcoes-holomorfas.pdf"><img src="capa-livro.png" width="249" height="352" alt="Capa do livro Funções Holomorfas"></a>
+  <div class="livro-info">
+    <h2>O livro</h2>
+    <p class="intro"><em>Funções Holomorfas: uma introdução conceitual à análise complexa</em>, de Vinícius Mello &amp; Claude, expande os três Resumões num texto completo, com ênfase nas ideias e as demonstrações mais técnicas reunidas no final de cada seção. São três partes<span class="partes"><i style="background:#2563EB"></i><i style="background:#0F9B8E"></i><i style="background:#EA580C"></i></span> — Números Complexos, Funções Holomorfas e Funções Analíticas —, com 39 figuras e os 144 exercícios das listas incorporados ao texto, todos com resposta e, os mais difíceis, com resolução abreviada.</p>
+    <ul class="pdf-list">
+      <li class="grupo">Livro</li>
+      <li><a href="pdf/funcoes-holomorfas.pdf">Funções Holomorfas · versão para tela <small>PDF · 129 p.</small></a></li>
+      <li><a href="pdf/funcoes-holomorfas-impressao.pdf">Funções Holomorfas · versão para impressão <small>PDF · 127 p. · sem fundos</small></a></li>
+      <li class="grupo">Listas de exercícios</li>
+      <li><a href="pdf/lista-01-complexos.pdf">Lista 1 · Números Complexos <small>PDF · com respostas</small></a></li>
+      <li><a href="pdf/lista-02-holomorfas.pdf">Lista 2 · Funções Holomorfas <small>PDF · com respostas</small></a></li>
+      <li><a href="pdf/lista-03-analiticas.pdf">Lista 3 · Funções Analíticas <small>PDF · com respostas</small></a></li>
+      <li><a href="pdf/lista-04-treino-complexos.pdf">Lista 4 · Treino: Números Complexos <small>PDF · com respostas</small></a></li>
+      <li class="grupo">Resumões</li>
+      <li><a href="pdf/resumao-complexos.pdf">Resumão · Números Complexos <small>PDF · 2 p.</small></a></li>
+      <li><a href="pdf/resumao-holomorfas.pdf">Resumão · Funções Holomorfas <small>PDF · 2 p.</small></a></li>
+      <li><a href="pdf/resumao-analiticas.pdf">Resumão · Funções Analíticas <small>PDF · 2 p.</small></a></li>
+    </ul>
+  </div>
+</section>
+</body>
+</html>
