@@ -1,8 +1,18 @@
 // Utilitários compartilhados pelas regras.
 
-import { getAt, newId, children, replaceAt, withArgs, fn, num } from '../ast.js';
+import { getAt, newId, children, replaceAt, withArgs, fn, num, walk, IMAGINARY, INFINITY, DOTS } from '../ast.js';
 import { toAscii } from '../serialize.js';
 import { withNotes } from './normal.js';
+
+// Exemplo de hipótese para uma recusa por sinal desconhecido, com uma letra
+// do próprio problema: "seja x > 0" (ou "seja x ≥ 0").
+export function signHint(nodes, rel = '>') {
+  let name = null;
+  for (const n of nodes) walk(n, (m) => {
+    if (!name && m.op === 'Symbol' && ![IMAGINARY, INFINITY, DOTS, 'Pi', 'ExponentialE', 'e', 'pi'].includes(m.name) && !m.vec) name = m.name;
+  });
+  return { ex: name ? `${name} ${rel} 0` : `… ${rel} 0` };
+}
 
 export const terms = (n) => (n.op === 'Add' ? n.args : [n]);
 export const factors = (n) => (n.op === 'Multiply' ? n.args : [n]);

@@ -7,7 +7,7 @@
 
 import { getAt, replaceAt, withArgs, fn, num } from './ast.js';
 import { msg } from './i18n.js';
-import { toAscii } from './serialize.js';
+import { toAscii, toPretty } from './serialize.js';
 import { evaluate } from './rules/arith.js';
 import { keepsEnds } from './rules/dots.js';
 import { isRelation, isInequality, FLIP, relationAt } from './relations.js';
@@ -54,7 +54,7 @@ export function scaledRelation(op, q) {
   const used = [];
   const v = evaluate(q);
   const s = v ? (v.n > 0n ? 1 : v.n < 0n ? -1 : 0) : signOf(q, used);
-  if (s === null) return { error: 'err.signUnknown', params: { e: toAscii(q) } };
+  if (s === null) return { error: 'err.signUnknown', params: { e: toPretty(q) } };
   if (s === 0) return { error: 'err.zero' };
   used.forEach(note);
   return { op: s < 0 ? FLIP[op] : op, flipped: s < 0 };
@@ -113,7 +113,7 @@ function transposeIn(tree, path, dir) {
       const rel = scaledRelation(tree.op, node);
       if (rel.error) return rel;
       const rest = side.args.filter((_, k) => k !== i);
-      const label = s0 === null ? msg('step.transposeFactorNZ', { e: toAscii(node) }) : msg('step.transposeFactor');
+      const label = s0 === null ? msg('step.transposeFactorNZ', { e: toPretty(node) }) : msg('step.transposeFactor');
       return build(rebuild('Multiply', rest, side), fn('Divide', other, node), label, node.id, node.id, rel.op);
     }
     case 'Divide': {
@@ -134,7 +134,20 @@ const guarded = (tree, r) => (r?.tree && !keepsEnds(tree, r.tree) ? { error: 'er
 export function shiftSideways(tree, path, dir) {
   const g = swapLines(tree, path, dir, 'col');
   if (g) return g;
+  // Coeficiente numérico de um lado que é produto (2x = 4): passa direto
+  // dividindo, sem o passo intermediário "x·2 = 4".
+  const direct = numericCoefficient(tree, path, dir) && transpose(tree, path, dir);
+  if (direct) return typed(tree, guarded(tree, direct));
   return typed(tree, guarded(tree, swap(tree, path, dir) ?? transpose(tree, path, dir)));
+}
+
+function numericCoefficient(tree, path, dir) {
+  const r = relationAt(tree, path);
+  if (!r) return false;
+  const rel = path.slice(r.rp.length);
+  if (rel.length !== 2 || dir !== (rel[0] === 0 ? +1 : -1)) return false;
+  const side = r.rel.args[rel[0]];
+  return side.op === 'Multiply' && !!evaluate(side.args[rel[1]]);
 }
 
 // Com matrizes, o passo é conferido numericamente (a ordem dos fatores).

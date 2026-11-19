@@ -24,8 +24,8 @@ export const COMMANDS = [
 // "Space" é traduzido (Espaço / Space).
 export const NAV_KEYS = [
   [['←', '→', '↑', '↓'], 'keys.nav'],
-  [['Ctrl', '← →'], 'keys.move'],
-  [['Ctrl', '↑ ↓'], 'keys.group'],
+  [['Ctrl/Alt', '← →'], 'keys.move'],
+  [['Ctrl/Alt', '↑ ↓'], 'keys.group'],
   [['Shift', '← →'], 'keys.extend'],
   [['Shift', '↑ ↓'], 'keys.column'],
   [['Space'], 'keys.select'],

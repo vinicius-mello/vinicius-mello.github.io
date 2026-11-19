@@ -10,7 +10,7 @@ import { msg } from '../i18n.js';
 import { isRelation, relationAt } from '../relations.js';
 import { parseInput } from '../input.js';
 import { parseAscii } from '../parse-ascii.js';
-import { toAscii } from '../serialize.js';
+import { toAscii, toPretty } from '../serialize.js';
 import { evaluate } from './arith.js';
 import { literal, matches, noted } from './normal.js';
 import { unparen, parentPath, cloneFrom, rebuild, place } from './util.js';
@@ -581,7 +581,7 @@ export function substitution(ctx) {
   if (!a || freeOf(a.expr, x) || isVar(a.expr, x)) return { error: 'err.substU' };
   const { name: u, expr: g } = a;
   const f1 = replaceExpr(bodyOf(I), g, u);
-  if (!f1) return { error: 'err.substAbsent', params: { g: toAscii(g) } };
+  if (!f1) return { error: 'err.substAbsent', params: { g: toPretty(g) } };
   // g′(x) numérico (diferença central)
   const dg = (t) => {
     const h = 1e-5 * Math.max(1, Math.abs(t));
@@ -603,12 +603,12 @@ export function substitution(ctx) {
     best = { rest, r };
     if (r.n === r.d) break;
   }
-  if (!best) return { error: 'err.substLeft', params: { u, g: toAscii(g) } };
+  if (!best) return { error: 'err.substLeft', params: { u, g: toPretty(g) } };
   const h = mul(best.r.n === best.r.d ? null : ratioNode(best.r), fromFactors(best.rest));
   const node = I.args.length === 4
     ? fn('Integrate', sym(u), instantiate(g, x, I.args[1]), instantiate(g, x, I.args[2]), h)
     : fn('Integrate', sym(u), h);
-  return { tree: place(tree, p, node), label: msg('step.iSubst', { u, g: toAscii(g) }), focus: node.id };
+  return { tree: place(tree, p, node), label: msg('step.iSubst', { u, g: toPretty(g) }), focus: node.id };
 }
 
 // Por partes: ∫ u dv = uv − ∫ v du, com v tirado da tabela e du = u′ dx
@@ -626,14 +626,14 @@ export function byParts(ctx) {
   if (k < 0) return { error: 'err.partsU' };
   const dv = fromFactors(list.filter((_, i) => i !== k));
   const v = antiderivative(dv, x);
-  if (!v) return { error: 'err.partsV', params: { dv: toAscii(dv) } };
+  if (!v) return { error: 'err.partsV', params: { dv: toPretty(dv) } };
   const u = copy(list[k][0]);
   const rest = integral(I, mul(copy(v), deriv(x, copy(u))));
   const uv = mul(u, v);
   const node = I.args.length === 4
     ? fn('Add', fn('EvalAt', sym(x), copy(I.args[1]), copy(I.args[2]), uv), neg(rest))
     : fn('Add', uv, neg(rest));
-  return { tree: place(tree, p, node), label: msg('step.iParts', { u: toAscii(u), v: toAscii(v) }), focus: node.id };
+  return { tree: place(tree, p, node), label: msg('step.iParts', { u: toPretty(u), v: toPretty(v) }), focus: node.id };
 }
 
 // ----------------------------------------------------------------- limites
@@ -735,7 +735,7 @@ function limitForms(ctx) {
   for (const [model, value] of notable) {
     const u = bindU(f, model);
     if (u && !freeOf(u, x) && behaviour(u, x, a, L.dir) === 'zero') {
-      add(copy(value), 'step.lNotable', { f: toAscii(model).replace(/u/g, 'u') });
+      add(copy(value), 'step.lNotable', { f: toPretty(model).replace(/u/g, 'u') });
       break;
     }
   }
@@ -803,7 +803,7 @@ function limitChange(ctx) {
   const node = { ...fn('Limit', sym(h), num(0), instantiate(body, x, value)) };
   if (infinite) node.dir = numeric(a, {}) > 0 ? '+' : '-';
   else if (L.dir) node.dir = L.dir;
-  return done(tree, p, node, 'step.lChange', { v: `${x} = ${toAscii(value)}` });
+  return done(tree, p, node, 'step.lChange', { v: `${x} = ${toPretty(value)}` });
 }
 
 export const LIMIT_RULES = [limitForms, limitChange];

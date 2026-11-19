@@ -88,6 +88,10 @@ export const MANUAL = [
     'Digite no campo de entrada e tecle Enter. O formato é detectado sozinho: ASCII (`2x + 3 = 7`) ou LaTeX (`\\frac{1}{2}`). O que pode ser digitado:',
     'Type in the input field and press Enter. The format is detected automatically: ASCII (`2x + 3 = 7`) or LaTeX (`\\frac{1}{2}`). What you can type:',
   )],
+  ['p', L(
+    'Um problema novo substitui a derivação da Principal; ela não se perde: **Ctrl + Z** no primeiro passo traz a derivação anterior de volta.',
+    'A new problem replaces the derivation in Main; it is not lost: **Ctrl + Z** on the first step brings the previous derivation back.',
+  )],
   ['ul', [
     L('uma **equação** (`2x + 3 = 7`) ou **inequação** (`x^2 - 1 < 0`, também `<=`, `>`, `>=`, `!=`);', 'an **equation** (`2x + 3 = 7`) or **inequality** (`x^2 - 1 < 0`, also `<=`, `>`, `>=`, `!=`);'),
     L('um **sistema**, com as equações separadas por `;` (`x + y = 3; x - y = 1`);', 'a **system**, with the equations separated by `;` (`x + y = 3; x - y = 1`);'),
@@ -133,7 +137,7 @@ export const MANUAL = [
   )],
   ['ul', [
     L('um **termo** de uma soma passa com o sinal trocado (2x + 3 = 7 → 2x = 7 − 3);', 'a **term** of a sum goes across with the opposite sign (2x + 3 = 7 → 2x = 7 − 3);'),
-    L('um **fator** de um produto passa dividindo (2x = 4 → x = 4/2);', 'a **factor** of a product goes across dividing (2x = 4 → x = 4/2);'),
+    L('um **fator** de um produto passa dividindo (2x = 4 → x = 4/2); um coeficiente numérico passa direto, de qualquer posição; se o fator pode valer zero, o passo avisa “supondo a ≠ 0”;', 'a **factor** of a product goes across dividing (2x = 4 → x = 4/2); a numeric coefficient goes across directly, from any position; if the factor may be zero, the step says “assuming a ≠ 0”;'),
     L('um **denominador** passa multiplicando (x/3 = 2 → x = 2·3);', 'a **denominator** goes across multiplying (x/3 = 2 → x = 2·3);'),
     L('um **lado inteiro** passa e deixa 0 no lugar.', 'a **whole side** goes across and leaves 0 behind.'),
   ]],

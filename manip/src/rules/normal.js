@@ -8,7 +8,7 @@
 // não são polinomiais (n!, sen x, a/b...), com os argumentos já em forma
 // normal: (n − k)! e (−k + n)! são o mesmo átomo.
 
-import { toAscii, looseSame } from '../serialize.js';
+import { toAscii, toPretty, looseSame } from '../serialize.js';
 import { msg } from '../i18n.js';
 import { tagOf } from '../ast.js';
 import { evaluate } from './arith.js';
@@ -163,10 +163,7 @@ export function flatten(n) {
 export const literal = (a, b) => looseSame(flatten(a), flatten(b));
 
 let notes = [];
-export const show = (x) => {
-  while (x.op === 'Delimiter') x = x.args[0];
-  return toAscii(x).replace(/-/g, '−').replace(/\*/g, '·');
-};
+export const show = (x) => toPretty(x);
 
 export function matches(a, b) {
   if (literal(a, b)) return true;

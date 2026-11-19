@@ -5,7 +5,7 @@
 
 import { getAt, replaceAt, withArgs, fn, num, sym, isGrid, gridSize, grid, row, walk, IMAGINARY, INFINITY } from '../ast.js';
 import { msg } from '../i18n.js';
-import { toAscii } from '../serialize.js';
+import { toAscii, toPretty } from '../serialize.js';
 import { parseInput } from '../input.js';
 import { isRelation } from '../relations.js';
 import { evaluate, evaluateComplex, complexToNode } from './arith.js';
@@ -160,7 +160,7 @@ function scalarIntoMatrix(ctx) {
     const node = withArgs(M, rows);
     return {
       tree: replaceAt(tree, p, node),
-      label: msg('step.mscalar', { k: toAscii(product(others)) }),
+      label: msg('step.mscalar', { k: toPretty(product(others)) }),
       focus: node.id,
       hints: { clones },
     };
@@ -253,9 +253,9 @@ function factorForms(ctx) {
     const rows = g.args.map((r, i) => withArgs(r, r.args.map((e, j) => (cells.some(([a, b]) => a === i && b === j) ? divide(e) : e))));
     const node = withArgs(g, rows);
     const k = cloneFrom(f, {});
-    const label = g.op === 'Matrix' ? msg('step.mfactor', { k: toAscii(f) })
-      : l.col !== undefined ? msg('step.colFactor', { k: toAscii(f), j: l.col + 1 })
-        : msg('step.rowFactor', { k: toAscii(f), i: l.row + 1 });
+    const label = g.op === 'Matrix' ? msg('step.mfactor', { k: toPretty(f) })
+      : l.col !== undefined ? msg('step.colFactor', { k: toPretty(f), j: l.col + 1 })
+        : msg('step.rowFactor', { k: toPretty(f), i: l.row + 1 });
     return { tree: inFront(ctx.tree, gp, k, node), label, focus: k.id, hints: { merge: { to: k.id, from: entries.map((e) => e.id) } } };
   });
 }
@@ -352,7 +352,7 @@ export function combineRows(sign) {
     }));
     const rows = r.g.args.slice();
     rows[r.j] = newRow;
-    const ks = one ? '' : toAscii(k.op === 'Add' || k.op === 'Negate' ? fn('Delimiter', k) : k);
+    const ks = one ? '' : toPretty(k.op === 'Add' || k.op === 'Negate' ? fn('Delimiter', k) : k);
     const out = rowResult(ctx.tree, r.g, r.gp, withArgs(r.g, rows));
     const params = { j: subscript(r.j + 1), i: subscript(r.i + 1), s: sign > 0 ? '+' : '−', k: ks };
     return {
@@ -459,7 +459,7 @@ export function scaleRow(ctx) {
   const out = chained(ctx.tree, r.gp, withArgs(r.g, rows));
   return {
     tree: out.tree,
-    label: msg('step.rowScale', { i: subscript(r.i + 1), k: toAscii(product(kf(k))) }),
+    label: msg('step.rowScale', { i: subscript(r.i + 1), k: toPretty(product(kf(k))) }),
     focus: newRow.id,
     hints: { clones: out.clones },
   };
@@ -911,7 +911,7 @@ function scalarIntoTuple(ctx) {
     const k = others.flatMap((x) => (x.op === 'Negate' ? [fn('Delimiter', x)] : factors(x)));
     const T = P.args[ti];
     const node = withArgs(T, T.args.map((e) => product([...k.map((x) => cloneFrom(x, clones)), ...(e.op === 'Negate' ? [fn('Delimiter', e)] : factors(e))])));
-    return { tree: replaceAt(tree, p, node), label: msg('step.mscalar', { k: toAscii(product(others)) }), focus: node.id, hints: { clones } };
+    return { tree: replaceAt(tree, p, node), label: msg('step.mscalar', { k: toPretty(product(others)) }), focus: node.id, hints: { clones } };
   }
   return null;
 }

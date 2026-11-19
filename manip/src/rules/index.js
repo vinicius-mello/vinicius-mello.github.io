@@ -21,8 +21,8 @@ import { wrapDots } from './dots.js';
 import { dotsForms, dotsZip } from './dotsterm.js';
 import { needsParens } from '../notation.js';
 import { parseInput, NAME_RE } from '../input.js';
-import { toAscii } from '../serialize.js';
-import { matches as same, withNotes, attempt, noted, show, note } from './normal.js';
+import { toAscii, toPretty } from '../serialize.js';
+import { matches as same, withNotes, attempt, noted, show, note, equivalent } from './normal.js';
 import { msg } from '../i18n.js';
 import { rewrite, rewriteSuggestion } from './rewrite.js';
 import { applyIdentities } from './identity.js';
@@ -38,7 +38,7 @@ import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse 
 import { monomial as normalMonomial, sameMonomial, negateMonomial, squareRoot } from './monomial.js';
 import {
   terms, factors, unparen, signed, parentPath, lastIndex, parentOf,
-  siblingsOf, cloneFrom, spliceFlat, rebuild, place, atFocusOrParent, sumOf, isNum, either,
+  siblingsOf, cloneFrom, spliceFlat, rebuild, place, atFocusOrParent, sumOf, isNum, either, signHint,
 } from './util.js';
 
 
@@ -50,6 +50,12 @@ function calculate(ctx) {
     const p = targets[0];
     const n = getAt(tree, p);
     if (isLeaf(n) || (n.op === 'Negate' && isLeaf(n.args[0]))) return null;
+    // Raiz exata de um número: √9 = 3, √(4/9) = 2/3.
+    if (n.op === 'Sqrt') {
+      const r = evaluate(unparen(n.args[0]));
+      const root = r && r.n >= 0n && squareRoot(ratToNode(r));
+      if (root) return { tree: place(tree, p, root), label: msg('step.calc'), focus: root.id, hints: { merge: { to: root.id, from: [n.id] } } };
+    }
     const v = evaluateComplex(n);
     if (!v) return null;
     const node = complexToNode(v);
@@ -791,7 +797,7 @@ function expandFraction(ctx) {
   const times = (x, f) => (x.op === 'Multiply' ? withArgs(x, [...x.args, f]) : fn('Multiply', x, f));
   const k2 = cloneFrom(k, {});
   const result = withArgs(D, [times(D.args[0], k), times(D.args[1], k2)]);
-  return { tree: replaceAt(tree, dp, result), label: msg('step.expandFrac', { q: toAscii(k) }), focus: result.id };
+  return { tree: replaceAt(tree, dp, result), label: msg('step.expandFrac', { q: toPretty(k) }), focus: result.id };
 }
 
 function splitFraction(ctx) {
@@ -965,7 +971,7 @@ function productOfPowers(ctx) {
     if (D.op !== 'Divide' || D.args.some((x) => x.op !== 'Power') || !same(D.args[0].args[1], D.args[1].args[1])) return null;
     const [a, b] = D.args;
     const used = [];
-    if (!splitPowerOk([a.args[0], b.args[0]], a.args[1], true, used)) return { error: 'err.powSigns' };
+    if (!splitPowerOk([a.args[0], b.args[0]], a.args[1], true, used)) return { error: 'err.powSigns', params: signHint([b.args[0]]) };
     used.forEach(note);
     const pw = withArgs(a, [withArgs(D, [a.args[0], b.args[0]]), a.args[1]]);
     return { tree: replaceAt(tree, p, pw), label: msg('step.prodPower'), focus: pw.id, hints: { merge: { to: a.args[1].id, from: [b.args[1].id] } } };
@@ -992,7 +998,7 @@ function productOfPowers(ctx) {
   const ps = idx.map((i) => M.args[i]);
   if (ps.some((x) => x.op !== 'Power' || !same(x.args[1], ps[0].args[1]))) return null;
   const used = [];
-  if (!splitPowerOk(ps.map((x) => x.args[0]), ps[0].args[1], false, used)) return { error: 'err.powSigns' };
+  if (!splitPowerOk(ps.map((x) => x.args[0]), ps[0].args[1], false, used)) return { error: 'err.powSigns', params: signHint(ps.map((x) => x.args[0])) };
   used.forEach(note);
   const pw = withArgs(ps[0], [fn('Multiply', ...ps.map((x) => x.args[0])), ps[0].args[1]]);
   const args = M.args.filter((_, i) => !idx.includes(i) || i === idx[0]);
@@ -1016,7 +1022,7 @@ function powerOfProduct(ctx) {
     const clones = {};
     const e = P.args[1];
     const used = [];
-    if (!splitPowerOk(b.args, e, b.op === 'Divide', used)) return { error: 'err.powSigns' };
+    if (!splitPowerOk(b.args, e, b.op === 'Divide', used)) return { error: 'err.powSigns', params: signHint(b.op === 'Divide' ? [b.args[1]] : b.args) };
     used.forEach(note);
     const args = b.args.map((f, i) => (i === 0 ? withArgs(P, [f, e]) : fn('Power', f, cloneFrom(e, clones))));
     const node = withArgs(b, args);
@@ -1558,20 +1564,32 @@ function bothSides(ctx) {
   const { op, e } = parsed;
   let rel = { op: tree.op };
   if (op === '/' && !isScalar(e)) return { error: 'err.matrixDivide' };
-  // ×0 dá 0 = 0 (a equação se perde), ÷0 não existe, ^0 dá 1 = 1.
-  const zero = evaluate(e);
-  if (zero && zero.n === 0n && (op === '*' || op === '*<' || op === '/' || op === '^')) return { error: op === '^' ? 'err.powZero' : 'err.zero' };
+  // ×0 dá 0 = 0 (a equação se perde), ÷0 não existe, ^0 dá 1 = 1. Vale
+  // também para o zero disfarçado: x − x, 2(x − 1) − 2x + 2...
+  const scales = op === '*' || op === '*<' || op === '/' || op === '^';
+  const value = evaluate(e);
+  const zero = value ? value.n === 0n : isScalar(e) && equivalent(e, num(0));
+  if (scales && zero) return { error: op === '^' ? 'err.powZero' : 'err.zero' };
+  // Por uma expressão que pode valer zero, o passo supõe que não vale
+  // (como em ax = b → x = b/a): dividir por x perde a raiz x = 0.
+  const assumes = scales && !value && isScalar(e) && tree.op === 'Equal' && signOf(e, []) === null;
   if (op === '*' || op === '*<' || op === '/') rel = scaledRelation(tree.op, e);
-  else if ((op === '^' || op === 'sqrt') && tree.op !== 'Equal') rel = { error: 'err.powerIneq' };
+  else if (op === 'sqrt' && tree.op !== 'Equal') rel = { error: 'err.rootIneq' };
+  else if (op === '^' && tree.op !== 'Equal') rel = { error: 'err.powerIneq' };
   if (rel.error) return rel;
   const clones = {};
   const e2 = cloneFrom(e, clones);
   const sides = [BOTH_SIDES[op](tree.args[0], e), BOTH_SIDES[op](tree.args[1], e2)];
   const sym = { '*': '·', '/': '÷', '-': '−' }[op] ?? op;
+  const shown = show(e);
+  let label = op === '*<' ? msg('step.sidesLeft', { e: shown }) : op === 'sqrt' ? msg('step.sidesSqrt') : msg('step.sides', { op: sym, e: shown });
+  if (assumes) label = msg('step.assuming', { step: label, e: shown });
   return {
     tree: { ...tree, op: rel.op, args: sides },
-    label: op === '*<' ? msg('step.sidesLeft', { e: toAscii(e) }) : op === 'sqrt' ? msg('step.sidesSqrt') : msg('step.sides', { op: sym, e: toAscii(e) }),
+    label,
     hints: rel.flipped ? { flip: tree.id } : undefined,
+    // √ nos dois lados: o foco fica na raiz (o próximo ^ dá |x|).
+    focus: op === 'sqrt' ? sides[0].id : undefined,
   };
 }
 
@@ -1586,11 +1604,11 @@ function absEquation(ctx) {
   const b = tree.args[1 - i];
   const used = [];
   if (signOf(unparen(b), used) === -1) return { error: 'err.absNegative' };
-  if (!nonNegative(unparen(b), used)) return { error: 'err.absSign' };
+  if (!nonNegative(unparen(b), used)) return { error: 'err.absSign', params: { b: show(b), ...signHint([b], '≥') } };
   used.forEach(note);
   const pm = fn('PlusMinus', b.op === 'Add' ? fn('Delimiter', b) : b);
   const args = i === 0 ? [unparen(a), pm] : [pm, unparen(a)];
-  return { tree: { ...tree, args }, label: msg('step.absEq'), focus: pm.id };
+  return { tree: { ...tree, args }, label: msg('step.absEq', { a: show(a), b: show(b) }), focus: pm.id };
 }
 
 // Trocar os lados de uma inequação inverte o símbolo: a < b ⇔ b > a.
@@ -1631,7 +1649,7 @@ function estimate(ctx) {
   args[side] = e;
   return {
     tree: { ...tree, op, args },
-    label: msg('step.estimate', { rel: RELATIONS[op], e: toAscii(e) }),
+    label: msg('step.estimate', { rel: RELATIONS[op], e: toPretty(e) }),
     focus: e.id,
   };
 }
@@ -1724,7 +1742,7 @@ function substitute(ctx) {
     focus ??= node.id;
     t2 = replaceAt(t2, p, node);
   }
-  return { tree: t2, label: msg('step.subst', { e: toAscii(e) }), focus };
+  return { tree: t2, label: msg('step.subst', { e: toPretty(e) }), focus };
 }
 
 // ------------------------------------------------------ somar e subtrair
@@ -1738,7 +1756,7 @@ function addSubtract(ctx) {
   const q = parseExpr(ctx.input);
   if (!q) return null;
   const pair = [q, fn('Negate', cloneFrom(q, {}))];
-  const label = msg('step.addsub', { q: toAscii(q) });
+  const label = msg('step.addsub', { q: toPretty(q) });
 
   if (targets.length > 1) {
     const idx = siblingsOf(targets);

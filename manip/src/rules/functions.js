@@ -12,7 +12,7 @@ import { parseAscii } from '../parse-ascii.js';
 import { walk } from '../ast.js';
 import {
   factors, unparen, signed, parentPath, parentOf, siblingsOf, cloneFrom,
-  rebuild, place, atFocusOrParent, isNum,
+  rebuild, place, atFocusOrParent, isNum, signHint,
 } from './util.js';
 
 const copy = (n) => cloneFrom(n, {});
@@ -87,7 +87,7 @@ function logExpand(ctx) {
       label = 'step.logPower';
     } else return null;
     used.forEach(note);
-    return { tree: place(tree, p, node), label: msg(abs ? `${label}Abs` : label), focus: node.id };
+    return { tree: place(tree, p, node), label: msg(abs ? `${label}Abs` : label, { f: L.op === 'Ln' ? 'ln' : 'log' }), focus: node.id };
   });
 }
 
@@ -498,7 +498,7 @@ function sqrtCombine(ctx) {
   const rs = idx.map((i) => M.args[i]);
   // √a·√b = √(ab) com a ≥ 0 ou b ≥ 0: √(−2)·√(−3) = i√2·i√3 = −√6, não √6.
   const used = [];
-  if (!radicandsOk(rs.map((r) => r.args[0]), used)) return { error: 'err.sqrtSigns' };
+  if (!radicandsOk(rs.map((r) => r.args[0]), used)) return { error: 'err.sqrtSigns', params: signHint(rs.map((r) => r.args[0])) };
   used.forEach(note);
   const node = withArgs(rs[0], [fn('Multiply', ...rs.map((r) => r.args[0]))]);
   const args = M.args.filter((_, i) => !idx.includes(i) || i === idx[0]);
@@ -523,7 +523,7 @@ function sqrtSplit(ctx) {
     if (n.op === 'Sqrt') {
       const a = unparen(n.args[0]);
       if (a.op === 'Multiply') {
-        if (!radicandsOk(a.args, used)) return { error: 'err.sqrtSigns' };
+        if (!radicandsOk(a.args, used)) return { error: 'err.sqrtSigns', params: signHint(a.args) };
         node = fn('Multiply', ...a.args.map((f, i) => (i === 0 ? withArgs(n, [f]) : fn('Sqrt', f))));
       } else if (a.op === 'Divide') {
         if (!nonNegative(unparen(a.args[1]), used)) return { error: 'err.sqrtDenominator' };

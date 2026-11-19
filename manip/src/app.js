@@ -49,6 +49,7 @@ const themeSelect = $('#theme');
 const langSelect = $('#lang');
 const KB_KEY = 'manip.keyboard';
 const OPS_KEY = 'manip.opsPanel';
+const PRESENT_KEY = 'manip.presentHint';
 const THEME_KEY = 'manip.theme';
 const ZOOM_KEY = 'manip.zoom';
 const LONG_KEY = 'manip.long';
@@ -61,6 +62,9 @@ let hypotheses = [];
 let selected = new Set();
 let anchorId = null; // início da seleção feita com Shift+setas
 let presenting = false;
+// Derivações da Principal trocadas por um problema novo (Ctrl+Z no primeiro
+// passo restaura a última).
+let previousMains = [];
 let zoom = 1;          // tamanho da fórmula escolhido com + / − / 0
 let longMode = 'wrap'; // expressões longas: 'wrap' (quebrar linhas) ou 'scroll'
 
@@ -531,12 +535,21 @@ function refresh(animate = false, arcKey = null, hints = undefined) {
   save();
 }
 
+// Aviso no rodapé. Fica o tempo de ler (mais longo para textos longos);
+// recusas (error) têm a cor de erro e somem quando um passo dá certo.
 let toastTimer;
-function toast(msg) {
+function toast(msg, kind) {
   toastEl.textContent = msg;
+  toastEl.classList.toggle('error', kind === 'error');
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+  const ms = Math.min(9000, Math.max(2200, 1200 + 55 * msg.length));
+  toastTimer = setTimeout(hideToast, ms);
+}
+const toastError = (msg) => toast(msg, 'error');
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastEl.classList.remove('show');
 }
 
 function bump() {
@@ -564,6 +577,7 @@ function keepFocus(tree, focusId) {
 // Cada passo guarda a sua animação (arco, fusões, riscos...), que é
 // reproduzida igual ao avançar pelo histórico ou numa apresentação.
 function commit(tree, label, focusId = state().focusId, arcKey = null, hints = undefined) {
+  if (toastEl.classList.contains('error')) hideToast();
   history().push({ tree, focusId: keepFocus(tree, focusId), label, arc: arcKey, hints });
   refresh(true, arcKey, hints);
 }
@@ -579,6 +593,15 @@ function stepTo(i) {
   refresh(true, forward ? s.arc : null, forward ? s.hints : undefined);
 }
 
+function restorePreviousMain() {
+  closeMenu();
+  workspaces[0] = previousMains.pop();
+  selected.clear();
+  input.value = toAscii(state().tree);
+  refresh(false);
+  toast(t('toast.restored'));
+}
+
 function setFocus(path) {
   state().focusId = getAt(state().tree, path).id;
   applyMarks();
@@ -589,7 +612,7 @@ function move(f, ...args) {
   const r = f(state().tree, focusPath(), ...args);
   if (!r) return bump();
   if (r.error) {
-    toast(t(r.error, r.params));
+    toastError(t(r.error, r.params));
     return bump();
   }
   selected.clear();
@@ -675,7 +698,12 @@ function setPresenting(on, quiet = false) {
   document.body.classList.toggle('presenting', presenting);
   closeMenu();
   refresh(false);
-  if (presenting && !quiet) toast(t('toast.presenting'));
+  // O aviso de como sair aparece só nas primeiras vezes: no quadro, ele cobre o rodapé.
+  if (presenting && !quiet) {
+    let seen = 0;
+    try { seen = Number(localStorage.getItem(PRESENT_KEY)) || 0; localStorage.setItem(PRESENT_KEY, String(seen + 1)); } catch { /* sem armazenamento */ }
+    if (seen < 2) toast(t('toast.presenting'));
+  }
 }
 
 const togglePresenting = () => setPresenting(!presenting);
@@ -726,8 +754,14 @@ function load(text) {
     input.value = toAscii(state().tree);
   } else if (active === 0) {
     // Um problema novo troca só a Principal: nomes e identidades ficam até
-    // serem fechados explicitamente (Shift+X, ×) ou até Reiniciar.
+    // serem fechados explicitamente (Shift+X, ×) ou até Reiniciar. A
+    // derivação anterior fica guardada: Ctrl+Z no primeiro passo a traz de volta.
+    closeMenu(false);
+    const old = workspaces[0];
+    const worked = old?.history.steps.length > 1;
+    if (worked) previousMains = [...previousMains.slice(-9), old];
     workspaces = [newWorkspace('main', 'Principal', tree, msg('step.input')), ...tabSpaces()];
+    if (worked) toast(t('toast.newProblem'));
   } else {
     history().push({ tree, focusId: (tree.args?.[0] ?? tree).id, label: msg('step.input') });
   }
@@ -900,15 +934,15 @@ function openMenu(ruleId) {
     toast(t('toast.noOps'));
     return;
   }
-  menu = { all: items, items, index: direct, input: !!ruleId, inputText: null, query: null };
+  menu = { all: items, items, index: direct, input: !!ruleId, direct: !!ruleId, inputText: null, query: null };
   drawMenu();
 }
 
-function closeMenu() {
+function closeMenu(refocus = true) {
   if (!menu) return;
   menu = null;
   menuEl.hidden = true;
-  stage.focus();
+  if (refocus) stage.focus();
 }
 
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -995,10 +1029,13 @@ function drawMenu() {
     inp.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter') {
         const r = rule.run(ruleContext(inp.value));
-        if (r?.error) { toast(t(r.error, r.params)); bump(); }
+        // A recusa já aparece na prévia, logo abaixo do campo.
+        if (r?.error) bump();
         else if (r) { closeMenu(); applyResult(r); }
         else bump();
       } else if (ev.key === 'Escape') {
+        // Aberto pela tecla da operação (=, s...): Esc fecha de vez.
+        if (menu.direct) return closeMenu();
         menu.input = false;
         drawMenu();
         menuEl.focus();
@@ -1094,9 +1131,26 @@ function applyResult(r) {
 // No ABNT2 (e no US internacional) o ^ é tecla morta: chega como "Dead".
 function keyOf(ev) {
   if (ev.key === 'Dead' && ev.shiftKey && (ev.code === 'Quote' || ev.code === 'Digit6')) return '^';
-  // No US internacional o apóstrofo (derivadas) também é tecla morta.
-  if (ev.key === 'Dead' && !ev.shiftKey && ev.code === 'Quote') return "'";
-  return ev.shiftKey && /^[a-z]$/.test(ev.key) ? ev.key.toUpperCase() : ev.key;
+  // Sem Shift, a tecla Quote é o apóstrofo (derivadas) no US internacional
+  // e o til (conjugado duplo) no ABNT2: o mapa do teclado decide.
+  if (ev.key === 'Dead' && !ev.shiftKey && ev.code === 'Quote') return quoteKey;
+  // Caps Lock não transforma operações em comandos: maiúscula só com Shift.
+  if (/^[a-zA-Z]$/.test(ev.key)) return ev.shiftKey ? ev.key.toUpperCase() : ev.key.toLowerCase();
+  return ev.key;
+}
+
+// Caractere da tecla Quote no layout em uso (navegadores com a Keyboard API).
+let quoteKey = "'";
+navigator.keyboard?.getLayoutMap?.().then((map) => {
+  if (map.get('Quote') === '~') quoteKey = '~';
+}).catch(() => { /* sem acesso ao layout */ });
+
+// Caps Lock ligado: avisa uma vez (as letras continuam valendo como operações).
+let capsWarned = false;
+function warnCaps(ev) {
+  const on = ev.getModifierState?.('CapsLock');
+  if (on && !capsWarned) toast(t('toast.capsLock'));
+  capsWarned = !!on;
 }
 
 function menuKey(ev) {
@@ -1372,9 +1426,18 @@ function runRuleKey(rules, key) {
     return;
   }
   const first = rules[0];
-  if (error) toast(t(error.error, error.params));
-  else toast(t(first.id === 'substsys' ? 'toast.substsys' : 'toast.notHere', { op: t(`rule.${first.id}`) }));
+  if (error) toastError(t(error.error, error.params));
+  else toastError(t(first.id === 'substsys' ? 'toast.substsys' : 'toast.notHere', { op: t(`rule.${first.id}`) }) + tryKeys(key));
   bump();
+}
+
+// Recusa sem saída: sugere as teclas que valem no foco.
+function tryKeys(except) {
+  let keys = [];
+  try {
+    keys = [...new Set(applicable(ruleContext()).map(({ rule }) => rule.key).filter((k) => k && k !== except))];
+  } catch { /* sem sugestões */ }
+  return keys.length ? t('toast.tryKeys', { keys: keys.slice(0, 8).join(' ') }) : '';
 }
 
 // Troca o passo atual pela próxima forma da mesma equivalência.
@@ -1516,12 +1579,16 @@ stage.addEventListener('keydown', (ev) => {
   // Gravando: só avançar e encerrar (tratados pelo gravador); nada de editar.
   if (recorder.isRecording()) return ev.preventDefault();
   if (menu?.kind === 'note') return;
+  if (/^[a-zA-Z]$/.test(ev.key)) warnCaps(ev);
   if (menu) {
     menuKey(ev);
     return;
   }
   const k = keyOf(ev);
   const ctrl = ev.ctrlKey || ev.metaKey;
+  // Passadores de slides mandam "b" e "." (tela preta): na apresentação,
+  // não mexem na fórmula.
+  if (presenting && (k === 'b' || k === 'B' || k === '.')) return ev.preventDefault();
   const nav = { ArrowLeft: left, ArrowRight: right, ArrowUp: up, ArrowDown: down };
   // Ctrl (ou Alt, já que no macOS Ctrl+setas troca de mesa) + setas movem o termo.
   const moves = {
@@ -1532,7 +1599,10 @@ stage.addEventListener('keydown', (ev) => {
   const command = !ctrl && !ev.altKey && COMMANDS.find((c) => c.key === k);
 
   if ((ctrl || ev.altKey) && moves[k]) move(...moves[k]);
-  else if (ctrl && (k === 'z' || k === 'Z')) stepTo(history().index + (ev.shiftKey ? 1 : -1));
+  else if (ctrl && (k === 'z' || k === 'Z')) {
+    if (!ev.shiftKey && active === 0 && history().index === 0 && previousMains.length) restorePreviousMain();
+    else stepTo(history().index + (ev.shiftKey ? 1 : -1));
+  }
   else if (ctrl && k === 'y') stepTo(history().index + 1);
   else if (ctrl) {
     return;
@@ -1576,6 +1646,9 @@ input.addEventListener('keydown', (ev) => {
   }
 });
 input.addEventListener('input', () => { inputError.textContent = ''; });
+// Ir ao campo de entrada fecha o menu: Enter ali carrega o problema, não
+// escolhe uma operação do menu antigo.
+input.addEventListener('focus', () => closeMenu(false));
 
 // O layout dos expoentes e o ajuste de largura dependem das fontes e do
 // tamanho da janela.
@@ -1618,6 +1691,7 @@ resetBtn.addEventListener('click', () => {
   disarmReset();
   closeMenu();
   workspaces = [];
+  previousMains = [];
   active = 0;
   hypotheses = [];
   input.value = EXAMPLE;

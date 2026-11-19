@@ -123,6 +123,30 @@ export function toAscii(n) {
   return `${FUNCTION_NAMES[n.op] ?? n.op}(${n.args.map(toAscii).join(', ')})`;
 }
 
+// Texto para rótulos e mensagens: a forma ASCII com a notação da tela
+// (x², √6, |x|, ·, −, ≠, ±). Não serve de entrada.
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const sup = (d) => [...d].map((c) => SUP[c]).join('');
+export function toPretty(n) {
+  while (n.op === 'Delimiter') n = n.args[0];
+  let s = toAscii(n);
+  for (let prev; prev !== s;) { prev = s; s = s.replace(/\babs\(([^()]*)\)/g, '|$1|'); }
+  return s
+    .replace(/\bsqrt\(/g, '√(')
+    .replace(/√\((\d+|[A-Za-z])\)/g, '√$1')
+    .replace(/\^\((-?\d+)\)/g, (_, d) => sup(d))
+    .replace(/\^(\d+)(?![\d.])/g, (_, d) => sup(d))
+    .replace(/\+-/g, '±')
+    .replace(/>=/g, '≥')
+    .replace(/<=/g, '≤')
+    .replace(/!=/g, '≠')
+    .replace(/->/g, '→')
+    .replace(/\boo\b/g, '∞')
+    .replace(/\bpi\b/g, 'π')
+    .replace(/\*/g, '·')
+    .replace(/-/g, '−');
+}
+
 function latexSymbol(name) {
   if (name === IMAGINARY) return '\\mathrm{i}';
   if (name === INFINITY) return '\\infty';
