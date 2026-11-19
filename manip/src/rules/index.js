@@ -31,7 +31,7 @@ import { isRelation, FLIP, direction, RELATIONS, RELATION_INPUT, relationAt } fr
 import { scaledRelation } from '../moves.js';
 import { evaluate, evaluateComplex, ratToNode, complexToNode } from './arith.js';
 import { LOG_RULES, TRIG_RULES, RADICAL_RULES, rationalizeSuggestion } from './functions.js';
-import { checkStep, isScalar, nonNegative, signOf, integerExponent } from '../types.js';
+import { checkStep, isScalar, nonNegative, signOf, integerExponent, numericValue } from '../types.js';
 import { INVERSE, INVERSE_CANCEL, IDENTITY_NEUTRAL, VECTOR_FORMS } from './matrix.js';
 import { LAPLACE_FORMS, MATRIX_DIST, MATRIX_FACTOR, MATRIX_FORMS, MATRIX_CALC, MATRIX_SUM, MATRIX_PRODUCT, AUGMENTED, combineRows, rowSuggestion, twoRows, scaleRow, scaleSuggestion, rowOfMatrix } from './matrix.js';
 import { COMBINATORICS_RULES, sumForms, binomialTheorem, binomialTheoremInverse } from './combinatorics.js';
@@ -1595,6 +1595,8 @@ function bothSides(ctx) {
 
 // |a| = b → a = ±b, com b ≥ 0 (número, √…, ou hipótese). Com b < 0 não há
 // solução; sem saber o sinal de b, o passo não é honesto.
+const CONSTANT_NAMES = new Set(['pi', 'e', IMAGINARY, INFINITY]);
+
 function absEquation(ctx) {
   const { tree } = ctx;
   if (tree.op !== 'Equal') return null;
@@ -1604,11 +1606,23 @@ function absEquation(ctx) {
   const b = tree.args[1 - i];
   const used = [];
   if (signOf(unparen(b), used) === -1) return { error: 'err.absNegative' };
-  if (!nonNegative(unparen(b), used)) return { error: 'err.absSign', params: { b: show(b), ...signHint([b], '≥') } };
+  // Um número precisa ser ≥ 0; uma expressão de sinal desconhecido passa,
+  // com o aviso "supondo b ≥ 0" (o professor decide a hipótese depois).
+  let assumes = false;
+  if (!nonNegative(unparen(b), used)) {
+    let letters = false;
+    walk(b, (n) => { if (n.op === 'Symbol' && !CONSTANT_NAMES.has(n.name)) letters = true; });
+    if (!letters) {
+      const v = numericValue(b, {});
+      if (typeof v === 'number' && v < 0) return { error: 'err.absNegative' };
+      if (!(typeof v === 'number' && v >= 0)) return { error: 'err.absSign', params: { b: show(b), ...signHint([b], '≥') } };
+    } else assumes = true;
+  }
   used.forEach(note);
   const pm = fn('PlusMinus', b.op === 'Add' ? fn('Delimiter', b) : b);
   const args = i === 0 ? [unparen(a), pm] : [pm, unparen(a)];
-  return { tree: { ...tree, args }, label: msg('step.absEq', { a: show(a), b: show(b) }), focus: pm.id };
+  const label = msg(assumes ? 'step.absEqAssuming' : 'step.absEq', { a: show(a), b: show(b) });
+  return { tree: { ...tree, args }, label, focus: pm.id };
 }
 
 // Trocar os lados de uma inequação inverte o símbolo: a < b ⇔ b > a.
