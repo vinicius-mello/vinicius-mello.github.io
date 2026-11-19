@@ -67,12 +67,11 @@ export const MANUAL = [
   ['table', [L('Parte', 'Part'), L('Para que serve', 'What it is for')], [
     [L('Campo de entrada', 'Input field'), L('no alto: digite a equação e tecle Enter (capítulo 3)', 'at the top: type the equation and press Enter (chapter 3)')],
     [L('Teclado', 'Keyboard'), L('mostra o teclado matemático na tela (também a tecla K)', 'shows the on-screen math keyboard (also the K key)')],
-    [L('Ajustes', 'Settings'), L('velocidade da animação, tema, expressões longas e idioma (capítulo 15)', 'animation speed, theme, long expressions and language (chapter 15)')],
+    [L('Ajustes', 'Settings'), L('velocidade da animação, tema, expressões longas, transparência do menu e idioma (capítulo 15)', 'animation speed, theme, long expressions, menu transparency and language (chapter 15)')],
     [L('Exportar', 'Export'), L('copiar texto, LaTeX ou MathJSON, salvar e abrir arquivos, gravar vídeo (capítulos 13 e 14)', 'copy text, LaTeX or MathJSON, save and open files, record video (chapters 13 and 14)')],
     [L('Reiniciar', 'Reset'), L('apaga tudo (abas, nomes, identidades e passos) e volta ao exemplo inicial; pede um segundo clique para confirmar. Os ajustes ficam', 'erases everything (tabs, names, identities and steps) and goes back to the starting example; asks for a second click to confirm. Settings are kept')],
     [L('Ajuda', 'Help'), L('atalhos e sintaxe completa da entrada (também a tecla ?)', 'shortcuts and full input syntax (also the ? key)')],
     [L('Palco', 'Stage'), L('a fórmula, com o foco (contorno) e a seleção (fundo amarelo)', 'the formula, with the focus (outline) and the selection (yellow background)')],
-    [L('Operações', 'Operations'), L('na coluna da direita: as operações que se aplicam ao foco, com a tecla de cada uma; refeito a cada movimento. Passar o mouse mostra o resultado, clicar aplica. A tecla M esconde e mostra (capítulo 6)', 'in the right column: the operations that apply to the focus, with the key of each one; rebuilt at every move. Hovering shows the result, clicking applies it. The M key hides and shows it (chapter 6)')],
     [L('Abas', 'Tabs'), L('acima do palco, quando há nomes: a Principal e uma por nome (capítulo 10)', 'above the stage, when there are names: Main and one per name (chapter 10)')],
     [L('Nomes', 'Names'), L('ao lado: cada nome com a sua definição atual', 'on the side: each name with its current definition')],
     [L('Passos', 'Steps'), L('ao lado: o histórico, com a justificativa e a nota de cada passo (capítulo 11)', 'on the side: the history, with the justification and note of each step (chapter 11)')],
@@ -150,8 +149,7 @@ export const MANUAL = [
   ['p', L('Há duas maneiras de aplicar uma operação ao foco (ou à seleção):', 'There are two ways to apply an operation to the focus (or the selection):')],
   ['ul', [
     L('**tecla direta:** cada operação tem uma tecla (minúscula, dígito ou símbolo), que vale direto na fórmula;', '**direct key:** each operation has a key (lowercase letter, digit or symbol), which works directly on the formula;'),
-    L('**menu (Enter):** lista só as operações que se aplicam ali, agrupadas por assunto, com a prévia do resultado. Setas escolhem, Enter aplica, a tecla da operação também vale, e `/` abre uma busca pelo nome (sem acentos: “potencia” acha “Potências”). Com o painel de operações à vista, o menu abre sobre ele, sem cobrir a fórmula.', '**menu (Enter):** lists only the operations that apply there, grouped by subject, with a preview of the result. Arrows choose, Enter applies, the operation’s key also works, and `/` opens a search by name. With the operations panel shown, the menu opens over it, without covering the formula.'),
-    L('**painel de operações:** a mesma lista, sempre à vista na coluna da direita e atualizada a cada movimento do foco. Serve de cola das teclas; passar o mouse mostra o resultado e clicar (ou tocar) aplica. A tecla **M** esconde e mostra o painel.', '**operations panel:** the same list, always shown in the right column and updated at every focus move. It works as a key cheat sheet; hovering shows the result and clicking (or tapping) applies it. The **M** key hides and shows the panel.'),
+    L('**menu (Enter):** lista só as operações que se aplicam ali, agrupadas por assunto, com a prévia do resultado. Setas escolhem, Enter aplica, a tecla da operação também vale, e `/` abre uma busca pelo nome (sem acentos: “potencia” acha “Potências”).', '**menu (Enter):** lists only the operations that apply there, grouped by subject, with a preview of the result. Arrows choose, Enter applies, the operation’s key also works, and `/` opens a search by name.'),
   ]],
   ['p', L(
     'Algumas operações pedem um texto (os nomes terminam em “…”): um campo se abre, já com uma sugestão quando há uma; Enter aplica e Esc cancela. Se a operação não se aplica, um aviso explica por quê.',
@@ -516,8 +514,8 @@ export const MANUAL = [
 
   ['h2', L('12. Modo apresentação', '12. Presentation mode')],
   ['p', L(
-    'A tecla **P** liga o modo apresentação: a fórmula ocupa a tela e os dois passos anteriores ficam empilhados acima dela, como num quadro, cada um esmaecido e com a justificativa entre eles (“↓ regra da cadeia”). Embaixo aparecem a nota do passo e o contador “passo i de n”. PgUp e PgDn percorrem os passos, repetindo as animações; P ou Esc saem. O painel de operações começa escondido; **M** o mostra numa coluna à direita, para discutir com a turma qual o próximo passo.',
-    'The **P** key turns presentation mode on: the formula fills the screen and the two previous steps are stacked above it, as on a board, each one faded and with the justification between them (“↓ chain rule”). Below are the step note and the counter “step i of n”. PgUp and PgDn go through the steps, replaying the animations; P or Esc leave. The operations panel starts hidden; **M** shows it in a column on the right, to discuss the next step with the class.',
+    'A tecla **P** liga o modo apresentação: a fórmula ocupa a tela e os dois passos anteriores ficam empilhados acima dela, como num quadro, cada um esmaecido e com a justificativa entre eles (“↓ regra da cadeia”). Embaixo aparecem a nota do passo e o contador “passo i de n”. PgUp e PgDn percorrem os passos, repetindo as animações; P ou Esc saem.',
+    'The **P** key turns presentation mode on: the formula fills the screen and the two previous steps are stacked above it, as on a board, each one faded and with the justification between them (“↓ chain rule”). Below are the step note and the counter “step i of n”. PgUp and PgDn go through the steps, replaying the animations; P or Esc leave.',
   )],
   ['p', L(
     'Para aulas, a opção “aula (lenta)” em Ajustes deixa as animações mais lentas; o tema “quadro verde” ou “alto contraste” ajuda em projetores; [ e ] aumentam e diminuem a fórmula.',
@@ -559,6 +557,7 @@ export const MANUAL = [
     [L('Animação', 'Animation'), L('normal, aula (lenta) ou desligada; com “reduzir movimento” ligado no sistema, as animações são desligadas', 'normal, lesson (slow) or off; with the system’s “reduce motion” on, animations are turned off')],
     [L('Tema', 'Theme'), L('automático (segue o sistema), claro, escuro, quadro verde, papel e alto contraste', 'automatic (follows the system), light, dark, chalkboard, paper and high contrast')],
     [L('Expressões longas', 'Long expressions'), L('quebrar linhas (nos + e − do nível de cima) ou rolar', 'wrap lines (at top-level + and −) or scroll')],
+    [L('Menu', 'Menu'), L('transparência do menu do Enter: opaco, levemente transparente (o padrão), transparente ou bem transparente; deixa ver a fórmula que o menu cobre', 'transparency of the Enter menu: opaque, slightly transparent (the default), transparent or very transparent; lets the formula under the menu show through')],
     [L('Idioma', 'Language'), L('português ou inglês; troca também os nomes das funções (sen/sin, tg/tan)', 'Portuguese or English; also switches function names (sen/sin, tg/tan)')],
     ['[  ]  \\', L('aumentar, diminuir e voltar ao tamanho normal da fórmula', 'enlarge, shrink and reset the formula size')],
   ]],
