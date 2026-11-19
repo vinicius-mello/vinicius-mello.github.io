@@ -117,7 +117,7 @@ export function kindOf(n) {
       if (n.op === 'Determinant') return rows !== cols ? err('err.detSquare') : formal ? { t: 'vector', n: '3' } : SCALAR;
       return { t: 'matrix', r: String(rows), c: String(cols) };
     }
-    case 'Delimiter': case 'Negate': case 'PlusMinus': return kindOf(n.args[0]);
+    case 'Delimiter': case 'Negate': case 'PlusMinus': case 'MinusPlus': return kindOf(n.args[0]);
     case 'Tuple': {
       for (const e of n.args) {
         const k = kindOf(e);

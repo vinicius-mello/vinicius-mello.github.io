@@ -830,6 +830,13 @@ function signs(ctx) {
       const inner = unparen(n.args[0]).args[0];
       return { tree: replaceAt(tree, p, inner), label: msg('step.doubleNeg'), focus: inner.id };
     }
+    // −(±a) → ∓a · −(∓a) → ±a
+    const PM_FLIP = { PlusMinus: 'MinusPlus', MinusPlus: 'PlusMinus' };
+    if (n.op === 'Negate' && PM_FLIP[unparen(n.args[0]).op]) {
+      const pm = unparen(n.args[0]);
+      const node = fn(PM_FLIP[pm.op], pm.args[0]);
+      return { tree: place(tree, p, node), label: msg('step.negPm', { s: pm.op === 'PlusMinus' ? '±' : '∓', t: pm.op === 'PlusMinus' ? '∓' : '±' }), focus: node.id };
+    }
     if (n.op !== 'Multiply' && n.op !== 'Divide') return null;
     const count = n.args.filter(isNeg).length;
     if (!count) return null;

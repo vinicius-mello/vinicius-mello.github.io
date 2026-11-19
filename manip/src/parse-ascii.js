@@ -54,6 +54,9 @@ function tokenize(src) {
     } else if ((m = /^(\+-|±)/.exec(rest))) {
       // x = 2 +- sqrt(6): mais ou menos
       toks.push({ t: 'pm', pos: i });
+    } else if ((m = /^(-\+|∓)/.exec(rest))) {
+      // x = 2 -+ sqrt(6): menos ou mais
+      toks.push({ t: 'mp', pos: i });
     } else if ('+-*/^(),|;·×÷−!_'.includes(c)) {
       const v = { '·': '*', '×': '*', '÷': '/', '−': '-' }[c] ?? c;
       toks.push(c === '×' ? { t: v, pos: i, cross: true } : { t: v, pos: i });

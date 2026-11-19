@@ -32,6 +32,8 @@ export class ParseError extends Error {
 
 const unwrap = (n) => (n.op === 'Delimiter' ? n.args[0] : n);
 const ARITY = { Root: 2, Binomial: 2, Cross: 2 };
+// ± e ∓ como sinais: x = 2 ± √6, x = ∓3.
+const SIGNED = { pm: 'PlusMinus', mp: 'MinusPlus' };
 const ATOM_START = new Set(['num', 'id', 'fn', '(', 'frac', 'sqrt', '{', '|', 'big', 'binom', 'lim', 'deriv', 'int', 'evopen', 'mopen', 'vec']);
 
 // d/dx escrito como fração: \frac{d}{dx}, \frac{d^2}{dx^2}, \frac{\partial}{\partial x}.
@@ -87,11 +89,11 @@ export function parseTokens(toks) {
     const terms = [];
     let tok = peek();
     if (tok.t === '-') { next(); terms.push(fn('Negate', term())); }
-    else if (tok.t === 'pm') { next(); terms.push(fn('PlusMinus', term())); }
+    else if (SIGNED[tok.t]) { next(); terms.push(fn(SIGNED[tok.t], term())); }
     else { if (tok.t === '+') next(); terms.push(term()); }
-    while ((tok = peek()).t === '+' || tok.t === '-' || tok.t === 'pm') {
+    while ((tok = peek()).t === '+' || tok.t === '-' || SIGNED[tok.t]) {
       next();
-      terms.push(tok.t === '-' ? fn('Negate', term()) : tok.t === 'pm' ? fn('PlusMinus', term()) : term());
+      terms.push(tok.t === '-' ? fn('Negate', term()) : SIGNED[tok.t] ? fn(SIGNED[tok.t], term()) : term());
     }
     return terms.length === 1 ? terms[0] : fn('Add', ...terms);
   }
@@ -119,7 +121,7 @@ export function parseTokens(toks) {
 
   function signedFactor() {
     if (peek().t === '-') { next(); return fn('Negate', signedFactor()); }
-    if (peek().t === 'pm') { next(); return fn('PlusMinus', signedFactor()); }
+    if (SIGNED[peek().t]) return fn(SIGNED[next().t], signedFactor());
     return power();
   }
 

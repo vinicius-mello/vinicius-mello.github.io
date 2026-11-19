@@ -36,12 +36,12 @@ export function needsParens(child, parent, index) {
   switch (parent.op) {
     case 'Add':
       return c === 'Add';
-    case 'Negate': case 'PlusMinus':
-      return c === 'Add' || c === 'Negate' || c === 'PlusMinus';
+    case 'Negate': case 'PlusMinus': case 'MinusPlus':
+      return c === 'Add' || c === 'Negate' || c === 'PlusMinus' || c === 'MinusPlus';
     case 'Multiply':
       // Σ no meio de um produto engoliria os fatores seguintes: (Σ k)·x.
       if (greedy(child) && index < parent.args.length - 1) return true;
-      return c === 'Add' || c === 'Multiply' || ((c === 'Negate' || c === 'PlusMinus') && index > 0);
+      return c === 'Add' || c === 'Multiply' || ((c === 'Negate' || c === 'PlusMinus' || c === 'MinusPlus') && index > 0);
     case 'Cross':
       return c === 'Add' || c === 'Multiply' || c === 'Negate' || c === 'Divide' || (c === 'Cross' && index === 1);
     case 'Factorial':
@@ -78,6 +78,6 @@ export function needsDot(prev, next, nextIndex, parent) {
   if (startsWithDigit(next)) return true;
   if (isDots(prev) || isDots(next)) return true;
   if (vectorish(prev) && vectorish(next)) return true;
-  if (next.op === 'Negate' || next.op === 'PlusMinus') return true;
+  if (next.op === 'Negate' || next.op === 'PlusMinus' || next.op === 'MinusPlus') return true;
   return false;
 }
