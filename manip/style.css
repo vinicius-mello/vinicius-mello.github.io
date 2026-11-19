@@ -377,6 +377,31 @@ body {
   color: var(--muted);
 }
 
+/* Painel de operações: o que se aplica ao foco, sempre à vista */
+#ops-panel { margin-bottom: 18px; }
+#ops { list-style: none; margin: 0; padding: 0 8px; max-height: 40vh; overflow-y: auto; }
+#ops li.ops-group {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#ops li.ops-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+#ops li.ops-item:hover { background: var(--focus-bg); color: var(--accent); }
+#ops li.ops-empty { padding: 4px 12px; font-size: 13px; color: var(--muted); }
+#ops-preview { margin: 8px 20px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+#ops-preview .hint { color: var(--muted); font-size: 13px; }
+
 #names-panel { margin-bottom: 18px; }
 #names { list-style: none; margin: 0; padding: 0; }
 #names li { padding: 6px 20px; cursor: pointer; }
@@ -1065,6 +1090,13 @@ body.presenting .layout { grid-template-columns: 1fr; }
 body.presenting { --formula-size: clamp(40px, 8vw, 104px); }
 body.presenting #stage { flex-direction: column; gap: 28px; padding: 32px 40px; overflow: hidden; }
 body.presenting #stage:focus-visible::after { display: none; }
+/* Painel de operações na apresentação (tecla M): só ele, numa coluna à direita */
+body.presenting.ops-on .layout { grid-template-columns: 1fr minmax(240px, 22vw); }
+body.presenting.ops-on .side { display: block; }
+body.presenting.ops-on .side > :not(#ops-panel) { display: none; }
+body.presenting #ops { max-height: none; }
+body.presenting #ops li.ops-item { font-size: clamp(16px, 1.4vw, 22px); padding: 6px 12px; }
+body.presenting #ops li.ops-item kbd { font-size: .8em; }
 
 .board {
   display: flex;

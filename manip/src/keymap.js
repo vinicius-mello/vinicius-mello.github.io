@@ -10,6 +10,7 @@ export const COMMANDS = [
   { id: 'latex', key: 'L', label: 'keys.latex' },
   { id: 'present', key: 'P', label: 'keys.present' },
   { id: 'keyboard', key: 'K', label: 'keys.keyboard' },
+  { id: 'opsPanel', key: 'M', label: 'keys.opsPanel' },
   { id: 'note', key: 'O', label: 'keys.note' },
   { id: 'record', key: 'R', label: 'keys.record' },
   { id: 'closeTab', key: 'X', label: 'keys.closeTab' },

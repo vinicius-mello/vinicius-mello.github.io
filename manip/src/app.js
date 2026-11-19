@@ -40,11 +40,15 @@ const namesList = $('#names');
 const toastEl = $('#toast');
 const speedSelect = $('#speed');
 const menuEl = $('#menu');
+const opsPanel = $('#ops-panel');
+const opsList = $('#ops');
+const opsPreview = $('#ops-preview');
 const fileInput = $('#file');
 const kbToggle = $('#kb-toggle');
 const themeSelect = $('#theme');
 const langSelect = $('#lang');
 const KB_KEY = 'manip.keyboard';
+const OPS_KEY = 'manip.opsPanel';
 const THEME_KEY = 'manip.theme';
 const ZOOM_KEY = 'manip.zoom';
 const LONG_KEY = 'manip.long';
@@ -418,6 +422,7 @@ function applyMarks() {
     focused.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reducedMotion.matches ? 'auto' : 'smooth' });
   }
   updateScrollHints();
+  scheduleOps();
 }
 
 function drawHistory() {
@@ -522,6 +527,7 @@ function refresh(animate = false, arcKey = null, hints = undefined) {
   drawHistory();
   drawTabs();
   drawNames();
+  scheduleOps();
   save();
 }
 
@@ -747,6 +753,86 @@ function addHypotheses(hyps) {
   return true;
 }
 
+// ---------- painel de operações ----------
+
+// Na coluna lateral, as operações que se aplicam ao foco, refeitas a cada
+// movimento. Fora da apresentação fica à vista (M esconde); na apresentação
+// começa escondido e M o mostra numa coluna à direita do quadro.
+const opsShown = { edit: true, present: false };
+const opsVisible = () => (presenting ? opsShown.present : opsShown.edit);
+let opsFrame = 0;
+function scheduleOps() {
+  cancelAnimationFrame(opsFrame);
+  opsFrame = requestAnimationFrame(drawOps);
+}
+
+const itemLabel = ({ rule, result, alt }) =>
+  alt || rule.labelled ? capitalize(fmt(result.label)) : t(`rule.${rule.id}`);
+
+function toggleOps() {
+  if (presenting) opsShown.present = !opsShown.present;
+  else {
+    opsShown.edit = !opsShown.edit;
+    try { localStorage.setItem(OPS_KEY, opsShown.edit ? '1' : '0'); } catch { /* sem armazenamento */ }
+  }
+  drawOps();
+}
+
+function showOpsPreview(rule, result) {
+  if (result?.tree) {
+    const f = staticFormula(result.tree);
+    opsPreview.replaceChildren(f);
+    opsPreview.hidden = false;
+    fit(f, opsPreview.clientWidth - 24);
+  } else {
+    opsPreview.replaceChildren(hintEl(rule.input ? t('menu.enterToType') : result?.label ? capitalize(fmt(result.label)) : ''));
+    opsPreview.hidden = false;
+  }
+}
+
+function drawOps() {
+  const on = opsVisible() && workspaces.length > 0;
+  // Na apresentação o painel muda a largura do quadro: refaz o ajuste.
+  const layoutChanged = presenting && document.body.classList.contains('ops-on') !== on;
+  document.body.classList.toggle('ops-on', on);
+  opsPanel.hidden = !on;
+  if (layoutChanged) relayout();
+  if (!on) return;
+  let items = [];
+  try { items = applicable(ruleContext()); } catch (err) { console.error('[Manip] painel de operações', err); }
+  opsPreview.hidden = true;
+  if (!items.length) {
+    opsList.replaceChildren(Object.assign(document.createElement('li'), { className: 'ops-empty', textContent: t('ops.empty') }));
+    return;
+  }
+  let lastGroup = null;
+  const lis = [];
+  for (const item of items) {
+    const { rule, result } = item;
+    if (rule.group !== lastGroup) {
+      lastGroup = rule.group;
+      lis.push(Object.assign(document.createElement('li'), { className: 'ops-group', textContent: t(`group.${rule.group}`) }));
+    }
+    const li = document.createElement('li');
+    li.className = 'ops-item';
+    const k = document.createElement('kbd');
+    k.textContent = rule.key ?? '·';
+    li.append(k, itemLabel(item));
+    li.addEventListener('mouseenter', () => showOpsPreview(rule, result));
+    li.addEventListener('mouseleave', () => { opsPreview.hidden = true; });
+    // mousedown: o foco do teclado fica na equação.
+    li.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      closeMenu();
+      if (rule.input) openMenu(rule.id);
+      else applyResult(result);
+      if (!menu) stage.focus();
+    });
+    lis.push(li);
+  }
+  opsList.replaceChildren(...lis);
+}
+
 // ---------- menu de operações ----------
 
 let menu = null; // { all, items, index, input: bool, inputText, query }
@@ -848,7 +934,7 @@ function drawMenu() {
     const k = document.createElement('kbd');
     k.textContent = rule.key ?? '·';
     // Equivalência com mais de uma forma aqui: cada uma diz o que faz.
-    li.append(k, alt || rule.labelled ? capitalize(fmt(result.label)) : t(`rule.${rule.id}`));
+    li.append(k, itemLabel({ rule, result, alt }));
     li.addEventListener('mousemove', () => {
       if (menu.index !== i && !menu.input) { menu.index = i; drawMenu(); }
     });
@@ -947,8 +1033,19 @@ function updateInputPreview(box, text) {
   box.querySelectorAll('.formula.mini').forEach((f) => fit(f, 320));
 }
 
-// O menu aparece logo abaixo do nó em foco, sem sair da tela.
+// O menu aparece logo abaixo do nó em foco, sem sair da tela. Com o painel
+// de operações à vista, abre sobre o painel: a fórmula fica descoberta.
 function positionMenu() {
+  if (!opsPanel.hidden && opsPanel.offsetParent) {
+    const p = opsPanel.getBoundingClientRect();
+    const w = Math.max(p.width, 260);
+    menuEl.style.width = `${w}px`;
+    const m = menuEl.getBoundingClientRect();
+    menuEl.style.left = `${Math.max(8, Math.min(p.left, innerWidth - w - 8))}px`;
+    menuEl.style.top = `${Math.max(8, Math.min(p.top, innerHeight - m.height - 8))}px`;
+    return;
+  }
+  menuEl.style.width = '';
   const root = stage.querySelector('.formula.main:not(.leaving)');
   const target = root.querySelector('.focus') ?? root;
   const r = target.getBoundingClientRect();
@@ -1226,6 +1323,7 @@ const ACTIONS = {
   latex: () => copyText(toLatex(state().tree), 'what.latex'),
   present: () => togglePresenting(),
   keyboard: () => toggleKeyboard(),
+  opsPanel: () => toggleOps(),
   note: () => openNote(),
   record: () => recorder.openDialog(),
   zoomIn: () => setZoom(zoom * 1.15),
@@ -1497,6 +1595,7 @@ try {
   zoom = Number(localStorage.getItem(ZOOM_KEY)) || 1;
   setLongMode(localStorage.getItem(LONG_KEY) || 'wrap');
   if (localStorage.getItem(KB_KEY)) toggleKeyboard(true);
+  if (localStorage.getItem(OPS_KEY) === '0') opsShown.edit = false;
 } catch { /* sem armazenamento */ }
 
 // Reiniciar: volta ao estado inicial (só o exemplo, sem nomes nem passos).

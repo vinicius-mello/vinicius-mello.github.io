@@ -157,6 +157,8 @@ const STRINGS = {
     'ui.stage': 'Equação: use as setas para navegar',
     'ui.names': 'Nomes e hipóteses',
     'ui.steps': 'Passos',
+    'ui.ops': 'Operações',
+    'ops.empty': 'Nenhuma operação se aplica aqui',
     'ui.kbd': 'Teclado matemático',
     'keys.nav': 'navegar',
     'keys.move': 'mover / passar para o outro lado',
@@ -176,6 +178,7 @@ const STRINGS = {
     'keys.latex': 'copiar LaTeX',
     'keys.present': 'apresentação',
     'keys.keyboard': 'teclado',
+    'keys.opsPanel': 'mostrar/ocultar o painel de operações',
     'keys.undo': 'desfazer',
 
     // mensagens
@@ -755,6 +758,8 @@ const STRINGS = {
     'ui.stage': 'Equation: use the arrow keys to navigate',
     'ui.names': 'Names and assumptions',
     'ui.steps': 'Steps',
+    'ui.ops': 'Operations',
+    'ops.empty': 'No operation applies here',
     'ui.kbd': 'Math keyboard',
     'keys.nav': 'navigate',
     'keys.move': 'move / take to the other side',
@@ -774,6 +779,7 @@ const STRINGS = {
     'keys.latex': 'copy LaTeX',
     'keys.present': 'present',
     'keys.keyboard': 'keyboard',
+    'keys.opsPanel': 'show/hide the operations panel',
     'keys.undo': 'undo',
 
     'tab.main': 'Main',
