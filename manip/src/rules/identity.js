@@ -81,9 +81,39 @@ function instantiate(side, b, clones) {
 
 const bindingText = (b) => Object.entries(b).map(([k, v]) => `${k} = ${show(v)}`).join(', ');
 
-// Uma aplicação: molde `from`, resultado `to`, no lugar dado por targets.
-function applyOne(ctx, name, from, to, vars, dir) {
+// Variável que prende a letra: dentro dela, a letra é outra (∑, ∫, d/dx, lim).
+const BINDERS = new Set(['Sum', 'Product', 'Integrate', 'D', 'Limit', 'EvalAt']);
+
+// Equação "u = g(v)" (a letra sozinha num lado, sem ser identidade): troca
+// todo u da expressão em foco (ou da equação inteira) por g(v), como numa
+// substituição. Fora das variáveis presas por ∑, ∫, d/dx e lim.
+function substituteAll(ctx, name, v, to, eq) {
   const { tree, targets } = ctx;
+  if (targets.length !== 1) return null;
+  const p = targets[0];
+  const expr = getAt(tree, p);
+  if (expr.op === 'Symbol' || literal(expr, eq)) return null;
+  const paths = [];
+  const find = (n, path) => {
+    if (n.op === 'Symbol' && n.name === v && !n.named) { paths.push(path); return; }
+    if (BINDERS.has(n.op) && n.args[0]?.op === 'Symbol' && n.args[0].name === v) return;
+    n.args?.forEach((a, i) => find(a, [...path, i]));
+  };
+  find(expr, p);
+  if (!paths.length) return null;
+  // Do último para o primeiro: achatar uma soma não muda os caminhos anteriores.
+  let t2 = tree;
+  for (const q of paths.reverse()) t2 = place(t2, q, instantiate(to, {}, {}));
+  return { tree: t2, label: msg('step.identityAll', { name, v }), focus: getAt(t2, p).id };
+}
+
+// Uma aplicação: molde `from`, resultado `to`, no lugar dado por targets.
+function applyOne(ctx, name, from, to, vars, dir, eq) {
+  const { tree, targets } = ctx;
+  if (!vars.size && from.op === 'Symbol' && !from.named && !CONSTANTS.has(from.name)) {
+    const r = substituteAll(ctx, name, from.name, to, eq);
+    if (r) return r;
+  }
   let expr, put;
   if (targets.length === 1) {
     const p = targets[0];
@@ -144,7 +174,7 @@ export function applyIdentities(ctx) {
     const vars = patternVars(eq, ctx.definitions);
     const [L, R] = eq.args;
     for (const [from, to, dir] of [[L, R, 1], [R, L, -1]]) {
-      const r = applyOne(ctx, name, from, to, vars, dir);
+      const r = applyOne(ctx, name, from, to, vars, dir, eq);
       if (r && !literal(r.tree, ctx.tree)) out.push(r);
     }
   }

@@ -396,10 +396,13 @@ export const MANUAL = [
     L('As letras casam pela forma escrita, não pelo valor: (a + b)² casa com (x + 3)² mas não com x² + 6x + 9 lido como a² + 2ab + b² (o 9 não está escrito como 3²). Escreva antes a forma que a identidade espera.', 'Letters match the written form, not the value: (a + b)² matches (x + 3)², but x² + 6x + 9 does not match a² + 2ab + b² (the 9 is not written as 3²). Write the form the identity expects first.'),
     L('Uma letra que só aparece do outro lado fica como está: aplicar S da direita para a esquerda num 1 dá sen²x + cos²x.', 'A letter that appears only on the other side stays as it is: applying S right to left to a 1 gives sin²x + cos²x.'),
     L('Uma igualdade que **não** é identidade (por exemplo `H := x + y = 3`, um dado do problema) também pode ter nome. O app confere numericamente: se os dois lados não são iguais para todo valor, as letras ficam fixas, e aplicar H só troca x + y por 3 (e vice-versa) onde x + y aparece.', 'An equality that is **not** an identity (for instance `H := x + y = 3`, a given of the problem) can have a name too. The app checks numerically: if the two sides are not equal for every value, the letters stay fixed, and applying H only replaces x + y with 3 (and back) where x + y shows up.'),
+    L('Uma equação com uma letra isolada, como `u = g(v)`, serve para **substituir** numa outra aba: com o foco na equação inteira (ou numa parte dela), `k` troca todo u ali por g(v), menos onde u é a variável de ∑, ∫, d/du ou lim. Um caminho típico: `E := f(u, v) = 0`, manipular na aba E até isolar u, e aplicar E na aba onde se quer eliminar u.', 'An equation with an isolated letter, such as `u = g(v)`, can be used to **substitute** in another tab: with the focus on the whole equation (or on part of it), `k` replaces every u there with g(v), except where u is the variable of ∑, ∫, d/du or lim. A typical path: `E := f(u, v) = 0`, manipulate in tab E until u is isolated, and apply E in the tab where u should be eliminated.'),
     L('Fechar a aba da identidade (Shift+X ou ×) a apaga.', 'Closing the identity’s tab (Shift+X or ×) deletes it.'),
   ]],
   ['ex', { rule: 'identity', src: 'z = 2(y + x)', focus: [1, 1], ids: { H: 'x + y = 3' },
     note: L('com H: x + y = 3 (não é identidade)', 'with H: x + y = 3 (not an identity)') }],
+  ['ex', { rule: 'identity', src: 'u^2 + u v = 3', focus: [], ids: { E: 'u = 2v + 1' },
+    note: L('com E: u = 2v + 1 (u isolado; foco na equação inteira)', 'with E: u = 2v + 1 (u isolated; focus on the whole equation)') }],
 
   ['h3', L('Derivada parcial', 'Partial derivative')],
   ['h4', L('Notação', 'Notation')],
