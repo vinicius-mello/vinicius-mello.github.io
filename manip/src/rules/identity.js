@@ -18,8 +18,20 @@ import { cloneFrom, parentPath, siblingsOf, rebuild, place } from './util.js';
 
 const CONSTANTS = new Set([IMAGINARY, INFINITY, DOTS, 'e', 'pi']);
 
+const isolated = (side, other) => {
+  side = unparen(side);
+  if (side.op !== 'Symbol' || side.named || CONSTANTS.has(side.name)) return false;
+  let found = false;
+  walk(other, (n) => { if (n.op === 'Symbol' && n.name === side.name) found = true; });
+  return !found;
+};
+
 // Letras do molde: as da identidade, menos constantes e nomes definidos.
 function patternVars(eq, defs = {}) {
+  // u = g(v), com u fora de g: nunca é identidade, mesmo quando a conta
+  // numérica não decide (√, f(x), ∫, x!); as letras ficam fixas, senão o u
+  // casaria com qualquer letra.
+  if (eq.args.some((side, i) => isolated(side, eq.args[1 - i]))) return new Set();
   if (sameValue(eq.args[0], eq.args[1])?.error) return new Set();
   const vars = new Set();
   walk(eq, (n) => {
