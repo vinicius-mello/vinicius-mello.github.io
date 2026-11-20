@@ -183,6 +183,9 @@ export function applyIdentities(ctx) {
   const out = [];
   for (const [name, eq] of Object.entries(ids)) {
     if (eq?.op !== 'Equal') continue;
+    // a própria equação em foco (a aba da identidade): aplicá-la nela só
+    // dá B = B ou 0 = 0
+    if (literal(eq, ctx.tree)) continue;
     const vars = patternVars(eq, ctx.definitions);
     const [L, R] = eq.args;
     for (const [from, to, dir] of [[L, R, 1], [R, L, -1]]) {

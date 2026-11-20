@@ -808,7 +808,10 @@ function ruleContext(text) {
     .map((id) => findPath(tree, id))
     .filter(Boolean)
     .sort((a, b) => (a.join() < b.join() ? -1 : 1));
-  return { tree, focus, targets: targets.length ? targets : [focus], input: text, definitions: definitions(), identities: identities() };
+  // A identidade da própria aba não se aplica nela (B = 0 viraria 0 = 0).
+  const ids = identities();
+  delete ids[workspaces[active]?.id];
+  return { tree, focus, targets: targets.length ? targets : [focus], input: text, definitions: definitions(), identities: ids };
 }
 
 // Nota do passo atual (tecla O): Enter salva, Shift+Enter quebra a linha,
