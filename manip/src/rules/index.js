@@ -817,6 +817,41 @@ function expandFraction(ctx) {
   return { tree: replaceAt(tree, dp, result), label: msg('step.expandFrac', { q: toPretty(k) }), focus: result.id };
 }
 
+// Fração de fração em um passo: a/(b/c) → ac/b · (a/b)/c → a/(bc) ·
+// (a/b)/(c/d) → ad/(bc). O denominador interno que sobe (c em a/(b/c), d em
+// (a/b)/(c/d)) deixa de ser denominador: se pode valer zero, o passo avisa.
+function nestedFraction(ctx) {
+  if (ctx.targets.length > 1) return null;
+  return atFocusOrParent(ctx, (p) => {
+    const { tree } = ctx;
+    const D = getAt(tree, p);
+    if (D.op !== 'Divide') return null;
+    const [N, M] = D.args.map(unparen);
+    if (N.op !== 'Divide' && M.op !== 'Divide') return null;
+    if (![N, M].every(isScalar)) return null;
+    const times = (...xs) => {
+      const fs = xs.flatMap((x) => { x = unparen(x); return x.op === 'Multiply' ? x.args : [x]; });
+      return fs.length === 1 ? fs[0] : fn('Multiply', ...fs);
+    };
+    let node, lifted, label;
+    if (N.op === 'Divide' && M.op === 'Divide') {
+      node = withArgs(D, [times(N.args[0], M.args[1]), times(N.args[1], M.args[0])]);
+      lifted = M.args[1];
+      label = 'step.nestedBoth';
+    } else if (M.op === 'Divide') {
+      node = withArgs(D, [times(D.args[0], M.args[1]), M.args[0]]);
+      lifted = M.args[1];
+      label = 'step.nestedDen';
+    } else {
+      node = withArgs(D, [N.args[0], times(N.args[1], D.args[1])]);
+      label = 'step.nestedNum';
+    }
+    let text = msg(label);
+    if (lifted && !evaluate(lifted) && signOf(lifted, []) === null) text = msg('step.assuming', { step: text, e: show(lifted) });
+    return { tree: place(tree, p, node), label: text, focus: node.id };
+  });
+}
+
 function splitFraction(ctx) {
   if (ctx.targets.length > 1) return null;
   return atFocusOrParent(ctx, (p) => {
@@ -2018,6 +2053,7 @@ export const RULES = [
   },
   // frações
   { id: 'join', key: 'j', group: 'fractions', ...either(fractionForms) },
+  { id: 'nestedfrac', key: '/', group: 'fractions', run: nestedFraction },
   {
     id: 'expandfrac', key: '*', group: 'fractions', run: expandFraction,
     input: true,
