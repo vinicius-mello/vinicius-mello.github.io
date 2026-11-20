@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSG · modelagem por conjuntos</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='16' y='25' font-size='26' text-anchor='middle' fill='%232f6fdf'%3E∪%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="menubar" role="menubar">
+    <span class="brand" aria-hidden="true">∪</span>
+    <nav class="menus">
+      <div class="menu-root">
+        <button class="menu-button" aria-haspopup="true" aria-expanded="false">Arquivo</button>
+        <div class="menu" role="menu" hidden>
+          <button role="menuitem" data-action="new">Novo</button>
+          <button role="menuitem" data-action="open">Abrir…</button>
+          <button role="menuitem" data-action="save">Salvar programa <kbd>Ctrl+S</kbd></button>
+          <hr>
+          <button role="menuitem" data-action="export-stl">Exportar STL do objeto selecionado</button>
+          <button role="menuitem" data-action="export-stl-ascii">Exportar STL (ASCII)</button>
+          <button role="menuitem" data-action="export-all">Exportar todos os objetos exibidos</button>
+        </div>
+      </div>
+      <div class="menu-root">
+        <button class="menu-button" aria-haspopup="true" aria-expanded="false">Editar</button>
+        <div class="menu" role="menu" hidden>
+          <button role="menuitem" data-action="undo">Desfazer <kbd>Ctrl+Z</kbd></button>
+          <button role="menuitem" data-action="redo">Refazer <kbd>Ctrl+Shift+Z</kbd></button>
+          <button role="menuitem" data-action="comment">Comentar linhas <kbd>Ctrl+/</kbd></button>
+          <hr>
+          <button role="menuitemcheckbox" data-setting="autoReplace" aria-checked="true">Substituir símbolos ao digitar</button>
+          <button role="menuitemcheckbox" data-setting="palette" aria-checked="true">Mostrar paleta de símbolos</button>
+        </div>
+      </div>
+      <div class="menu-root">
+        <button class="menu-button" aria-haspopup="true" aria-expanded="false">Exibir</button>
+        <div class="menu" role="menu" hidden>
+          <button role="menuitemcheckbox" data-setting="grid" aria-checked="true">Grade da mesa</button>
+          <button role="menuitemcheckbox" data-setting="axes" aria-checked="true">Eixos</button>
+          <button role="menuitemcheckbox" data-setting="wireframe" aria-checked="false">Arestas dos triângulos</button>
+          <button role="menuitemcheckbox" data-setting="ortho" aria-checked="false">Projeção ortográfica</button>
+          <hr>
+          <button role="menuitem" data-action="fit">Enquadrar <kbd>F</kbd></button>
+          <button role="menuitem" data-view="iso">Vista isométrica</button>
+          <button role="menuitem" data-view="front">Vista frontal</button>
+          <button role="menuitem" data-view="top">Vista superior</button>
+          <button role="menuitem" data-view="right">Vista lateral</button>
+          <hr>
+          <button role="menuitemradio" data-theme-choice="system">Tema do sistema</button>
+          <button role="menuitemradio" data-theme-choice="light">Tema claro</button>
+          <button role="menuitemradio" data-theme-choice="dark">Tema escuro</button>
+        </div>
+      </div>
+      <div class="menu-root">
+        <button class="menu-button" aria-haspopup="true" aria-expanded="false">Avaliar</button>
+        <div class="menu" role="menu" hidden>
+          <button role="menuitem" data-action="run">Avaliar agora <kbd>Ctrl+Enter</kbd></button>
+          <button role="menuitemcheckbox" data-setting="autoRun" aria-checked="true">Avaliar ao digitar</button>
+          <hr>
+          <button role="menuitemradio" data-quality="draft">Qualidade: rascunho</button>
+          <button role="menuitemradio" data-quality="normal">Qualidade: normal</button>
+          <button role="menuitemradio" data-quality="fine">Qualidade: fina</button>
+        </div>
+      </div>
+      <div class="menu-root">
+        <button class="menu-button" aria-haspopup="true" aria-expanded="false">Exemplos</button>
+        <div class="menu" role="menu" hidden id="examples-menu"></div>
+      </div>
+      <div class="menu-root">
+        <button class="menu-button" aria-haspopup="true" aria-expanded="false">Ajuda</button>
+        <div class="menu" role="menu" hidden>
+          <button role="menuitem" data-action="help">Referência rápida <kbd>F1</kbd></button>
+          <a role="menuitem" href="docs/csg-manual.pdf" target="_blank" rel="noopener">Manual completo (PDF)</a>
+        </div>
+      </div>
+    </nav>
+    <span class="spacer"></span>
+    <button class="run-button" data-action="run" title="Avaliar (Ctrl+Enter)">▶ Avaliar</button>
+  </header>
+
+  <div class="palette" id="palette" aria-label="Paleta de símbolos"></div>
+
+  <main class="workspace" id="workspace">
+    <section class="pane editor-pane" aria-label="Editor">
+      <div id="editor"></div>
+      <div class="output" id="output" aria-live="polite"></div>
+    </section>
+    <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Redimensionar painéis"></div>
+    <section class="pane view-pane" aria-label="Visualização 3D">
+      <canvas id="view"></canvas>
+      <aside class="objects" id="objects" aria-label="Objetos"></aside>
+      <div class="view-toolbar" role="toolbar" aria-label="Vistas">
+        <button data-view="iso" title="Isométrica">Iso</button>
+        <button data-view="front" title="Frente">Frente</button>
+        <button data-view="top" title="Topo">Topo</button>
+        <button data-view="right" title="Lado">Lado</button>
+        <button data-action="fit" title="Enquadrar (F)">⤢</button>
+      </div>
+      <div class="busy" id="busy" hidden><span class="spinner"></span> avaliando…</div>
+      <div class="view-message" id="view-message" hidden></div>
+    </section>
+  </main>
+
+  <footer class="statusbar">
+    <span id="status" class="status">carregando o kernel geométrico…</span>
+    <span id="stats" class="stats"></span>
+    <span id="cursor" class="cursor"></span>
+  </footer>
+
+  <dialog id="help" class="help">
+    <form method="dialog"><button class="close" aria-label="Fechar">✕</button></form>
+    <div id="help-content"></div>
+  </dialog>
+
+  <input type="file" id="file-input" accept=".csg,.txt,text/plain" hidden>
+  <script>
+    if (location.protocol === 'file:') {
+      document.getElementById('status').textContent =
+        'Abra por um servidor HTTP (ex.: python3 -m http.server na pasta do projeto): módulos JS não carregam via file://';
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
