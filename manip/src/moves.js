@@ -134,11 +134,53 @@ const guarded = (tree, r) => (r?.tree && !keepsEnds(tree, r.tree) ? { error: 'er
 export function shiftSideways(tree, path, dir) {
   const g = swapLines(tree, path, dir, 'col');
   if (g) return g;
+  // (−1) no início de um produto: vira o sinal (antes de passar para o outro lado)
+  const m = minusOne(tree, path, dir);
+  if (m) return typed(tree, guarded(tree, m));
   // Coeficiente numérico de um lado que é produto (2x = 4): passa direto
   // dividindo, sem o passo intermediário "x·2 = 4".
   const direct = numericCoefficient(tree, path, dir) && transpose(tree, path, dir);
   if (direct) return typed(tree, guarded(tree, direct));
   return typed(tree, guarded(tree, swap(tree, path, dir) ?? outOfNumerator(tree, path, dir) ?? transpose(tree, path, dir)));
+}
+
+// Ctrl+← num fator (−1) no início de um produto: o sinal vai para a frente
+// de tudo. (−1)a → −a; no numerador ou no denominador de uma fração, nega a
+// fração: (−1)a/b → −a/b, a/((−1)b) → −a/b, (−1)/b → −1/b. Se já havia um −
+// na frente, os dois se cancelam.
+const unwrap = (n) => (n.op === 'Delimiter' ? unwrap(n.args[0]) : n);
+const isMinusOne = (n) => {
+  const u = unwrap(n);
+  return (u.op === 'Negate' && unwrap(u.args[0]).op === 'Number' && unwrap(u.args[0]).value === '1')
+    || (u.op === 'Number' && u.value === '-1');
+};
+
+function minusOne(tree, path, dir) {
+  if (dir !== -1 || !path.length || !isMinusOne(getAt(tree, path))) return null;
+  const pp = path.slice(0, -1);
+  const parent = getAt(tree, pp);
+  const i = path[path.length - 1];
+  let tp, body;
+  if (parent.op === 'Multiply' && i === 0) {
+    const rest = rebuild('Multiply', parent.args.slice(1), parent);
+    const gp = pp.slice(0, -1);
+    const G = pp.length ? getAt(tree, gp) : null;
+    if (G?.op === 'Divide') {
+      const args = G.args.slice();
+      args[pp[pp.length - 1]] = rest;
+      tp = gp; body = withArgs(G, args);
+    } else { tp = pp; body = rest; }
+  } else if (parent.op === 'Divide' && i === 0) {
+    tp = pp; body = withArgs(parent, [num(1), parent.args[1]]);
+  } else return null;
+  // −((−1)a) → a: o − que já estava na frente cancela
+  let tpp = tp.slice(0, -1);
+  while (tpp.length && getAt(tree, tpp).op === 'Delimiter') tpp = tpp.slice(0, -1);
+  if (tp.length && getAt(tree, tpp).op === 'Negate') {
+    return { tree: replaceAt(tree, tpp, body), label: msg('step.minusOneOut'), arc: null, focus: body.id };
+  }
+  const node = fn('Negate', body);
+  return { tree: replaceAt(tree, tp, node), label: msg('step.minusOneOut'), arc: null, focus: node.id };
 }
 
 // Ctrl+← no primeiro fator do numerador: ele sai da fração, para a frente
