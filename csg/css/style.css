@@ -1,3 +1,8 @@
+/* JuliaMono (SIL OFL 1.1, fonts/JuliaMono-LICENSE.txt), reduzida aos blocos Unicode da linguagem */
+@font-face { font-family: "JuliaMono"; src: url("../fonts/JuliaMono-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "JuliaMono"; src: url("../fonts/JuliaMono-SemiBold.woff2") format("woff2"); font-weight: 500 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JuliaMono"; src: url("../fonts/JuliaMono-RegularItalic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+
 :root {
   --bg: #f6f6f4;
   --surface: #ffffff;
