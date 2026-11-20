@@ -423,6 +423,23 @@ const cancel = (ctx) => cancelTerms(ctx) ?? cancelFactors(ctx);
 
 // ----------------------------------------------------- elemento neutro
 
+// O inverso do neutro na divisão: a → a/1, para introduzir uma fração
+// (depois `*` multiplica em cima e embaixo). Só quando 0 não tem neutro
+// para tirar ali.
+function overOne(ctx) {
+  const { tree, targets } = ctx;
+  if (targets.length !== 1) return null;
+  const p = targets[0];
+  const n = getAt(tree, p);
+  if (isRelation(n.op) || n.op === 'System' || !isScalar(n)) return null;
+  if (n.op === 'Divide' && (isNum(n.args[1], 1) || isNum(n.args[1], 0))) return null;
+  if (n.op === 'Power' && isNum(n.args[0], 0) && isNum(n.args[1], 0)) return null; // 0⁰ não é número
+  const parent = parentOf(tree, p);
+  if (parent?.op === 'Divide' && p[p.length - 1] === 1) return null;
+  const node = fn('Divide', n.op === 'Delimiter' ? n.args[0] : n, num(1));
+  return { tree: replaceAt(tree, p, node), label: msg('step.overOne'), focus: node.id };
+}
+
 function neutral(ctx) {
   return atFocusOrParent(ctx, (p) => {
     const { tree } = ctx;
@@ -1970,7 +1987,7 @@ export const RULES = [
   { id: 'calc', key: 'c', group: 'arith', ...either(calculate, primeFactors) },
   { id: 'like', key: 'l', group: 'arith', run: likeTerms },
   { id: 'cancel', key: 'x', group: 'arith', run: cancel },
-  { id: 'neutral', key: '0', group: 'arith', run: neutral },
+  { id: 'neutral', key: '0', group: 'arith', run: (ctx) => neutral(ctx) ?? overOne(ctx) },
   { id: 'signs', key: 'r', group: 'arith', ...either(signs, signsInverse) },
   // "-" é compartilhada com "subtrair equações": nunca valem juntas.
   { id: 'flipsigns', key: '-', group: 'arith', run: flipSigns },

@@ -138,7 +138,44 @@ export function shiftSideways(tree, path, dir) {
   // dividindo, sem o passo intermediário "x·2 = 4".
   const direct = numericCoefficient(tree, path, dir) && transpose(tree, path, dir);
   if (direct) return typed(tree, guarded(tree, direct));
-  return typed(tree, guarded(tree, swap(tree, path, dir) ?? transpose(tree, path, dir)));
+  return typed(tree, guarded(tree, swap(tree, path, dir) ?? outOfNumerator(tree, path, dir) ?? transpose(tree, path, dir)));
+}
+
+// Ctrl+← no primeiro fator do numerador: ele sai da fração, para a frente
+// dela. ab/c → a·(b/c) e a/c → a·(1/c); se a fração já é fator de um produto,
+// o fator entra no produto (x·ab/c → x·a·(b/c)).
+function outOfNumerator(tree, path, dir) {
+  if (dir !== -1 || !path.length) return null;
+  let fp, node, rest;
+  const parent = getAt(tree, path.slice(0, -1));
+  const i = path[path.length - 1];
+  if (parent?.op === 'Multiply' && i === 0 && path.length >= 2) {
+    fp = path.slice(0, -2);
+    const D = getAt(tree, fp);
+    if (D?.op !== 'Divide' || path[path.length - 2] !== 0) return null;
+    node = parent.args[0];
+    rest = rebuild('Multiply', parent.args.slice(1), parent);
+  } else if (parent?.op === 'Divide' && i === 0) {
+    node = parent.args[0];
+    if (node.op === 'Number' && node.value === '1') return null;
+    if (node.op === 'Negate') return null;
+    if (node.op === 'Add') node = fn('Delimiter', node);
+    fp = path.slice(0, -1);
+    rest = num(1);
+  } else return null;
+  const D = getAt(tree, fp);
+  const frac = withArgs(D, [rest, D.args[1]]);
+  // k·(ab/c): os parênteses em volta da fração também saem do caminho.
+  let gp = fp;
+  if (gp.length >= 2 && getAt(tree, gp.slice(0, -1)).op === 'Delimiter' && getAt(tree, gp.slice(0, -2)).op === 'Multiply') gp = gp.slice(0, -1);
+  const outer = gp.length ? getAt(tree, gp.slice(0, -1)) : null;
+  let t;
+  if (outer?.op === 'Multiply') {
+    const args = outer.args.slice();
+    args.splice(gp[gp.length - 1], 1, node, frac);
+    t = replaceAt(tree, gp.slice(0, -1), withArgs(outer, args));
+  } else t = replaceAt(tree, fp, fn('Multiply', node, frac));
+  return { tree: t, label: msg('step.outOfNumerator'), arc: null, focus: node.id };
 }
 
 function numericCoefficient(tree, path, dir) {

@@ -141,6 +141,10 @@ export const MANUAL = [
     L('um **lado inteiro** passa e deixa 0 no lugar.', 'a **whole side** goes across and leaves 0 behind.'),
   ]],
   ['p', L(
+    'Dentro de uma fração, **Ctrl + ←** no primeiro fator do numerador o tira da fração e o põe na frente dela: 2x/3 → 2·(x/3), x/3 → x·(1/3). Para o caminho contrário, criar uma fração onde não há, `0` com o foco num termo o divide por 1 (a → a/1, o inverso de a/1 → a); depois `*` multiplica em cima e embaixo.',
+    'Inside a fraction, **Ctrl + ←** on the first factor of the numerator takes it out of the fraction and puts it in front: 2x/3 → 2·(x/3), x/3 → x·(1/3). To go the other way and create a fraction where there is none, `0` with the focus on a term divides it by 1 (a → a/1, the reverse of a/1 → a); then `*` multiplies top and bottom.',
+  )],
+  ['p', L(
     'Numa inequação, multiplicar ou dividir só é aceito por número diferente de zero; por um número negativo, o sentido da desigualdade inverte; por uma letra, só com uma hipótese que dê o sinal dela (`seja x > 0`, capítulo 7), e o passo mostra a hipótese usada; sem hipótese, o movimento é recusado com uma explicação. **Ctrl + ↑** tira o termo de dentro do grupo (parênteses) e o põe logo depois dele; **Ctrl + ↓** o coloca dentro do grupo vizinho.',
     'In an inequality, multiplying or dividing is only accepted by a nonzero number; by a negative number, the inequality flips; by a letter, only with an assumption that gives its sign (`let x > 0`, chapter 7), and the step shows the assumption used; without one, the move is refused with an explanation. **Ctrl + ↑** takes the term out of its group (parentheses) and places it right after it; **Ctrl + ↓** puts it into the neighboring group.',
   )],
