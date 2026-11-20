@@ -1607,6 +1607,8 @@ function onRelation(f) {
       focus: ctx.focus.slice(r.rp.length),
       targets: ctx.targets.filter(inside).map((p) => p.slice(r.rp.length)),
     });
+    // várias formas: cada uma volta para o lugar da relação
+    if (Array.isArray(res)) return res.map((x) => (x?.tree ? { ...x, tree: replaceAt(ctx.tree, r.rp, x.tree) } : x));
     if (!res?.tree) return res;
     return { ...res, tree: replaceAt(ctx.tree, r.rp, res.tree) };
   };
@@ -1682,6 +1684,68 @@ function absEquation(ctx) {
   const args = i === 0 ? [unparen(a), pm] : [pm, unparen(a)];
   const label = msg(assumes ? 'step.absEqAssuming' : 'step.absEq', { a: show(a), b: show(b) });
   return { tree: { ...tree, args }, label, focus: pm.id };
+}
+
+// x² + px + q = 0 ⇔ x = −p/2 ± √(p²/4 − q), num passo só. A incógnita é a
+// letra do termo x² (com coeficiente 1); os termos em x dão p, os sem x dão
+// q. As partes numéricas já saem calculadas (x² + 2x − 3 = 0 → x = −1 ± √4).
+function quadratic(ctx) {
+  const { tree } = ctx;
+  if (tree.op !== 'Equal') return null;
+  const z = [0, 1].find((k) => isNum(unparen(tree.args[k]), 0));
+  if (z === undefined) return null;
+  const side = unparen(tree.args[1 - z]);
+  if (side.op !== 'Add') return null;
+  // Cada letra com termo x² é uma incógnita possível (x² − 2ax + a² = 0:
+  // em x ou em a); x, y, z, t… vêm primeiro, e repetir a tecla troca.
+  const ORDER = ['x', 'y', 'z', 't', 'u', 'v', 'w'];
+  const rank = (s) => (ORDER.includes(s) ? ORDER.indexOf(s) : ORDER.length) + s;
+  const squares = side.args.filter((t) => t.op === 'Power' && t.args[0].op === 'Symbol' && isNum(t.args[1], 2)
+    && !CONSTANT_NAMES.has(t.args[0].name) && !t.args[0].named);
+  const names = [...new Set(squares.map((t) => t.args[0].name))].sort((a, b) => (rank(a) < rank(b) ? -1 : 1));
+  const out = names.map((x) => quadraticIn(tree, side, x)).filter(Boolean);
+  return out.length ? out : null;
+}
+
+function quadraticIn(tree, side, x) {
+  const squares = side.args.filter((t) => t.op === 'Power' && t.args[0].op === 'Symbol' && t.args[0].name === x && isNum(t.args[1], 2));
+  if (squares.length !== 1) return null;
+  const has = (n) => { let f = false; walk(n, (m) => { if (m.op === 'Symbol' && m.name === x) f = true; }); return f; };
+  const isX = (n) => n.op === 'Symbol' && n.name === x;
+  // coeficiente de um termo linear (x, −x, 3x, −ax, a·x·b), ou null
+  const coef = (t) => {
+    if (t.op === 'Negate') { const c = coef(t.args[0]); return c && fn('Negate', c); }
+    if (isX(t)) return num(1);
+    if (t.op !== 'Multiply') return null;
+    const xs = t.args.filter(isX);
+    const rest = t.args.filter((f) => !isX(f));
+    if (xs.length !== 1 || rest.some(has)) return null;
+    return rest.length === 1 ? cloneFrom(rest[0], {}) : fn('Multiply', ...rest.map((f) => cloneFrom(f, {})));
+  };
+  const ps = [], qs = [];
+  for (const t of side.args) {
+    if (t === squares[0]) continue;
+    if (!has(t)) { qs.push(cloneFrom(t, {})); continue; }
+    const c = coef(t);
+    if (!c) return null;
+    ps.push(c);
+  }
+  if (![...ps, ...qs].every(isScalar)) return null;
+  const sumOfAll = (xs) => (xs.length ? (xs.length === 1 ? xs[0] : fn('Add', ...xs)) : num(0));
+  const p = sumOfAll(ps), q = sumOfAll(qs);
+  const paren = (n) => (n.op === 'Add' || n.op === 'Negate' ? fn('Delimiter', n) : n);
+  const tidyNum = (n) => { const v = evaluate(n); return v ? ratToNode(v) : n; };
+  // −p/2 com o sinal já resolvido: p = −2a dá 2a/2, não −(−2a)/2
+  const half = tidyNum(p.op === 'Negate' ? fn('Divide', paren(p.args[0]), num(2)) : fn('Negate', fn('Divide', paren(p), num(2))));
+  // sem termo em x, o radicando é só −q
+  const minusQ = q.op === 'Negate' ? q.args[0] : fn('Negate', paren(q));
+  const disc = tidyNum(ps.length ? fn('Add', fn('Divide', fn('Power', paren(cloneFrom(p, {})), num(2)), num(4)), minusQ) : minusQ);
+  const root = fn('PlusMinus', fn('Sqrt', disc));
+  const zeroHalf = isNum(half, 0);
+  const rhs = zeroHalf ? root : fn('Add', half, root);
+  const v = evaluate(disc);
+  const label = msg(v && v.n < 0n ? 'step.quadraticComplex' : 'step.quadratic', { x });
+  return { tree: { ...tree, args: [sym(x), rhs] }, label, focus: rhs.id };
 }
 
 // Trocar os lados de uma inequação inverte o símbolo: a < b ⇔ b > a.
@@ -2119,6 +2183,7 @@ export const RULES = [
   },
   { id: 'swap', key: 't', group: 'relation', run: onRelation(swapSides) },
   { id: 'abseq', key: '|', group: 'relation', run: onRelation(absEquation) },
+  { id: 'quadratic', key: 'r', group: 'relation', ...either(onRelation(quadratic)) },
   {
     id: 'estimate', key: 'i', group: 'relation', run: onRelation(estimate),
     input: true,
