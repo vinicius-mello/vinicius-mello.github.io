@@ -1988,9 +1988,11 @@ export const RULES = [
   { id: 'like', key: 'l', group: 'arith', run: likeTerms },
   { id: 'cancel', key: 'x', group: 'arith', run: cancel },
   { id: 'neutral', key: '0', group: 'arith', run: (ctx) => neutral(ctx) ?? overOne(ctx) },
-  { id: 'signs', key: 'r', group: 'arith', ...either(signs, signsInverse) },
-  // "-" é compartilhada com "subtrair equações": nunca valem juntas.
-  { id: 'flipsigns', key: '-', group: 'arith', run: flipSigns },
+  // Tudo de sinais numa tecla só: primeiro simplificar (−(−a) → a,
+  // (−a)b → −ab, −(±a) → ∓a), depois mover o sinal (parênteses, ∫, Σ, um
+  // fator). "-" é compartilhada com "subtrair equações" e "Lⱼ − kLᵢ": nunca
+  // valem juntas.
+  { id: 'signs', key: '-', group: 'arith', ...either(signs, flipSigns, signsInverse) },
   // estrutura
   { id: 'dist', key: 'd', group: 'structure', run: distribute },
   { id: 'factor', key: 'e', group: 'structure', run: factorOut },
