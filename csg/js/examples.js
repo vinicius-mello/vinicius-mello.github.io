@@ -75,6 +75,47 @@ vaso ≔ externo ∖ interno
 `,
   },
   {
+    id: 'revolve',
+    title: 'Vaso de revolução (perfil)',
+    source: `# Vaso de revolução — o perfil r(z) girado em torno do eixo z
+H ≔ 80          # altura
+e ≔ 2           # espessura da parede e do fundo
+
+r(z) ≔ 20 + 7sin(z/10) + z/6       # raio na altura z
+
+externo ≔ polygon([⟨0, 0⟩] ++ [⟨r(z), z⟩ | z ∈ range(0, H, 0.5)] ++ [⟨0, H⟩])
+interno ≔ polygon([⟨0, e⟩] ++ [⟨r(z) - e, z⟩ | z ∈ range(e, H + 1, 0.5)] ++ [⟨0, H + 1⟩])
+
+vaso ≔ revolve(externo ∖ interno)
+
+⊢ vaso
+⊢ volume(revolve(externo))                       # volume do sólido cheio
+⊢ Σ[ π · r(z)^2 · 0.5 | z ∈ range(0.25, H, 0.5) ]  # soma de discos: ≈ π∫r(z)² dz
+`,
+  },
+  {
+    id: 'extrude',
+    title: 'Estrela torcida (extrusão)',
+    source: `# Perfis e extrusão — um porta-lápis em forma de estrela torcida
+estrela(n, R, r) ≔ polygon([ ρ · ⟨cos(θ), sin(θ)⟩
+                     | k ∈ 0..<2n, θ ≔ k · π/n, ρ ≔ if k mod 2 = 0 then R else r ])
+
+H ≔ 70          # altura
+giro ≔ 72°      # torção total
+e ≔ 2           # parede
+
+base ≔ offset(estrela(6, 26, 17), 2)       # cantos arredondados
+furo ≔ offset(base, -e)
+
+copo ≔ extrude(base, H, giro)
+                                 # o furo começa em z = e já girado e · giro/H
+oco ≔ Tz(e) · Rz(e · giro/H) · extrude(furo, H, giro)
+
+⊢ copo ∖ oco
+⊢ area(base)
+`,
+  },
+  {
     id: 'group',
     title: 'Simetria: grupo diedral',
     source: `# O grupo diedral D₄ agindo sobre um motivo

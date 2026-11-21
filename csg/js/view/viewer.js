@@ -201,7 +201,7 @@ export class Viewer {
     this.cam.target = box.min.map((v, k) => (v + box.max[k]) / 2);
     const r = Math.max(1, Math.hypot(...box.max.map((v, k) => v - box.min[k])) / 2);
     this.sceneRadius = r;
-    this.cam.dist = r / Math.sin((40 * Math.PI) / 180 / 2) * 1.1;
+    this.cam.dist = r / Math.sin((40 * Math.PI) / 180 / 2) * (this.fitMargin ?? 1.1);
     this.requestRender();
   }
 

@@ -230,6 +230,7 @@ kbd { font: 11px var(--mono); color: var(--muted); }
 }
 .obj button:hover { border-color: var(--border); color: var(--text); background: var(--surface); }
 .obj button[aria-pressed="true"] { color: var(--accent); }
+.obj .obj-kind { font-size: 11px; color: var(--muted, #888); padding: 2px 6px; font-style: italic; }
 .values { padding: 2px 10px 8px; font: 12px/1.5 var(--mono); color: var(--muted); }
 .values div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .view-toolbar {
@@ -293,3 +294,36 @@ kbd { font: 11px var(--mono); color: var(--muted); }
   .run-button { padding: 5px 9px; }
   .objects { width: min(220px, calc(100% - 20px)); }
 }
+
+/* ---------- modo tutorial (js/demo.js) ---------- */
+.demo-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 1000; font-family: var(--sans); }
+.demo-overlay [hidden] { display: none !important; }
+.demo-spot {
+  position: fixed; border: 3px solid #f0a35e; border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(10, 12, 16, 0.42);
+}
+.demo-caption {
+  position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%);
+  max-width: min(980px, 86vw); padding: 12px 22px 14px; border-radius: 12px;
+  background: rgba(22, 26, 33, 0.9); color: #fff; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+}
+.demo-topic { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #f0a35e; margin-bottom: 3px; }
+.demo-topic:empty { display: none; }
+.demo-text { font-size: 23px; line-height: 1.35; }
+.demo-title {
+  position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: center;
+  padding: 0 12vw; background: #1f2a36; color: #fff;
+}
+.demo-title .demo-brand { font: 22px var(--mono); color: #f0a35e; margin-bottom: 18px; }
+.demo-title h1 { font-size: 54px; margin: 0 0 10px; font-weight: 700; }
+.demo-title p { font-size: 26px; margin: 0; color: #c9d1da; }
+.demo-record .editor-input { caret-color: transparent; }
+.demo-caption.demo-caption-top { top: 96px; bottom: auto; }
+.demo-text code { font-family: var(--mono); font-size: 0.92em; color: #ffd6b0; background: rgba(255, 255, 255, 0.08); padding: 1px 6px; border-radius: 5px; }
+.demo-sym { font-family: var(--mono); font-size: 1.15em; line-height: 1; color: #ffd6b0; }
+.demo-mode .editor { font-size: 18px; }
+.demo-mode .editor-gutter { font-size: 14px; line-height: calc(18px * 1.55); }
+.demo-mode .gutter-line { height: calc(18px * 1.55); }
+.demo-press { background: var(--accent) !important; color: var(--accent-text) !important; border-radius: 6px; box-shadow: 0 0 0 3px #f0a35e; }
+.demo-caption.demo-caption-right { left: auto; right: 28px; transform: none; max-width: 44vw; }
+.demo-caption.demo-caption-left { left: 28px; transform: none; max-width: 44vw; }

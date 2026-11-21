@@ -35,7 +35,7 @@ const settings = {
   theme: 'system', quality: 'normal',
   ...store.get('settings', {}),
 };
-const saveSettings = () => store.set('settings', settings);
+const saveSettings = () => { if (!window.app?.demo) store.set('settings', settings); }; // tutorials never change the user's preferences
 
 // ---------- worker ----------
 class Runner {
@@ -144,6 +144,7 @@ class App {
 
   // ---------- evaluation ----------
   changed(src) {
+    if (this.demo) { this.updateCursor(); return; } // a tutorial script drives evaluation; never overwrite the user's program
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => store.set('source', src), 400);
     this.updateCursor();
@@ -156,6 +157,21 @@ class App {
   run() {
     clearTimeout(this.runTimer);
     this.runner.run(this.editor.value, QUALITY[settings.quality] ?? QUALITY.normal);
+  }
+
+  // Evaluate and resolve once the result is on screen (used by the tutorial player).
+  runAndWait() {
+    return new Promise((resolve) => {
+      (this.resultWaiters ??= []).push(resolve);
+      this.run();
+    });
+  }
+
+  flushWaiters() {
+    if (this.runner.queued) return; // a newer run (the one being waited for) is still to come
+    const ws = this.resultWaiters ?? [];
+    this.resultWaiters = [];
+    for (const w of ws) w();
   }
 
   workerMessage(msg) {
@@ -189,6 +205,7 @@ class App {
       // Syntax errors: the worker kept the last good model; keep showing it.
       this.renderOutput();
       this.setStatus(this.errorSummary(), 'error');
+      this.flushWaiters();
       return;
     }
     this.state.objects = msg.objects ?? [];
@@ -206,6 +223,7 @@ class App {
     this.renderAll();
     if (this.state.errors.length) this.setStatus(this.errorSummary(), 'error');
     else this.setStatus(`✓ avaliado em ${fmt(msg.time?.total ?? 0, 0)} ms`, 'ok');
+    this.flushWaiters();
   }
 
   errorSummary() {
@@ -298,7 +316,9 @@ class App {
           <span class="swatch" style="background:${vis ? this.colorOf(k) : 'transparent'};border:1px solid ${this.colorOf(k)}"></span>
           <span class="name">${esc(k)}</span>
           <button data-obj-action="toggle" aria-pressed="${vis}" title="${vis ? 'Ocultar' : 'Exibir'}">${vis ? '◉' : '○'}</button>
-          <button data-obj-action="stl" title="Exportar ${esc(k)} como STL">STL</button>
+          ${this.meshes.get(k)?.stats?.profile
+            ? '<span class="obj-kind" title="Perfil plano: use extrude ou revolve para imprimir">perfil</span>'
+            : `<button data-obj-action="stl" title="Exportar ${esc(k)} como STL">STL</button>`}
         </div>`;
       }
     }
@@ -331,6 +351,10 @@ class App {
     if (!m?.stats) { el.textContent = this.selected ? `${this.selected}` : ''; return; }
     const { triangles, volume, bbox } = m.stats;
     const dims = bbox ? bbox.max.map((v, k) => v - bbox.min[k]) : [0, 0, 0];
+    if (m.stats.profile) {
+      el.textContent = `${this.selected} · perfil · ${dims.slice(0, 2).map((d) => fmt(d)).join(' × ')} mm · área ${fmt(m.stats.area / 100, 2)} cm²`;
+      return;
+    }
     el.textContent = `${this.selected} · ${triangles.toLocaleString('pt-BR')} triângulos · ${dims.map((d) => fmt(d)).join(' × ')} mm · ${fmt(volume / 1000, 2)} cm³`;
   }
 
@@ -392,7 +416,8 @@ class App {
   async exportSTL(key = this.selected, ascii = false) {
     if (!key) { this.setStatus('nenhum objeto selecionado para exportar', 'error'); return; }
     try {
-      const { mesh } = await this.fetchMesh(key);
+      const { mesh, stats } = await this.fetchMesh(key);
+      if (stats?.profile) { this.setStatus(`'${key}' é um perfil (plano): para imprimir, use extrude ou revolve`, 'error'); return; }
       if (!mesh.triangleCount) { this.setStatus(`'${key}' é vazio; nada a exportar`, 'error'); return; }
       const name = `${this.fileSafe(key)}.stl`;
       if (ascii) this.download(name, toAsciiSTL(mesh, this.fileSafe(key)), 'model/stl');
@@ -626,3 +651,11 @@ class App {
 }
 
 window.app = new App();
+
+// Tutorial player: index.html?demo=<roteiro>[&record=1] (see js/demo.js).
+const demoParams = new URLSearchParams(location.search);
+if (demoParams.has('demo')) {
+  import('./demo.js')
+    .then((m) => m.startDemo(window.app, demoParams.get('demo'), { record: demoParams.has('record') }))
+    .catch((e) => { window.demoError = e.message; window.app.setStatus(`demo: ${e.message}`, 'error'); });
+}

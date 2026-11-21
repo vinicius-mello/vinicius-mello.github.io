@@ -1,6 +1,6 @@
 // Runtime values of the language.
-//   number · boolean · Array (lists, also used as vectors) · Range · Solid · Iso · functions
-import { Solid } from '../geom/kernel.js';
+//   number · boolean · Array (lists, also used as vectors) · Range · Solid · Profile · Iso · functions
+import { Solid, Profile } from '../geom/kernel.js';
 import * as M from '../geom/mat4.js';
 
 export const MAX_LIST = 1_000_000;
@@ -71,12 +71,13 @@ export class Partial {
   }
 }
 
-export { Solid };
+export { Solid, Profile };
 
 export const isFunction = (v) => v instanceof Closure || v instanceof Builtin || v instanceof Partial || v instanceof Iso;
 export const isNumber = (v) => typeof v === 'number';
 export const isList = Array.isArray;
 export const isVector = (v) => Array.isArray(v) && v.length === 3 && v.every(isNumber);
+export const isPoint2 = (v) => Array.isArray(v) && v.length === 2 && v.every(isNumber);
 
 export function functionName(f) {
   if (f instanceof Partial) return functionName(f.fn);
@@ -89,6 +90,7 @@ export function typeName(v) {
   if (Array.isArray(v)) return isVector(v) ? 'vetor' : 'lista';
   if (v instanceof Range) return 'intervalo';
   if (v instanceof Solid) return 'sólido';
+  if (v instanceof Profile) return 'perfil';
   if (v instanceof Iso) return v.kind();
   if (v instanceof Partial) {
     const missing = v.fn.params?.slice(v.args.length).filter((p) => !p.optional && !p.default).map((p) => p.name) ?? [];
@@ -115,6 +117,7 @@ export function format(v, depth = 0) {
   }
   if (v instanceof Range) return `${formatNumber(v.lo)}..${v.exclusive ? '<' : ''}${formatNumber(v.hi)}`;
   if (v instanceof Solid) return 'sólido';
+  if (v instanceof Profile) return `perfil (área ${formatNumber(v.cs.area())} mm²)`;
   if (v instanceof Iso) return v.label ?? v.kind();
   if (isFunction(v)) return `função ${functionName(v)}`;
   return String(v);

@@ -1,7 +1,7 @@
 // The prelude: primitives, isometries, math and list functions.
 import { LangError } from './errors.js';
 import * as M from '../geom/mat4.js';
-import { Builtin, Iso, Solid, Range, isNumber, isList, isVector, typeName, format, deepEqual } from './values.js';
+import { Builtin, Iso, Solid, Profile, Range, isNumber, isList, isVector, isPoint2, typeName, format, deepEqual } from './values.js';
 import { callValue, iterate, geometry, binary, bigOp, invert } from './evaluator.js';
 
 const fail = (msg, node) => { throw new LangError(msg, node?.span); };
@@ -19,6 +19,16 @@ const segments = (v, node) => {
 };
 const vec3 = (v, what, node) => (isVector(v) ? v : fail(`${what}: esperava vetor [x, y, z], recebi ${typeName(v)}`, node));
 const solid = (v, what, node) => (v instanceof Solid ? v : fail(`${what}: esperava sólido, recebi ${typeName(v)}`, node));
+const profile = (v, what, node) => {
+  if (v instanceof Profile) return v;
+  fail(`${what}: esperava perfil, recebi ${typeName(v)}${v instanceof Solid ? ' (perfis são regiões do plano: circle, square, polygon…)' : ''}`, node);
+};
+// A point of the plane: ⟨x, y⟩ (a 3D point is accepted when z = 0).
+const point2 = (v, what, node) => {
+  if (isPoint2(v)) return v;
+  if (isVector(v) && v[2] === 0) return [v[0], v[1]];
+  return fail(`${what}: esperava ponto do plano ⟨x, y⟩, recebi ${isVector(v) ? `o ponto ${format(v)} fora do plano z = 0` : typeName(v)}`, node);
+};
 const bool = (v, what, node) => (typeof v === 'boolean' ? v : fail(`${what}: esperava booleano, recebi ${typeName(v)}`, node));
 
 // Vectors may be given as one list or as separate numbers: T([1,2,3]) or T(1,2,3).
@@ -101,18 +111,74 @@ export function createPrelude() {
     return geometry(ctx, n, (k) => k.polyhedron(points, fs));
   }, 'polyhedron(pontos, faces) — faces anti-horárias vistas de fora');
   def('hull(items...)', (items, ctx, n) => {
-    const solids = [], points = [];
+    const solids = [], points = [], profiles = [], points2 = [];
     const walk = (x) => {
       if (x instanceof Solid) solids.push(x);
+      else if (x instanceof Profile) profiles.push(x);
       else if (isVector(x)) points.push(x);
+      else if (isPoint2(x)) points2.push(x);
       else if (isList(x) || x instanceof Range) iterate(x, n).forEach(walk);
-      else fail(`hull: esperava sólidos ou pontos, recebi ${typeName(x)}`, n);
+      else fail(`hull: esperava sólidos, perfis ou pontos, recebi ${typeName(x)}`, n);
     };
     items.forEach(walk);
+    const flat = profiles.length + points2.length, solid3 = solids.length + points.length;
+    if (flat && solid3) fail('hull: não misture perfis e pontos ⟨x, y⟩ com sólidos e pontos [x, y, z]', n);
+    if (flat) {
+      if (!profiles.length && points2.length < 3) fail('hull: precisa de perfis ou pelo menos 3 pontos do plano', n);
+      return geometry(ctx, n, (k) => k.hull2(profiles, points2));
+    }
     if (!solids.length && points.length < 4) fail('hull: precisa de sólidos ou pelo menos 4 pontos', n);
     return geometry(ctx, n, (k) => k.hull(solids, points));
-  }, 'hull(A, B, …) — fecho convexo');
+  }, 'hull(A, B, …) — fecho convexo (de sólidos ou de perfis)');
   def('minkowski(a, b)', ([a, b], ctx, n) => binary('⊕', solid(a, 'minkowski', n), solid(b, 'minkowski', n), ctx, n));
+
+  // ----- profiles: regions of the plane z = 0 -----
+  def('circle(r, n?)', ([r, s], ctx, n) =>
+    geometry(ctx, n, (k) => k.circle(positive(r, 'circle: raio', n), segments(s, n))), 'circle(r) — disco de raio r');
+  def('square(x, y?)', ([x, y], ctx, n) => {
+    const [a, b] = isList(x) ? point2(x, 'square', n) : [x, y ?? x];
+    return geometry(ctx, n, (k) => k.square(positive(a, 'square x', n), positive(b, 'square y', n)));
+  }, 'square(a) ou square(x, y) — retângulo centrado na origem');
+  def('polygon(points)', ([pts], ctx, n) => {
+    const items = iterate(pts, n, 'lista de pontos');
+    // one contour [⟨x, y⟩…] or several [[⟨x, y⟩…], …] (holes by even–odd)
+    const nested = items.length > 0 && isList(items[0]) && !items[0].every(isNumber);
+    const contours = (nested ? items : [items]).map((c) => {
+      const ps = iterate(c, n, 'contorno').map((p) => point2(p, 'polygon', n));
+      if (ps.length < 3) fail('polygon: cada contorno precisa de pelo menos 3 pontos', n);
+      return ps;
+    });
+    return geometry(ctx, n, (k) => k.polygon(contours));
+  }, 'polygon(pontos) — região limitada pela poligonal ⟨x, y⟩ fechada');
+  def('region(f, a, b, n?)', ([f, a, b, s], ctx, n) => {
+    num(a, 'region: a', n); num(b, 'region: b', n);
+    if (!(a < b)) fail('region: é preciso a < b', n);
+    const m = s === undefined ? 128 : segments(s, n);
+    const pts = [[a, 0]];
+    for (let i = 0; i <= m; i++) {
+      const x = a + ((b - a) * i) / m;
+      pts.push([x, num(callValue(f, [x], {}, ctx, n), 'region: f(x)', n)]);
+    }
+    pts.push([b, 0]);
+    return geometry(ctx, n, (k) => k.polygon([pts]));
+  }, 'region(f, a, b) — região entre o gráfico de f e o eixo x, para a ≤ x ≤ b');
+  def('offset(P, d, n?)', ([p, d, s], ctx, n) =>
+    geometry(ctx, n, (k) => k.offset(profile(p, 'offset', n), num(d, 'offset: d', n), segments(s, n))),
+  'offset(P, d) — engorda o perfil de d (afina se d < 0), arredondando os cantos');
+  def('extrude(P, h, θ?, k?)', ([p, h, t = 0, sc = 1], ctx, n) => {
+    profile(p, 'extrude', n);
+    positive(h, 'extrude: altura', n);
+    const top = isList(sc) ? point2(sc, 'extrude: escala', n) : nonNegative(sc, 'extrude: escala do topo', n);
+    if (isList(top)) top.forEach((c) => nonNegative(c, 'extrude: escala do topo', n));
+    return geometry(ctx, n, (k) => k.extrude(p, h, (num(t, 'extrude: torção', n) * 180) / Math.PI, top));
+  }, 'extrude(P, h, θ?, k?) — prisma de z = 0 a z = h; θ torce o topo, k o escala');
+  def('revolve(P, θ?, n?)', ([p, t = 2 * Math.PI, s], ctx, n) => {
+    profile(p, 'revolve', n);
+    const deg = (positive(t, 'revolve: ângulo', n) * 180) / Math.PI;
+    const b = geometry(ctx, n, (k) => k.bbox2(p));
+    if (!(b.max[0] > 0)) fail('revolve: o perfil precisa ter pontos com x > 0 (gira em torno do eixo y)', n);
+    return geometry(ctx, n, (k) => k.revolve(p, Math.min(deg, 360), segments(s, n)));
+  }, 'revolve(P, θ?) — gira o perfil (x ≥ 0) em torno do eixo y, que vira o eixo z');
 
   // ----- isometries -----
   def('T(x, y?, z?)', ([x, y, z], ctx, n) => iso(M.translation(...vectorArgs(x, y, z, 'T', n))), 'T(x, y, z) ou T(v) — translação');
@@ -162,21 +228,31 @@ export function createPrelude() {
   def('isometry(g)', ([g], ctx, n) => (g instanceof Iso ? g.rigid : fail(`isometry: esperava transformação, recebi ${typeName(g)}`, n)),
     'isometry(g) — g preserva distâncias?');
 
-  // ----- solid queries and placement -----
-  const bounds = (s, ctx, n) => geometry(ctx, n, (k) => k.bbox(solid(s, 'bounds', n)));
+  // ----- solid and profile queries, placement -----
+  const shape = (v, what, n) => (v instanceof Solid || v instanceof Profile ? v : fail(`${what}: esperava sólido ou perfil, recebi ${typeName(v)}`, n));
+  const bounds = (s, ctx, n, what = 'bounds') => {
+    shape(s, what, n);
+    return geometry(ctx, n, (k) => (s instanceof Profile ? k.bbox2(s) : k.bbox(s)));
+  };
   def('bounds(S)', ([s], ctx, n) => { const b = bounds(s, ctx, n); return [b.min, b.max]; }, 'bounds(S) — [[min], [max]]');
-  def('size(S)', ([s], ctx, n) => { const b = bounds(s, ctx, n); return b.max.map((v, i) => v - b.min[i]); });
-  def('volume(S)', ([s], ctx, n) => geometry(ctx, n, (k) => k.volume(solid(s, 'volume', n))));
-  def('area(S)', ([s], ctx, n) => geometry(ctx, n, (k) => k.area(solid(s, 'area', n))));
-  def('isempty(S)', ([s], ctx, n) => geometry(ctx, n, (k) => k.isEmpty(solid(s, 'isempty', n))));
+  def('size(S)', ([s], ctx, n) => { const b = bounds(s, ctx, n, 'size'); return b.max.map((v, i) => v - b.min[i]); });
+  def('volume(S)', ([s], ctx, n) => {
+    if (s instanceof Profile) fail('volume: um perfil é plano e não tem volume (use area)', n);
+    return geometry(ctx, n, (k) => k.volume(solid(s, 'volume', n)));
+  });
+  def('area(S)', ([s], ctx, n) => geometry(ctx, n, (k) => (shape(s, 'area', n) instanceof Profile ? k.area2(s) : k.area(s))),
+    'area(S) — área da superfície do sólido, ou área do perfil');
+  def('isempty(S)', ([s], ctx, n) => geometry(ctx, n, (k) => (shape(s, 'isempty', n) instanceof Profile ? k.isEmpty2(s) : k.isEmpty(s))));
   def('center(S)', ([s], ctx, n) => {
-    const b = bounds(s, ctx, n);
+    const b = bounds(s, ctx, n, 'center');
     if (!b.min.every(Number.isFinite)) return s;
     const c = b.min.map((v, i) => -(v + b.max[i]) / 2);
+    if (s instanceof Profile) return geometry(ctx, n, (k) => k.transform2(s, [1, 0, 0, 0, 1, 0, c[0], c[1], 1]));
     return geometry(ctx, n, (k) => k.transform(s, M.translation(...c)));
   }, 'center(S) — centraliza a caixa envolvente na origem');
   def('ground(S)', ([s], ctx, n) => {
-    const b = bounds(s, ctx, n);
+    if (s instanceof Profile) fail('ground: um perfil já está no plano z = 0', n);
+    const b = bounds(s, ctx, n, 'ground');
     if (!Number.isFinite(b.min[2])) return s;
     return geometry(ctx, n, (k) => k.transform(s, M.translation(0, 0, -b.min[2])));
   }, 'ground(S) — apoia o sólido em z = 0 (mesa de impressão)');

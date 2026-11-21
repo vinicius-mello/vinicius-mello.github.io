@@ -3,12 +3,14 @@
 // Top-level definitions are order-independent and may refer to each other
 // (functions may be mutually recursive). Constants are evaluated lazily, once,
 // with cycle detection. Every top-level constant whose value is a solid is a
-// *named object*: listed in the UI and exportable as STL.
+// *named object*: listed in the UI and exportable as STL. Profiles (regions of the
+// plane) are shown with ⊢ as thin plates, but are not objects: they print only once
+// extruded or revolved.
 import { LangError } from './errors.js';
 import { parse } from './parser.js';
 import { Env, evaluate, makeContext } from './evaluator.js';
 import { createPrelude, bindKernelConstants } from './builtins.js';
-import { Closure, Solid, format } from './values.js';
+import { Closure, Solid, Profile, format } from './values.js';
 
 // Raised when a definition depends on one that already failed (reported once).
 class DependencyError extends LangError {}
@@ -56,7 +58,7 @@ function sourceText(src, span) {
   return text.length > 40 ? `${text.slice(0, 39)}…` : text;
 }
 
-// Returns { objects: [{ name, solid }], shows: [{ label, solid?, text? }], values, errors }.
+// Returns { objects: [{ name, solid }], shows: [{ label, solid?, profile?, text? }], values, errors }.
 // Solids stay owned by `kernel` until kernel.dispose().
 export function run(src, kernel, options = {}) {
   const { program, errors } = parse(src);
@@ -88,11 +90,13 @@ export function run(src, kernel, options = {}) {
     if (!(err instanceof DependencyError)) result.errors.push(err);
   };
 
+  let lastProfile = null;
   for (const def of defs) {
     try {
       const value = globals.force(def.name, null);
       if (value instanceof Solid) result.objects.push({ name: def.name, solid: value, span: def.span });
       else result.values.push({ name: def.name, text: format(value) });
+      if (value instanceof Profile) lastProfile = { name: def.name, profile: value };
     } catch (e) {
       report(e);
     }
@@ -107,6 +111,7 @@ export function run(src, kernel, options = {}) {
       try {
         const value = evaluate(expr, globals, ctx);
         if (value instanceof Solid) result.shows.push({ label, solid: value, name: expr.type === 'Ident' ? expr.name : null });
+        else if (value instanceof Profile) result.shows.push({ label, profile: value });
         else result.shows.push({ label, text: format(value) });
       } catch (e) {
         report(e);
@@ -116,6 +121,8 @@ export function run(src, kernel, options = {}) {
   if (!anyShow && result.objects.length) {
     const last = result.objects[result.objects.length - 1];
     result.shows.push({ label: last.name, solid: last.solid, name: last.name });
+  } else if (!anyShow && lastProfile) {
+    result.shows.push({ label: lastProfile.name, profile: lastProfile.profile });
   }
   return result;
 }

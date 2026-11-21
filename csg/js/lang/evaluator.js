@@ -1,9 +1,9 @@
 // Tree-walking evaluator. Solids are built eagerly through the kernel in ctx.
 import { LangError } from './errors.js';
-import { GeometryError } from '../geom/kernel.js';
+import { GeometryError, planarMatrix } from '../geom/kernel.js';
 import * as M from '../geom/mat4.js';
 import {
-  Range, Iso, Closure, Builtin, Partial, Solid, MAX_LIST,
+  Range, Iso, Closure, Builtin, Partial, Solid, Profile, MAX_LIST,
   isFunction, isNumber, isList, typeName, format, deepEqual, functionName,
 } from './values.js';
 
@@ -55,17 +55,22 @@ export function geometry(ctx, node, f) {
   }
 }
 
+// The members of a family for ⋃/⋂: all solids or all profiles (nested lists are flattened).
 function flattenSolids(items, node, op) {
   const out = [];
   const walk = (x) => {
-    if (x instanceof Solid) out.push(x);
+    if (x instanceof Solid || x instanceof Profile) out.push(x);
     else if (Array.isArray(x)) x.forEach(walk);
-    else if (x instanceof Range) fail(`${op} espera sólidos, recebeu um intervalo de números`, node);
-    else fail(`${op} espera sólidos, recebeu ${typeName(x)}`, node);
+    else if (x instanceof Range) fail(`${op} espera sólidos ou perfis, recebeu um intervalo de números`, node);
+    else fail(`${op} espera sólidos ou perfis, recebeu ${typeName(x)}`, node);
   };
   items.forEach(walk);
+  if (out.some((x) => x instanceof Profile) && out.some((x) => x instanceof Solid)) fail(MIXED(op), node);
   return out;
 }
+
+const MIXED = (op) => `'${op}' não combina perfis com sólidos: transforme o perfil em sólido com extrude(P, h) ou revolve(P)`;
+const both = (a, b, T) => a instanceof T && b instanceof T;
 
 // ---------- operators ----------
 const numeric = (v) => isList(v) && v.every(isNumber);
@@ -77,10 +82,20 @@ function elementwise(op, a, b, node, f) {
 
 function applyIso(g, x, ctx, node) {
   if (x instanceof Solid) return geometry(ctx, node, (k) => k.transform(x, g.m));
+  if (x instanceof Profile) {
+    const m3 = planarMatrix(g.m);
+    if (!m3) fail(`um perfil fica no plano z = 0, e ${g.label ?? `esta ${g.kind()}`} o tiraria do plano (use extrude ou revolve antes)`, node);
+    return geometry(ctx, node, (k) => k.transform2(x, m3));
+  }
   if (x instanceof Iso) return new Iso(M.multiply(g.m, x.m));
   if (numeric(x) && x.length === 3) return M.transformPoint(g.m, x);
+  if (numeric(x) && x.length === 2) {
+    // a point of the plane: stays in the plane when g preserves it
+    const p = M.transformPoint(g.m, [x[0], x[1], 0]);
+    return Math.abs(p[2]) < 1e-9 ? [p[0], p[1]] : p;
+  }
   if (isList(x)) return x.map((y) => applyIso(g, y, ctx, node));
-  fail(`uma ${g.kind()} se aplica a sólidos, pontos [x, y, z] ou listas deles; recebeu ${typeName(x)}`, node);
+  fail(`uma ${g.kind()} se aplica a sólidos, perfis, pontos ou listas deles; recebeu ${typeName(x)}`, node);
 }
 
 export function invert(g, node) {
@@ -106,18 +121,22 @@ function listUnion(a, b) {
 }
 
 export function binary(op, a, b, ctx, node) {
-  const bad = (hint = '') =>
+  const bad = (hint = '') => {
+    if ((a instanceof Profile && b instanceof Solid) || (a instanceof Solid && b instanceof Profile)) fail(MIXED(op), node);
     fail(`'${op}' não se aplica a ${typeName(a)} e ${typeName(b)}${hint}`, node);
+  };
   switch (op) {
     case '+':
       if (isNumber(a) && isNumber(b)) return a + b;
       if (numeric(a) && numeric(b)) return elementwise(op, a, b, node, (x, y) => x + y);
       if (a instanceof Solid && b instanceof Solid) return geometry(ctx, node, (k) => k.union(a, b));
+      if (both(a, b, Profile)) return geometry(ctx, node, (k) => k.union2(a, b));
       return bad();
     case '-':
       if (isNumber(a) && isNumber(b)) return a - b;
       if (numeric(a) && numeric(b)) return elementwise(op, a, b, node, (x, y) => x - y);
       if (a instanceof Solid && b instanceof Solid) return geometry(ctx, node, (k) => k.subtract(a, b));
+      if (both(a, b, Profile)) return geometry(ctx, node, (k) => k.subtract2(a, b));
       return bad();
     case '·':
       if (isNumber(a) && isNumber(b)) return a * b;
@@ -127,7 +146,7 @@ export function binary(op, a, b, ctx, node) {
         return elementwise(op, a, b, node, (x, y) => x * y).reduce((s, x) => s + x, 0);
       }
       if (a instanceof Iso) return applyIso(a, b, ctx, node);
-      if (a instanceof Solid && b instanceof Solid) return bad(' (para interseção use ∩)');
+      if ((a instanceof Solid || a instanceof Profile) && (b instanceof Solid || b instanceof Profile)) return bad(' (para interseção use ∩)');
       if (b instanceof Iso) return bad(` (a ${b.kind()} vem à esquerda: g · S)`);
       return bad();
     case '×':
@@ -169,24 +188,29 @@ export function binary(op, a, b, ctx, node) {
       return bad();
     case '∪':
       if (a instanceof Solid && b instanceof Solid) return geometry(ctx, node, (k) => k.union(a, b));
+      if (both(a, b, Profile)) return geometry(ctx, node, (k) => k.union2(a, b));
       if (isList(a) && isList(b)) return listUnion(a, b);
       return bad();
     case '∩':
       if (a instanceof Solid && b instanceof Solid) return geometry(ctx, node, (k) => k.intersect(a, b));
+      if (both(a, b, Profile)) return geometry(ctx, node, (k) => k.intersect2(a, b));
       if (isList(a) && isList(b)) return a.filter((x) => b.some((y) => deepEqual(x, y)));
       return bad();
     case '∖':
       if (a instanceof Solid && b instanceof Solid) return geometry(ctx, node, (k) => k.subtract(a, b));
+      if (both(a, b, Profile)) return geometry(ctx, node, (k) => k.subtract2(a, b));
       if (isList(a) && isList(b)) return a.filter((x) => !b.some((y) => deepEqual(x, y)));
       return bad();
     case '△':
       if (a instanceof Solid && b instanceof Solid) return geometry(ctx, node, (k) => k.symdiff(a, b));
+      if (both(a, b, Profile)) return geometry(ctx, node, (k) => k.symdiff2(a, b));
       if (isList(a) && isList(b)) {
         return [...a.filter((x) => !b.some((y) => deepEqual(x, y))), ...b.filter((x) => !a.some((y) => deepEqual(x, y)))];
       }
       return bad();
     case '⊕':
       if (a instanceof Solid && b instanceof Solid) return geometry(ctx, node, (k) => k.minkowski(a, b));
+      if (both(a, b, Profile)) return bad(' (para engordar um perfil use offset(P, d))');
       return bad();
     case '++':
       if (isList(a) && isList(b)) return a.concat(b);
@@ -251,11 +275,16 @@ function unary(op, v, node) {
 export function bigOp(op, coll, ctx, node) {
   const items = iterate(coll, node, `a coleção de ${op}`);
   switch (op) {
-    case '⋃': return geometry(ctx, node, (k) => k.unionAll(flattenSolids(items, node, '⋃')));
+    case '⋃': {
+      const parts = flattenSolids(items, node, '⋃');
+      if (parts[0] instanceof Profile) return geometry(ctx, node, (k) => k.unionAll2(parts));
+      return geometry(ctx, node, (k) => k.unionAll(parts));
+    }
     case '⋂': {
-      const solids = flattenSolids(items, node, '⋂');
-      if (!solids.length) fail('⋂ de uma família vazia não é um sólido limitado', node);
-      return geometry(ctx, node, (k) => k.intersectAll(solids));
+      const parts = flattenSolids(items, node, '⋂');
+      if (!parts.length) fail('⋂ de uma família vazia não é um sólido limitado', node);
+      if (parts[0] instanceof Profile) return geometry(ctx, node, (k) => k.intersectAll2(parts));
+      return geometry(ctx, node, (k) => k.intersectAll(parts));
     }
     case 'Σ':
       if (!items.length) return 0;

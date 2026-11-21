@@ -8,12 +8,14 @@ import { describe } from './lang/errors.js';
 let kernel = null;
 let last = null; // { objects: Map(name → solid) } of the last evaluated run
 
-function meshPayload(solid) {
-  const mesh = kernel.toMesh(solid);
+// A profile is drawn as a thin plate lying on z = 0; its stats give the area instead.
+function meshPayload(solid, profile = null) {
+  const mesh = kernel.toMesh(profile ? kernel.plate(profile) : solid);
   const box = mesh.triangleCount ? mesh.bbox() : null;
+  if (box && profile) box.min[2] = box.max[2] = 0;
   return {
     mesh: { positions: mesh.positions, indices: mesh.indices },
-    stats: {
+    stats: profile ? { triangles: mesh.triangleCount, area: kernel.area2(profile), bbox: box, profile: true } : {
       triangles: mesh.triangleCount,
       volume: kernel.volume(solid),
       bbox: box,
@@ -42,9 +44,9 @@ async function handleRun({ id, source, quality }) {
   const transfer = [];
   const shows = [];
   for (const s of result.shows) {
-    if (!s.solid) { shows.push({ label: s.label, text: s.text }); continue; }
+    if (!s.solid && !s.profile) { shows.push({ label: s.label, text: s.text }); continue; }
     try {
-      const p = meshPayload(s.solid);
+      const p = meshPayload(s.solid, s.profile);
       transfer.push(...p.transfer);
       shows.push({ label: s.label, name: s.name, mesh: p.mesh, stats: p.stats });
     } catch (e) {
