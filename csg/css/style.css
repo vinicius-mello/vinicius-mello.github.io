@@ -211,10 +211,21 @@ kbd { font: 11px var(--mono); color: var(--muted); }
 .objects {
   position: absolute; top: 10px; right: 10px; z-index: 5;
   width: min(270px, calc(100% - 20px)); max-height: calc(100% - 70px); overflow: auto;
-  background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--surface) 62%, transparent); backdrop-filter: blur(3px);
   border: 1px solid var(--border); border-radius: 10px; font-size: 13px;
+  transition: background-color .15s;
 }
+.objects:hover, .objects:focus-within { background: color-mix(in srgb, var(--surface) 94%, transparent); }
 .objects:empty { display: none; }
+.objects.collapsed { width: auto; }
+.objects.collapsed .objects-body { display: none; }
+.objects-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  padding: 5px 10px; border: 0; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--muted);
+}
+.objects-head:hover { color: var(--text); }
+.objects:not(.collapsed) .objects-head { border-bottom: 1px solid var(--border); }
+.objects-head .chev { font-size: 11px; }
 .objects h3 { margin: 0; padding: 8px 10px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .obj {
   display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; cursor: pointer;

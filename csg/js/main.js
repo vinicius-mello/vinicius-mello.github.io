@@ -334,7 +334,12 @@ class App {
     const visible = new Set(this.visibleKeys());
     if (!keys.length && !this.state.values.length) { panel.innerHTML = ''; return; }
     const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-    let html = '';
+    const collapsed = store.get('objectsCollapsed', false);
+    panel.classList.toggle('collapsed', collapsed);
+    const count = [keys.length && `${keys.length} ${keys.length === 1 ? 'objeto' : 'objetos'}`,
+      this.state.values.length && `${this.state.values.length} ${this.state.values.length === 1 ? 'valor' : 'valores'}`].filter(Boolean).join(' · ');
+    let html = `<button class="objects-head" data-action="toggle-objects" aria-expanded="${!collapsed}" title="${collapsed ? 'Mostrar' : 'Recolher'} a lista">
+      <span>${count}</span><span class="chev" aria-hidden="true">${collapsed ? '▸' : '▾'}</span></button><div class="objects-body">`;
     if (keys.length) {
       html += '<h3>Objetos</h3>';
       for (const k of keys) {
@@ -354,7 +359,7 @@ class App {
       for (const v of this.state.values) html += `<div title="${esc(`${v.name} = ${v.text}`)}">${esc(v.name)} = ${esc(v.text)}</div>`;
       html += '</div>';
     }
-    panel.innerHTML = html;
+    panel.innerHTML = html + '</div>';
   }
 
   renderOutput() {
@@ -596,6 +601,7 @@ class App {
       case 'comment': return this.editor.toggleComment();
       case 'fit': return this.viewer?.fit();
       case 'help': return this.openHelp();
+      case 'toggle-objects': store.set('objectsCollapsed', !store.get('objectsCollapsed', false)); return this.renderObjects();
     }
   }
 
