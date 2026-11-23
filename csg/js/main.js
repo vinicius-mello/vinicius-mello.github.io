@@ -3,6 +3,7 @@ import { Editor } from './editor/editor.js';
 import { Viewer } from './view/viewer.js';
 import { Mesh } from './geom/mesh.js';
 import { toBinarySTL, toAsciiSTL } from './io/stl.js';
+import { shareURL, readShared } from './io/share.js';
 import { SYMBOLS } from './lang/symbols.js';
 import { createPrelude } from './lang/builtins.js';
 import { EXAMPLES, DEFAULT_EXAMPLE } from './examples.js';
@@ -140,6 +141,32 @@ class App {
     this.syncMenuChecks();
     this.updateCursor();
     this.run();
+    this.loadShared();
+    window.addEventListener('hashchange', () => this.loadShared());
+  }
+
+  // ---------- shared links ----------
+  async loadShared() {
+    let shared;
+    try { shared = await readShared(); } catch { return this.setStatus('link de programa inválido ou incompleto', 'error'); }
+    if (!shared) return;
+    history.replaceState(null, '', location.pathname + location.search); // later edits are not undone by a reload
+    if (shared.name) { this.fileName = shared.name; store.set('fileName', this.fileName); }
+    this.replaceProgram(shared.text);
+    this.setStatus('programa aberto do link (Ctrl+Z volta ao anterior)', 'ok');
+  }
+
+  async copyLink() {
+    let url;
+    try { url = await shareURL(this.editor.value, this.fileName); } catch (e) { return this.setStatus(`não foi possível gerar o link: ${e.message}`, 'error'); }
+    const long = url.length > 8000 ? ' — é longo; alguns aplicativos de mensagem podem cortá-lo' : '';
+    try {
+      await navigator.clipboard.writeText(url);
+      this.setStatus(`link do programa copiado (${url.length.toLocaleString('pt-BR')} caracteres)${long}`, long ? 'error' : 'ok');
+    } catch {
+      history.replaceState(null, '', url);
+      this.setStatus('não foi possível copiar: o link está na barra de endereço', 'error');
+    }
   }
 
   // ---------- evaluation ----------
@@ -560,6 +587,7 @@ class App {
       case 'new': this.fileName = 'modelo'; return this.replaceProgram(NEW_PROGRAM);
       case 'open': return this.openProgram();
       case 'save': return this.saveProgram();
+      case 'share': return this.copyLink();
       case 'export-stl': return this.exportSTL(this.selected, false);
       case 'export-stl-ascii': return this.exportSTL(this.selected, true);
       case 'export-all': return this.exportAll();
